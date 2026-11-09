@@ -6,6 +6,10 @@ Ideas waiting for a spec. Move an item into `specs/NNN-*/` when it is picked up.
 |---|---|---|---|
 | ~~B1~~ | ~~**Pets + blessings**~~ → **built 2026-11-09** (pets free, blessings 1 h free / 24 h paid) | Paid | [specs/008-pets-blessings](specs/008-pets-blessings/spec.md) |
 
+| B2 | **Perf, bigger jobs (QA 2026-11-09)**: merge the robed avatar parts into 1–2 meshes + distance LOD (crowd of 20 normal mode still ~970 calls); split instanced vegetation into culling cells and simplify maple (7.4k tris) / pine; one skeleton per animal; real bounding spheres instead of `frustumCulled=false`; instance lanterns; merge hall props / cushions | – | – |
+| B3 | **Smaller downloads**: compress GLB textures (KTX2/WebP) + meshopt, strip unused clips from shiba/husky (24 clips, 4–5 used), load husky/maple after entering (first load 5.4 MB GLB). Needs a project dev dependency (`@gltf-transform/cli`); ask first | – | – |
+| B4 | **Polish (QA)**: pet preview in the pet sheet; Lookout looks at the hall's plain back wall (give the back a mural / round window); husky "sit" uses standing Idle_2; lookout cairn stones float; chibi pool characters get huge heads at 1.55 m; "Low Poly Cat" Degen roll overlaps the Kitty pick; fren bubble can run off-screen | – | – |
+
 ## Bugs
 
 | # | Bug | Seen | Likely cause / fix |
