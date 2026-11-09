@@ -38,6 +38,7 @@ interface Att {
   ip: string;
   pid: string; // persistent visitor id (for invite links), not an account
   c: number; // light colour index
+  sd: number; // degen character seed (traits are derived from it on every client)
   x: number;
   z: number;
   ry: number;
@@ -80,7 +81,7 @@ function att(ws: WebSocket): Att | null {
   }
 }
 
-const pub = (a: Att) => ({ id: a.id, color: a.c, x: r2(a.x), z: r2(a.z), ry: r2(a.ry), s: a.s, g: a.g, sp: a.sp });
+const pub = (a: Att) => ({ id: a.id, color: a.c, sd: a.sd, x: r2(a.x), z: r2(a.z), ry: r2(a.ry), s: a.s, g: a.g, sp: a.sp });
 const ledger = (env: Env) => env.LEDGER.get(env.LEDGER.idFromName('main'));
 
 function cors(req: Request, res: Response) {
@@ -412,6 +413,7 @@ export class Hall extends DurableObject<Env> {
       ip,
       pid: '',
       c: 0,
+      sd: 0,
       x: 0,
       z: 17,
       ry: Math.PI,
@@ -454,6 +456,7 @@ export class Hall extends DurableObject<Env> {
     switch (m.t) {
       case 'hello': {
         a.c = Math.max(0, Math.min(COLORS - 1, Math.floor(num(m.color))));
+        a.sd = Math.floor(num(m.seed)) >>> 0;
         [a.x, a.z] = clampPos(num(m.x, 0), num(m.z, 17));
         a.ry = num(m.ry, Math.PI);
         if (m.s === 'sit' && a.s !== 'sit') {

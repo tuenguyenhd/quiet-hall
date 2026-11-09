@@ -42,6 +42,8 @@ function part(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: numb
 
 /** Species shown as real animated humans (see human.ts): Guy, Girl. */
 export const HUMAN_SPECIES = [5, 6];
+/** Random-trait PFP characters (see degen.ts). */
+export const DEGEN_SPECIES = 7;
 
 /** Fur / skin colour for hands. */
 export function skinOf(sp: number) {

@@ -12,6 +12,7 @@ import { Meditation } from './meditation';
 import { LIGHTS } from './palette';
 import { LIGHT_COUNT, SPECIES, SPECIES_ORDER } from './layout';
 import { setupFrens } from './frens';
+import { TIER, describeTraits } from './degen';
 import { setupAnimals } from './animals';
 import { inviteUrl, makeCard, shareCard, shareInvite } from './share';
 import { setupPwa } from './pwa';
@@ -81,11 +82,16 @@ addEventListener('resize', resize);
 resize();
 
 // ---------- me ----------
+let mySeed = Number(store.get('seed') ?? NaN);
+if (!Number.isInteger(mySeed) || mySeed <= 0) {
+  mySeed = 1 + Math.floor(Math.random() * 0x7ffffffe);
+  store.set('seed', String(mySeed));
+}
 let colorIdx = Number(store.get('color') ?? NaN);
 if (!(Number.isInteger(colorIdx) && colorIdx >= 0 && colorIdx < LIGHT_COUNT * SPECIES.length)) {
-  colorIdx = SPECIES_ORDER[Math.floor(Math.random() * SPECIES_ORDER.length)] * LIGHT_COUNT + Math.floor(Math.random() * LIGHT_COUNT);
+  colorIdx = SPECIES_ORDER[0] * LIGHT_COUNT + Math.floor(Math.random() * LIGHT_COUNT); // new visitors start as a random Degen
 }
-let me = new Avatar(colorIdx, true);
+let me = new Avatar(colorIdx, true, mySeed);
 const frens = setupFrens(scene, world.heightAt, world.clickables);
 const animals = setupAnimals(scene, world.heightAt, world.walkable, lowPower);
 me.root.position.copy(world.spawn);
@@ -133,10 +139,10 @@ function renderStats() {
 const net = new Net();
 let clockOffset = 0;
 
-type PubPlayer = { id: string; color: number; x: number; z: number; ry: number; s: SitState; g?: boolean; sp?: boolean };
+type PubPlayer = { id: string; color: number; sd?: number; x: number; z: number; ry: number; s: SitState; g?: boolean; sp?: boolean };
 function addOther(p: PubPlayer) {
   others.get(p.id)?.dispose();
-  const a = new Avatar(p.color, false);
+  const a = new Avatar(p.color, false, p.sd ?? 0);
   a.root.position.set(p.x, world.heightAt(p.x, p.z), p.z);
   a.root.rotation.y = p.ry;
   a.target.set(p.x, 0, p.z);
@@ -149,6 +155,7 @@ function addOther(p: PubPlayer) {
 
 net.hello = () => ({
   color: colorIdx,
+  seed: mySeed,
   x: me.root.position.x,
   z: me.root.position.z,
   ry: me.root.rotation.y,
@@ -491,7 +498,7 @@ function rebuildMe() {
   const pos = me.root.position.clone();
   const ry = me.root.rotation.y;
   me.dispose();
-  me = new Avatar(colorIdx, true);
+  me = new Avatar(colorIdx, true, mySeed);
   me.setBadges(myBadges.g, myBadges.sp);
   me.root.position.copy(pos);
   me.root.rotation.y = ry;
@@ -508,8 +515,26 @@ SPECIES_ORDER.forEach((i) => {
     colorIdx = i * LIGHT_COUNT + (colorIdx % LIGHT_COUNT);
     for (const x of speciesEl.children) x.classList.toggle('on', x === b);
     rebuildMe();
+    renderDegen();
   });
   speciesEl.appendChild(b);
+});
+// Degen: random PFP traits from a seed; reroll for a new look (free, unlimited)
+function renderDegen() {
+  const t = me.degen;
+  $('degen-row').classList.toggle('hidden', !t);
+  if (!t) return;
+  const tier = TIER[t.tier];
+  $('degen-tier').textContent = tier;
+  $('degen-tier').className = `tier t${t.tier}`;
+  $('degen-traits').textContent = describeTraits(t);
+}
+$('btn-reroll').addEventListener('click', () => {
+  mySeed = 1 + Math.floor(Math.random() * 0x7ffffffe);
+  store.set('seed', String(mySeed));
+  rebuildMe();
+  renderDegen();
+  haptic(10);
 });
 LIGHTS.forEach((c, i) => {
   const b = document.createElement('button');
@@ -523,6 +548,8 @@ LIGHTS.forEach((c, i) => {
   });
   colorsEl.appendChild(b);
 });
+
+renderDegen();
 
 $('btn-enter').addEventListener('click', () => {
   audio.unlock();
@@ -866,6 +893,19 @@ const lineup: Avatar[] = [];
 if (import.meta.env.DEV && params.has('lineup')) {
   const p = me.root.position;
   const cushions = world.seats.filter((x) => x.place === 'hall');
+  if (params.get('lineup') === 'degen') {
+    for (let k = 0; k < 12; k++) {
+      const a = new Avatar(7 * LIGHT_COUNT + (k % LIGHT_COUNT), false, 1000 + k * 7777);
+      const x = p.x + ((k % 4) - 1.5) * 1.5;
+      const z = p.z - 3.6 - Math.floor(k / 4) * 1.8;
+      a.root.position.set(x, world.heightAt(x, z), z);
+      a.target.copy(a.root.position);
+      a.targetRy = a.root.rotation.y = 0;
+      a.moving = k % 5 === 1;
+      scene.add(a.root);
+      lineup.push(a);
+    }
+  } else
   SPECIES.forEach((_, i) => {
     for (const row of params.get('lineup') === 'seated' ? [1] : [0, 1]) {
       const a = new Avatar(i * LIGHT_COUNT + ((i * 3 + row * 2) % LIGHT_COUNT), false);

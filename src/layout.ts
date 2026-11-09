@@ -21,9 +21,10 @@ export const SPECIES = [
   { id: 'capy', name: 'Capy', emoji: '🦫' },
   { id: 'guy', name: 'Guy', emoji: '🧑' },
   { id: 'girl', name: 'Girl', emoji: '👩' },
+  { id: 'degen', name: 'Degen', emoji: '🎲' },
 ] as const;
 /** Order on the welcome card (humans first; index into SPECIES). */
-export const SPECIES_ORDER = [5, 6, 0, 1, 2, 3, 4];
+export const SPECIES_ORDER = [7, 0, 1, 2, 3, 4]; // Guy/Girl (5, 6) kept for old saves, not offered
 export const LIGHT_COUNT = 8;
 
 export const STONE_COUNT = 108;

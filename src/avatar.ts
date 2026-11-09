@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { LIGHT_COUNT } from './layout';
 import { LIGHTS, ROBES } from './palette';
 import { addSleeves, buildRobe } from './body';
+import { DegenRig } from './degen';
 import { HumanRig } from './human';
-import { HUMAN_SPECIES, buildCharacter, skinOf } from './species';
+import { DEGEN_SPECIES, HUMAN_SPECIES, buildCharacter, skinOf } from './species';
 
 // Shared geometry/materials: a small, round, hooded meditator in soft clay style.
 const G = {
@@ -61,7 +62,11 @@ export class Avatar {
   moving = false;
 
   private body = new THREE.Group();
-  private human: HumanRig | null = null;
+  private human: HumanRig | DegenRig | null = null;
+  /** the degen character's traits (when this avatar is a Degen) */
+  get degen() {
+    return this.human instanceof DegenRig ? this.human.traits : null;
+  }
   private upper = new THREE.Group();
   private robe: THREE.Object3D;
   private feet: THREE.Mesh[] = [];
@@ -80,6 +85,7 @@ export class Avatar {
   constructor(
     public color: number,
     public isSelf: boolean,
+    seed = 0,
   ) {
     const robeColor = ROBES[color % ROBES.length];
     const light = LIGHTS[color % LIGHTS.length];
@@ -123,6 +129,10 @@ export class Avatar {
     if (hv >= 0) {
       this.body.visible = false;
       this.human = new HumanRig(hv === 1 && color % 2 ? 2 : hv, light);
+      this.root.add(this.human.root);
+    } else if (sp === DEGEN_SPECIES) {
+      this.body.visible = false;
+      this.human = new DegenRig(seed || color * 7919 + 1);
       this.root.add(this.human.root);
     }
 
