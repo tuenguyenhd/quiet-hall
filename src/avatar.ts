@@ -3,6 +3,7 @@ import { LIGHT_COUNT } from './layout';
 import { LIGHTS, ROBES } from './palette';
 import { addSleeves, buildRobe } from './body';
 import { DegenRig } from './degen';
+import { PoolRig, poolPick, type PoolChar } from './pool';
 import { HumanRig } from './human';
 import { DEGEN_SPECIES, HUMAN_SPECIES, buildCharacter, skinOf } from './species';
 
@@ -62,7 +63,11 @@ export class Avatar {
   moving = false;
 
   private body = new THREE.Group();
-  private human: HumanRig | DegenRig | null = null;
+  private human: HumanRig | DegenRig | PoolRig | null = null;
+  /** the pool character this Degen drew (null = generated block character) */
+  get poolChar(): PoolChar | null {
+    return this.human instanceof PoolRig ? this.human.char : null;
+  }
   /** the degen character's traits (when this avatar is a Degen) */
   get degen() {
     return this.human instanceof DegenRig ? this.human.traits : null;
@@ -132,7 +137,9 @@ export class Avatar {
       this.root.add(this.human.root);
     } else if (sp === DEGEN_SPECIES) {
       this.body.visible = false;
-      this.human = new DegenRig(seed || color * 7919 + 1);
+      const s = seed || color * 7919 + 1;
+      const pc = poolPick(s);
+      this.human = pc ? new PoolRig(pc) : new DegenRig(s);
       this.root.add(this.human.root);
     }
 

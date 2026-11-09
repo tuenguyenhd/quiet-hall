@@ -13,6 +13,7 @@ import { LIGHTS } from './palette';
 import { LIGHT_COUNT, SPECIES, SPECIES_ORDER } from './layout';
 import { setupFrens } from './frens';
 import { TIER, describeTraits } from './degen';
+import { CHARS, poolPick } from './pool';
 import { setupAnimals } from './animals';
 import { inviteUrl, makeCard, shareCard, shareInvite } from './share';
 import { setupPwa } from './pwa';
@@ -522,12 +523,12 @@ SPECIES_ORDER.forEach((i) => {
 // Degen: random PFP traits from a seed; reroll for a new look (free, unlimited)
 function renderDegen() {
   const t = me.degen;
-  $('degen-row').classList.toggle('hidden', !t);
-  if (!t) return;
-  const tier = TIER[t.tier];
-  $('degen-tier').textContent = tier;
-  $('degen-tier').className = `tier t${t.tier}`;
-  $('degen-traits').textContent = describeTraits(t);
+  const pc = me.poolChar;
+  $('degen-row').classList.toggle('hidden', !t && !pc);
+  const tier = pc ? pc.tier : t?.tier ?? 1;
+  $('degen-tier').textContent = TIER[tier];
+  $('degen-tier').className = `tier t${tier}`;
+  $('degen-traits').textContent = pc ? `${pc.name} · 3D by ${pc.by} (CC-BY)` : t ? describeTraits(t) : '';
 }
 $('btn-reroll').addEventListener('click', () => {
   mySeed = 1 + Math.floor(Math.random() * 0x7ffffffe);
@@ -893,7 +894,22 @@ const lineup: Avatar[] = [];
 if (import.meta.env.DEV && params.has('lineup')) {
   const p = me.root.position;
   const cushions = world.seats.filter((x) => x.place === 'hall');
-  if (params.get('lineup') === 'degen') {
+  if (params.get('lineup') === 'pool') {
+    // every pool character, in rows of 6; ?lineup=pool&page=N
+    const page = Number(params.get('page') ?? 0);
+    CHARS.slice(page * 12, page * 12 + 12).forEach((c, k) => {
+      let s = 1;
+      while (poolPick(s)?.id !== c.id && s < 200000) s++;
+      const a = new Avatar(7 * LIGHT_COUNT + (k % LIGHT_COUNT), false, s);
+      const x = p.x + ((k % 6) - 2.5) * 1.3;
+      const z = p.z - 3.4 - Math.floor(k / 6) * 2.2;
+      a.root.position.set(x, world.heightAt(x, z), z);
+      a.target.copy(a.root.position);
+      a.targetRy = a.root.rotation.y = 0;
+      scene.add(a.root);
+      lineup.push(a);
+    });
+  } else if (params.get('lineup') === 'degen') {
     for (let k = 0; k < 12; k++) {
       const a = new Avatar(7 * LIGHT_COUNT + (k % LIGHT_COUNT), false, 1000 + k * 7777);
       const x = p.x + ((k % 4) - 1.5) * 1.5;
