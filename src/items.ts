@@ -192,7 +192,7 @@ export function setupItems(h: ItemsHooks) {
     stone: (l, t) => `Only ${t} stones exist; ${l} are still free. Yours shows your name and a line to everyone in the Stone Garden, and comes as an NFT in your wallet.`,
     tree: (l, t) => `Only ${t} maples exist; ${l} are still free. Your tree grows taller with your name and a line, and comes as an NFT in your wallet.`,
     cushion: (l, t) => `One of the ${t} cushions in the Main Hall, forever yours: it turns gold, carries your name and a line, and comes as an NFT. ${l} of ${t} left.`,
-    banner: (l, t) => `Your name on the front of the Main Hall for ${BANNER_DAYS} days: the first thing everyone sees when they arrive. ${l} of ${t} banners free right now.`,
+    banner: (l, t) => `Your name on a tall banner on the avenue into PumpHall for ${BANNER_DAYS} days: everyone walks past it on the way to play. ${l} of ${t} banners free right now.`,
   };
   function openSpot(kind: SpotKind, i: number) {
     if (i < 0) return;
@@ -230,7 +230,7 @@ export function setupItems(h: ItemsHooks) {
       const sp = r.spot as { asset?: string; mintError?: string } | undefined;
       sStatus(
         current.kind === 'banner'
-          ? `Your banner is up ✦ ${BANNER_DAYS} days on the front of the hall.`
+          ? `Your banner is up ✦ ${BANNER_DAYS} days on the PumpHall avenue.`
           : sp?.asset
             ? `It's yours ✦ NFT ${short(sp.asset)} is in your wallet.`
             : `Paid. Minting is retrying (${sp?.mintError ?? 'pending'}).`,

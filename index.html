@@ -49,6 +49,7 @@
       <button class="act main" id="btn-sit"><span>Sit</span></button>
       <button class="act" id="btn-lantern"><span class="ico">🏮</span><span>Lantern</span></button>
       <button class="act" id="btn-pet"><span class="ico">🐾</span><span>Pet</span></button>
+      <button class="act pump-act hidden" id="btn-pump"><span class="ico">📈</span><span>Play</span></button>
       <button class="act" id="btn-greet"><span class="ico">✧</span><span>Greet</span></button>
     </div>
 
@@ -249,10 +250,10 @@
         </div>
         <div id="pump-price" class="pump-price">…</div>
         <p class="small" id="pump-live"></p>
-        <div class="label" id="pump-q">Up or down?</div>
+        <div class="label" id="pump-q">Loading prices…</div>
         <div class="pump-pick">
-          <button class="up" id="btn-pump-up">⬆ UP</button>
-          <button class="down" id="btn-pump-down">⬇ DOWN</button>
+          <button class="up" id="btn-pump-up" disabled>⬆ UP</button>
+          <button class="down" id="btn-pump-down" disabled>⬇ DOWN</button>
         </div>
         <p class="small" id="pump-closes"></p>
         <div class="label">Last rounds</div>

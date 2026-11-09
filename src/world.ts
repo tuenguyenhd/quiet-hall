@@ -6,7 +6,7 @@ import { dressWorld } from './world-assets';
 import { buildTeasers } from './teasers';
 import { buildPumpHall, type BoardData } from './pumphall';
 import { stickerWallTexture } from './stickers';
-import { PUMP, TEASERS, BELL, BOUNDS, COURT, GARDEN, GROVE, HALL, HALL_CUSHIONS, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
+import { PUMP, SPOTS, TEASERS, BELL, BOUNDS, COURT, GARDEN, GROVE, HALL, HALL_CUSHIONS, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
 import { buildPlaces, labelSprite } from './places';
 
 export interface Obstacle {
@@ -530,7 +530,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     for (const l of cushionLabels) l.visible = l.position.distanceTo(ctx.focus) < 5;
   });
 
-  // ---------- Patron Banners (6, rented 30 days) hanging on the front columns ----------
+  // ---------- Patron Banners (6, rented 30 days): an avenue of poles leading into PumpHall ----------
   const banners: THREE.Mesh[] = [];
   const bannerTex = (i: number, o?: { name: string; line: string }) => {
     const c = document.createElement('canvas');
@@ -579,16 +579,34 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     return t;
   };
   const bannerG = new THREE.PlaneGeometry(1.4, 3.5);
-  colX.forEach((x, i) => {
+  const bPole = new THREE.CylinderGeometry(0.08, 0.1, 6.2, 8);
+  const bBar = new THREE.CylinderGeometry(0.05, 0.05, 1.7, 6);
+  const bPoleM = mat('#160d2e', { roughness: 0.5 });
+  const bCap = new THREE.MeshBasicMaterial({ color: '#14f195', toneMapped: false });
+  const bCapG = new THREE.SphereGeometry(0.16, 10, 8);
+  for (let i = 0; i < SPOTS.banner.count; i++) {
+    const side = i % 2 ? 1 : -1;
+    const row = Math.floor(i / 2);
+    const x = PUMP.x + side * 5;
+    const z = PUMP.z - PUMP.r - 9 - row * 6; // starts clear of the gate, bull and bear
+    const g = new THREE.Group();
+    g.position.set(x, terrain(x, z), z);
+    g.rotation.y = side < 0 ? (Math.PI * 3) / 4 : (-Math.PI * 3) / 4; // angled toward the path and people arriving
+    add(mesh(bPole, bPoleM, -0.8, 3.1, 0), g);
+    const bar = mesh(bBar, bPoleM, 0, 5.95, 0);
+    bar.rotation.z = Math.PI / 2;
+    g.add(bar, mesh(bCapG, bCap, -0.8, 6.3, 0));
     const m = new THREE.Mesh(bannerG, new THREE.MeshBasicMaterial({ map: bannerTex(i), transparent: true, toneMapped: false, side: THREE.DoubleSide }));
-    m.position.set(x, H + 4.9, HZ + HD - 0.4 + 0.58);
+    m.position.set(0, 4.1, 0);
     m.userData.action = 'spot';
     m.userData.kind = 'banner';
     m.userData.index = i;
-    hall.add(m);
+    g.add(m);
+    scene.add(g);
     clickables.push(m);
     banners.push(m);
-  });
+    obstacles.push({ x, z, r: 0.6 });
+  }
   const setBanners = (owned: Map<number, { name: string; line: string }>) => {
     banners.forEach((m, i) => {
       const mt = m.material as THREE.MeshBasicMaterial;
@@ -678,10 +696,10 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   // the fork where you arrive: mindfulness one way, the fun-only prediction hall the other
   sign(3.4, COURT.z + 7, 0.25, ['↑ Quiet Hall · sit', '↓ PumpHall · predict']);
 
-  // ---------- "built on Solana" / "made for Seeker" banners flanking the hall steps ----------
+  // ---------- "built on Solana" / "made for Seeker" banners: at the PumpHall gate (the Quiet Hall stays calm) ----------
   addBrandBanners(scene, obstacles, terrain, [
-    { x: -(STEP_W / 2 + 6), z: HZ + HD + 3, ry: 0 },
-    { x: STEP_W / 2 + 6, z: HZ + HD + 3, ry: 0 },
+    { x: PUMP.x - 11, z: PUMP.z - PUMP.r + 1, ry: Math.PI },
+    { x: PUMP.x + 11, z: PUMP.z - PUMP.r + 1, ry: Math.PI },
   ]);
 
   // ---------- places ----------

@@ -859,6 +859,7 @@ function faceOther() {
   const p = me.root.position;
   me.root.rotation.y = Math.atan2(a.root.position.x - p.x, a.root.position.z - p.z);
 }
+$('btn-pump').addEventListener('click', () => pump.open());
 $('btn-pl-chat').addEventListener('click', () => {
   $('playersheet').classList.add('hidden');
   chat.whisper(plId, names.get(plId) ?? 'Someone');
@@ -1040,6 +1041,7 @@ function placeTick() {
   const id = p?.id ?? '';
   if (id === lastPlace) return;
   lastPlace = id;
+  $('btn-pump').classList.toggle('hidden', id !== 'pump');
   const el = $('place');
   el.textContent = p ? p.name : '';
   el.classList.toggle('hidden', !p);
@@ -1347,4 +1349,4 @@ if (import.meta.env.DEV && params.has('lineup')) {
 }
 
 // tiny debug hook for automated checks
-(window as unknown as { __qh: unknown }).__qh = { lineup: () => lineup, scene, animals, controls, frens, items, openFren, openPlayer, pump, chat, others, stats, net, me: () => me, renderer };
+(window as unknown as { __qh: unknown }).__qh = { lineup: () => lineup, scene, animals, controls, frens, items, openFren, openPlayer, pump, chat, world, camera, others, stats, net, me: () => me, renderer };

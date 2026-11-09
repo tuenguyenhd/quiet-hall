@@ -164,15 +164,15 @@ export function setupPump(h: Host) {
       ? `Saved ✓ Price locks at ${hhmm(s.next.start)}, result at ${hhmm(s.next.end)}. You can pick the following round once this one starts.`
       : closes > 0
         ? `Picks close in ${fmtT(closes)} (30 s before the round starts) · crowd ⬆${s.next.up} ⬇${s.next.down}`
-        : `Picks closed. The next round opens at ${hhmm(s.next.start)}.`;
+        : `⏱ Last 30 s: picks are closed while the price locks (${fmtT(s.next.start - t)}). The next round opens right after.`;
     const can = !nm && closes > 0 && !busy;
     const up = $('btn-pump-up') as HTMLButtonElement;
     const down = $('btn-pump-down') as HTMLButtonElement;
     up.disabled = down.disabled = !can;
     up.classList.toggle('picked', nm?.dir === 'up');
     down.classList.toggle('picked', nm?.dir === 'down');
-    up.textContent = nm?.dir === 'up' ? '✓ UP picked' : '⬆ UP';
-    down.textContent = nm?.dir === 'down' ? '✓ DOWN picked' : '⬇ DOWN';
+    up.textContent = nm?.dir === 'up' ? '✓ UP' : '⬆ UP';
+    down.textContent = nm?.dir === 'down' ? '✓ DOWN' : '⬇ DOWN';
     status(t);
     // past results
     $('pump-past').innerHTML = s.past.length
@@ -188,7 +188,7 @@ export function setupPump(h: Host) {
     const rows = board === 'week' ? st.week_board : st.all_board;
     $('pump-board').innerHTML = rows.length
       ? rows.map((r, i) => `<li class="${r.you ? 'you' : ''}"><span>${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span> ${esc(r.name)} <small>#${r.tag}</small><b>${r.pts}</b></li>`).join('')
-      : '<li>Nobody on the board yet this week.</li>';
+      : `<li>${board === 'week' ? 'Nobody on the board yet this week.' : 'Nobody has scored yet.'}</li>`;
     const me = st.me;
     $('pump-me').textContent = me
       ? `You: ${me.name} #${me.tag} · ${board === 'week' ? me.wpts : me.pts} pts${(board === 'week' ? me.wrank : me.rank) ? ` · rank ${board === 'week' ? me.wrank : me.rank}` : ''} · ${me.wins}W ${me.losses}L · streak ${me.streak} (best ${me.best})`
@@ -201,7 +201,7 @@ export function setupPump(h: Host) {
     render();
     try {
       await apiPost('/api/pump/pick', { pid: h.pid, seed: h.seed, name: h.name(), m: market, k: st.markets[market].next.k, dir, room });
-      h.toast(`${dir === 'up' ? '⬆ UP' : '⬇ DOWN'} locked in for ${market} ✦ good luck, ser`, 3000);
+      // the status card at the top of the sheet already says "✓ picked"; no toast over the sheet
     } catch (e) {
       h.toast((e as Error).message, 3500);
     }

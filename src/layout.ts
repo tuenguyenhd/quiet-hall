@@ -187,7 +187,7 @@ export const SPOTS = {
   stone: { count: 108, label: 'Stone', place: 'Stone Garden', nft: true },
   tree: { count: 64, label: 'Tree', place: 'Maple Grove', nft: true },
   cushion: { count: 24, label: 'Founder Cushion', place: 'Main Hall', nft: true },
-  banner: { count: 6, label: 'Patron Banner', place: 'Hall front', nft: false },
+  banner: { count: 6, label: 'Patron Banner', place: 'PumpHall avenue', nft: false },
 } as const;
 export type SpotKind = keyof typeof SPOTS;
 /** Patron banners are rented: this many days per payment. */

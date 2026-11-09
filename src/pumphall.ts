@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { add, mat, mesh } from './build';
 import { PUMP } from './layout';
+import { stickerWallTexture } from './stickers';
 
 type Ctx = {
   scene: THREE.Scene;
@@ -82,7 +83,7 @@ export function buildPumpHall(c: Ctx) {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
   const board = new THREE.Group();
-  board.position.set(0, 0.5, 3.5);
+  board.position.set(0, -0.6, 3.5); // low enough to read under the HUD as you walk in
   board.rotation.y = Math.PI; // face -z (toward the courtyard)
   const frame = mat('#120b24', { roughness: 0.5 });
   add(mesh(new THREE.BoxGeometry(0.35, 7.4, 0.35), frame, -5.4, 3.7, 0), board);
@@ -103,8 +104,8 @@ export function buildPumpHall(c: Ctx) {
   const arrowGeo = new THREE.ConeGeometry(0.6, 1.1, 4);
   const pads: THREE.Mesh[] = [];
   for (const [x, col, up] of [
-    [-3, GREEN, true],
-    [3, RED, false],
+    [3, GREEN, true], // UP on the left as you face the board
+    [-3, RED, false],
   ] as const) {
     const pad = mesh(padGeo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.55, toneMapped: false }), x, 0.57, -1.5);
     pad.userData.action = 'pump';
@@ -117,6 +118,186 @@ export function buildPumpHall(c: Ctx) {
     g.add(arrow);
     c.clickables.push(arrow);
     pads.push(arrow);
+  }
+
+  // ---------- big invisible tap target over board + pads (the thin screen was easy to miss) ----------
+  const hitM = new THREE.MeshBasicMaterial({ visible: false });
+  const hitBox = mesh(new THREE.BoxGeometry(12, 8, 2.5), hitM, 0, 3.6, 3.3); // just the board: tapping the floor in front still walks
+  hitBox.userData.action = 'pump';
+  g.add(hitBox);
+  c.clickables.push(hitBox);
+
+  // ---------- decorations ----------
+  const spin: THREE.Object3D[] = [];
+  const bob: { o: THREE.Object3D; y: number; ph: number }[] = [];
+  const pop = (t: string) => {
+    const cv = document.createElement('canvas');
+    cv.width = 1024;
+    cv.height = 160;
+    const x = cv.getContext('2d')!;
+    const tx = new THREE.CanvasTexture(cv);
+    tx.colorSpace = THREE.SRGBColorSpace;
+    const draw = () => {
+      x.fillStyle = '#0c0820';
+      x.fillRect(0, 0, 1024, 160);
+      x.font = '110px "Lilita One", system-ui, sans-serif';
+      x.textAlign = 'center';
+      x.textBaseline = 'middle';
+      x.shadowColor = GREEN;
+      x.shadowBlur = 24;
+      x.fillStyle = GREEN;
+      x.fillText(t, 512, 86);
+      tx.needsUpdate = true;
+    };
+    draw();
+    document.fonts?.load('110px "Lilita One"').then(draw);
+    return tx;
+  };
+  // neon gate over the entrance (north edge of the dais)
+  {
+    const gz = -R - 0.6;
+    const postG = new THREE.BoxGeometry(0.6, 7, 0.6);
+    for (const x of [-5.2, 5.2]) {
+      add(mesh(postG, frame, x, 3.5, gz), g);
+      g.add(mesh(new THREE.BoxGeometry(0.16, 7, 0.16), neonP, x, 3.5, gz - 0.34));
+      c.obstacles.push({ x: PUMP.x + x, z: PUMP.z + gz, r: 0.6 });
+    }
+    add(mesh(new THREE.BoxGeometry(12, 1.5, 0.5), frame, 0, 7.4, gz), g);
+    const sign = mesh(new THREE.PlaneGeometry(10.8, 1.69), new THREE.MeshBasicMaterial({ map: pop('PUMPHALL'), toneMapped: false }), 0, 7.4, gz - 0.26);
+    sign.rotation.y = Math.PI;
+    g.add(sign);
+    g.add(mesh(new THREE.BoxGeometry(12.2, 0.12, 0.12), neonG, 0, 6.6, gz - 0.3), mesh(new THREE.BoxGeometry(12.2, 0.12, 0.12), neonR, 0, 8.2, gz - 0.3));
+  }
+  // rocket on a pedestal (back left), with a flickering flame
+  let flame: THREE.Mesh;
+  {
+    const rk = new THREE.Group();
+    rk.position.set(-8.6, 0.5, 6.5);
+    add(mesh(new THREE.CylinderGeometry(1.3, 1.5, 1.2, 8), dark, 0, 0.6, 0), rk);
+    const white = mat('#f4f1ff', { roughness: 0.5 });
+    const red = mat('#ff4d6d', { roughness: 0.5 });
+    add(mesh(new THREE.CylinderGeometry(0.75, 0.75, 4.2, 16), white, 0, 4.4, 0), rk);
+    add(mesh(new THREE.ConeGeometry(0.75, 1.6, 16), red, 0, 7.3, 0), rk);
+    const win = mesh(new THREE.CircleGeometry(0.32, 16), new THREE.MeshBasicMaterial({ color: '#7fd8ff', toneMapped: false }), 0, 5.4, 0.76);
+    rk.add(win);
+    for (let i = 0; i < 4; i++) {
+      const fin = mesh(new THREE.BoxGeometry(0.12, 1.3, 0.9), red, 0, 2.9, 0);
+      fin.rotation.y = (i * Math.PI) / 2;
+      fin.translateZ(0.9);
+      add(fin, rk);
+    }
+    flame = mesh(new THREE.ConeGeometry(0.55, 1.4, 12), new THREE.MeshBasicMaterial({ color: '#ffb02e', toneMapped: false }), 0, 1.9, 0);
+    flame.rotation.x = Math.PI;
+    rk.add(flame);
+    rk.rotation.z = 0.12;
+    g.add(rk);
+    c.obstacles.push({ x: PUMP.x - 8.6, z: PUMP.z + 6.5, r: 1.6 });
+  }
+  // the moon, high behind the board ("to the moon")
+  {
+    const moon = mesh(new THREE.SphereGeometry(3.2, 24, 16), new THREE.MeshBasicMaterial({ color: '#fff2b8', toneMapped: false }), 6, 17, 14);
+    const crater = new THREE.MeshBasicMaterial({ color: '#ead98f', toneMapped: false });
+    for (const [x, y, r] of [
+      [-1, 1, 0.7],
+      [1.2, -0.6, 0.5],
+      [-0.2, -1.4, 0.4],
+    ])
+      moon.add(mesh(new THREE.CircleGeometry(r, 14), crater, x, y, -3.05)).children.at(-1)!.rotation.set(0, Math.PI, 0);
+    g.add(moon);
+    bob.push({ o: moon, y: 17, ph: 0 });
+  }
+  // floating SOL coins around the dais
+  {
+    const face = document.createElement('canvas');
+    face.width = face.height = 128;
+    const f = face.getContext('2d')!;
+    const grad = f.createLinearGradient(0, 128, 128, 0);
+    grad.addColorStop(0, PURPLE);
+    grad.addColorStop(1, GREEN);
+    f.fillStyle = grad;
+    f.fillRect(0, 0, 128, 128);
+    f.fillStyle = '#0c0820';
+    for (const [y, dx] of [
+      [36, 8],
+      [64, -8],
+      [92, 8],
+    ]) {
+      f.beginPath();
+      f.moveTo(30 + dx, y - 9);
+      f.lineTo(106 + dx, y - 9);
+      f.lineTo(98 - dx, y + 9);
+      f.lineTo(22 - dx, y + 9);
+      f.fill();
+    }
+    const ft = new THREE.CanvasTexture(face);
+    ft.colorSpace = THREE.SRGBColorSpace;
+    const coinM = [new THREE.MeshBasicMaterial({ color: '#2b1d5c', toneMapped: false }), new THREE.MeshBasicMaterial({ map: ft, toneMapped: false }), new THREE.MeshBasicMaterial({ map: ft, toneMapped: false })];
+    const coinG = new THREE.CylinderGeometry(0.7, 0.7, 0.14, 24);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.3;
+      const coin = new THREE.Mesh(coinG, coinM);
+      coin.position.set(Math.sin(a) * (R + 1.5), 4 + (i % 3) * 1.2, Math.cos(a) * (R + 1.5));
+      coin.rotation.x = Math.PI / 2;
+      const holder = new THREE.Group();
+      holder.position.copy(coin.position);
+      coin.position.set(0, 0, 0);
+      holder.add(coin);
+      g.add(holder);
+      spin.push(holder);
+      bob.push({ o: holder, y: holder.position.y, ph: i });
+    }
+  }
+  // blocky bull (green, left) and bear (red, right) guarding the gate
+  {
+    const beast = (x: number, col: string, bull: boolean) => {
+      const b = new THREE.Group();
+      b.position.set(x, 0, -R - 2.6);
+      b.rotation.y = Math.PI + (x < 0 ? 0.6 : -0.6);
+      const m = mat(col, { roughness: 0.6, emissive: col, emissiveIntensity: 0.25 });
+      const dk = mat('#160d2e');
+      add(mesh(new THREE.BoxGeometry(1.4, 1.1, 2.4), m, 0, 1.5, 0), b);
+      for (const [lx, lz] of [
+        [-0.45, -0.8],
+        [0.45, -0.8],
+        [-0.45, 0.8],
+        [0.45, 0.8],
+      ])
+        add(mesh(new THREE.BoxGeometry(0.35, 0.95, 0.35), m, lx, 0.48, lz), b);
+      add(mesh(new THREE.BoxGeometry(1, 0.9, 0.9), m, 0, 2.05, 1.4), b);
+      add(mesh(new THREE.BoxGeometry(0.16, 0.16, 0.05), dk, -0.25, 2.2, 1.86), b);
+      add(mesh(new THREE.BoxGeometry(0.16, 0.16, 0.05), dk, 0.25, 2.2, 1.86), b);
+      if (bull) {
+        for (const s of [-1, 1]) {
+          const horn = mesh(new THREE.ConeGeometry(0.13, 0.7, 8), mat('#fff6d8'), s * 0.62, 2.6, 1.3);
+          horn.rotation.z = -s * 0.9;
+          add(horn, b);
+        }
+      } else {
+        for (const s of [-1, 1]) add(mesh(new THREE.BoxGeometry(0.3, 0.3, 0.2), m, s * 0.38, 2.6, 1.3), b);
+      }
+      const plaque = mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshBasicMaterial({ map: pop(bull ? 'BULL' : 'BEAR'), toneMapped: false }), 0, 0.5, 1.3);
+      b.add(plaque);
+      g.add(b);
+      c.obstacles.push({ x: PUMP.x + x, z: PUMP.z - R - 2.6, r: 1.5 });
+    };
+    // seen from the path (looking south) +x is on the left: bull left, bear right, beside the gate posts
+    beast(7.4, '#14c47f', true);
+    beast(-7.4, '#ff4d6d', false);
+  }
+  // sticker billboards either side of the board (gm, wagmi, Solana + Seeker marks, our mascots)
+  {
+    const tex2 = stickerWallTexture(1.6, 42, 768);
+    for (const x of [-9.6, 9.6]) {
+      const bb = new THREE.Group();
+      bb.position.set(x, 0.5, 2);
+      bb.rotation.y = Math.PI + (x < 0 ? 0.45 : -0.45);
+      add(mesh(new THREE.BoxGeometry(0.25, 5, 0.25), frame, 0, 2.5, 0.1), bb);
+      add(mesh(new THREE.BoxGeometry(4.2, 2.7, 0.15), frame, 0, 4.4, 0.05), bb);
+      // the group is turned to face north, so the picture faces local +z
+      bb.add(mesh(new THREE.PlaneGeometry(4, 2.5), new THREE.MeshBasicMaterial({ map: tex2, toneMapped: false }), 0, 4.4, 0.14));
+      g.add(bb);
+      c.obstacles.push({ x: PUMP.x + x, z: PUMP.z + 2, r: 0.5 });
+    }
   }
 
   // ---------- draw the board ----------
@@ -178,6 +359,9 @@ export function buildPumpHall(c: Ctx) {
     /** redraw the board (call ~1×/s while near) */
     setBoard: draw,
     update(t: number) {
+      for (const o of spin) o.rotation.y = t * 1.4;
+      for (const b of bob) b.o.position.y = b.y + Math.sin(t * 1.1 + b.ph) * 0.35;
+      flame.scale.set(1 + Math.sin(t * 23) * 0.08, 1 + Math.sin(t * 17) * 0.2, 1);
       for (const cd of candles) cd.m.scale.y = cd.base * (1 + 0.08 * Math.sin(t * 1.3 + cd.ph));
       for (const p of pads) (p.material as THREE.MeshBasicMaterial).opacity = p.geometry === padGeo ? 0.45 + 0.2 * Math.sin(t * 3) : 1;
     },

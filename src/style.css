@@ -1619,3 +1619,14 @@ body:has(.fren-mini:not(.hidden)) .chat {
   outline: 3px solid #ffe14d;
   outline-offset: 2px;
 }
+/* first-visit hint sits under the HUD, clear of the chat box */
+.hint {
+  bottom: auto;
+  top: calc(max(12px, env(safe-area-inset-top)) + 170px);
+  max-width: calc(100vw - 32px);
+  white-space: normal;
+  text-align: center;
+}
+.act.pump-act {
+  background: #14f195;
+}
