@@ -12,6 +12,7 @@ import { Meditation } from './meditation';
 import { LIGHTS } from './palette';
 import { LIGHT_COUNT, SPECIES } from './layout';
 import { setupFrens } from './frens';
+import { setupAnimals } from './animals';
 import { inviteUrl, makeCard, shareCard, shareInvite } from './share';
 import { setupPwa } from './pwa';
 
@@ -81,6 +82,7 @@ if (!(Number.isInteger(colorIdx) && colorIdx >= 0 && colorIdx < LIGHT_COUNT * SP
 }
 let me = new Avatar(colorIdx, true);
 const frens = setupFrens(scene, world.heightAt, world.clickables);
+const animals = setupAnimals(scene, world.heightAt, world.walkable, lowPower);
 me.root.position.copy(world.spawn);
 me.root.rotation.y = Math.PI;
 scene.add(me.root);
@@ -815,6 +817,7 @@ function frame(now: number) {
   for (const a of lineup) a.update(dt, t);
   world.update(t, dt, me.root.position);
   frens.update(t, dt, me.root.position);
+  animals.update(dt, me.root.position);
   placeTick();
   items.update(t);
   if (markerT < 1) {
@@ -855,4 +858,4 @@ if (import.meta.env.DEV && params.has('lineup')) {
 }
 
 // tiny debug hook for automated checks
-(window as unknown as { __qh: unknown }).__qh = { others, stats, net, me: () => me, renderer };
+(window as unknown as { __qh: unknown }).__qh = { animals, others, stats, net, me: () => me, renderer };
