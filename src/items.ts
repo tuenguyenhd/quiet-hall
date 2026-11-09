@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { apiGet } from './api';
 import { haptic } from './audio';
 import { BADGES, applyEvent, badge, daysLeft, isActive, type BadgeEvent, type BadgeStore } from './badges';
-import { BANNER_DAYS, LINES, PRICE_USD, SPOTS, WISHES, cleanName, type SpotKind } from './layout';
+import { BANNER_DAYS, LINES, PRICE_SOL, SPOTS, WISHES, cleanName, type SpotKind } from './layout';
 import { Lanterns, describe, type LanternData } from './lanterns';
 import type { Msg } from './net';
 import type { World } from './world';
@@ -188,7 +188,11 @@ export function setupItems(h: ItemsHooks) {
     $('spot-status').textContent = t;
     $('spot-status').classList.toggle('err', err);
   };
-  const usd = (n: number) => `$${n % 1 ? n.toFixed(2) : n}`;
+  /** " (~$22)" from the live SOL price ('' until loaded) */
+  const usdOf = (kind: keyof typeof PRICE_SOL) => {
+    const u = spots?.prices[kind]?.USD;
+    return u ? ` (~$${u >= 10 ? Math.round(u) : u.toFixed(2)})` : '';
+  };
   const COPY: Record<SpotKind, (left: number, total: number) => string> = {
     stone: (l, t) => `Only ${t} stones exist; ${l} are still free. Yours shows your name and a line to everyone in the Stone Garden, and comes as an NFT in your wallet.`,
     tree: (l, t) => `Only ${t} maples exist; ${l} are still free. Your tree grows taller with your name and a line, and comes as an NFT in your wallet.`,
@@ -208,7 +212,7 @@ export function setupItems(h: ItemsHooks) {
       ? `“${owned.line}” · ${info.label} #${i + 1} · ${kind === 'banner' ? 'rented' : 'held'} by ${short(owned.owner)}${until}${owned.asset ? ' · NFT ' + short(owned.asset) : ''}`
       : COPY[kind](info.count - taken, info.count);
     $('spot-buy').classList.toggle('hidden', !!owned);
-    $('spot-price').textContent = `${usd(PRICE_USD[kind])}${kind === 'banner' ? ` / ${BANNER_DAYS} days` : ''} · ${fmt(kind)}`;
+    $('spot-price').textContent = `${PRICE_SOL[kind]} SOL${kind === 'banner' ? ` / ${BANNER_DAYS} days` : ''}${usdOf(kind)}${pay === 'SOL' && spots?.priceScale === 1 ? '' : ` · ${fmt(kind)}`}`;
     const onSale = !!spots?.sale?.[kind];
     $('spot-note').textContent = !onSale
       ? 'Not on sale yet.'
@@ -265,7 +269,8 @@ export function setupItems(h: ItemsHooks) {
     saleOf: (kind: SpotKind) => !!spots?.sale?.[kind],
     /** legendary pet supply {sold, supply} */
     legend: (pet: number) => spots?.legends?.[String(pet)] ?? null,
-    usd: (kind: keyof typeof PRICE_USD) => usd(PRICE_USD[kind]),
+    /** headline price, e.g. "0.25 SOL (~$22)" */
+    headline: (kind: keyof typeof PRICE_SOL) => `${PRICE_SOL[kind]} SOL${usdOf(kind)}`,
     set onSpotsChange(f: () => void) {
       onSpots = f;
     },

@@ -158,18 +158,21 @@ export const FREE_SEEKER_MS = 600000;
 export const LANTERN_FREE_MS = 60000;
 export const BLESS_PAID_MS = 86400000;
 
-/** Prices in US dollars (fixed). SOL / SKR amounts are worked out from the live SOL price when you buy. */
-export const PRICE_USD = {
-  bless24: 2.99,
-  lantern24: 4.99,
-  lantern7d: 14.99,
-  pet: 9.99,
-  stone: 149,
-  tree: 249,
-  cushion: 499,
-  banner: 149,
+/**
+ * Prices anchored in SOL (what Seeker owners hold). USDC / SKR amounts follow the live SOL price.
+ * Ladder by scarcity and visibility: temporary < unlimited permanent < 108 stones < 64 trees < 6 banners < 24 cushions.
+ */
+export const PRICE_SOL = {
+  bless24: 0.015,
+  lantern24: 0.02,
+  lantern7d: 0.06,
+  pet: 0.035,
+  stone: 0.25,
+  tree: 0.4,
+  banner: 0.75, // per 30 days
+  cushion: 2,
 } as const;
-export type PricedKind = keyof typeof PRICE_USD;
+export type PricedKind = keyof typeof PRICE_SOL;
 
 /** Scarce things you can own (or rent) at a fixed place in the world. */
 export const SPOTS = {

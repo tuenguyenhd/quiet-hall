@@ -5,7 +5,7 @@ import { getBase58Decoder } from '@solana/kit';
 import type { Env } from './index';
 import { type Currency, associatedTokenAccount, seekerMints, serverRpc, signatureForReference, verifyTip } from './solana';
 import { assetOwners, mintSpotAsset, treasurySigner } from './core';
-import { BANNER_DAYS, LINES, PETS, PRICE_USD, SPOTS, cleanName, type PricedKind, type SpotKind } from '../src/layout';
+import { BANNER_DAYS, LINES, PETS, PRICE_SOL, SPOTS, cleanName, type PricedKind, type SpotKind } from '../src/layout';
 
 export type OrderKind = 'tip' | 'lantern24' | 'lantern7d' | 'bless24' | 'pet' | 'stone' | 'tree' | 'cushion' | 'banner';
 type PriceEnv = { SKR_MINT?: string; SKR_PER_USDC?: string; PRICE_SCALE?: string };
@@ -20,20 +20,22 @@ const scaleOf = (env: PriceEnv) => {
   return s > 0 && s <= 1 ? s : 1;
 };
 const sig3 = (n: number) => Number(n.toPrecision(3));
-/** Price of one item in `currency`. `kind` is a PRICE_USD key. */
+/** Price of one item in `currency`. Anchored in SOL (PRICE_SOL); USDC / SKR follow the live SOL price. */
 export function priceIn(kind: PricedKind, currency: Currency, solUsd: number, env: PriceEnv) {
-  const usd = PRICE_USD[kind] * scaleOf(env);
+  const sol = PRICE_SOL[kind] * scaleOf(env);
+  const usd = sol * solUsd;
   if (currency === 'USDC') return Math.max(0.01, Math.round(usd * 100) / 100);
   if (currency === 'SKR') return Math.max(1, Math.ceil(usd * skrRate(env)));
-  return sig3(usd / solUsd);
+  return sig3(sol);
 }
 /** Price table for the app: USD and the matching SOL / USDC (/ SKR when on). */
 export function priceTable(env: PriceEnv, solUsd: number) {
   return Object.fromEntries(
-    (Object.keys(PRICE_USD) as PricedKind[]).map((k) => [
+    (Object.keys(PRICE_SOL) as PricedKind[]).map((k) => [
       k,
       {
-        USD: PRICE_USD[k],
+        // what it is worth in dollars today (full price, not the devnet test scale)
+        USD: Math.round(PRICE_SOL[k] * solUsd * 100) / 100,
         SOL: priceIn(k, 'SOL', solUsd, env),
         USDC: priceIn(k, 'USDC', solUsd, env),
         ...(env.SKR_MINT ? { SKR: priceIn(k, 'SKR', solUsd, env) } : {}),

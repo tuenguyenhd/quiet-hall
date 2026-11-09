@@ -470,7 +470,7 @@ function showCushionOffer(seat: Seat | null | undefined) {
   const o = items.spotOwner('cushion', i);
   el.classList.remove('hidden');
   el.dataset.i = String(i);
-  el.textContent = o ? `✦ Founder cushion of ${o.name} · “${o.line}”` : `✦ Own this Founder Cushion #${i + 1} · ${items.usd('cushion')}`;
+  el.textContent = o ? `✦ Founder cushion of ${o.name} · “${o.line}”` : `✦ Own this Founder Cushion #${i + 1} · ${items.headline('cushion')}`;
   el.classList.toggle('taken', !!o);
 }
 $('sit-cushion').addEventListener('click', () => {
@@ -723,7 +723,7 @@ function renderPets() {
   const price = items.price(kind);
   const lg = pk.legend ? items.legend(petPick) : null;
   const left = lg ? lg.supply - lg.sold : 0;
-  $('btn-adopt').textContent = pk.legend && lg && left <= 0 ? `${pk.name}: all ${lg.supply} adopted` : `Adopt ${pk.name} · ${items.usd(kind)}${price ? ' · ' + price : ''}`;
+  $('btn-adopt').textContent = pk.legend && lg && left <= 0 ? `${pk.name}: all ${lg.supply} adopted` : `Adopt ${pk.name} · ${items.headline(kind)}${price && !items.headline(kind).startsWith(price) ? ' · pay ' + price : ''}`;
   ($('btn-adopt') as HTMLButtonElement).disabled = !items.onSale || (!!lg && left <= 0);
   $('pet-note').textContent = pk.legend
     ? `✦ Legendary: only ${pk.legend} will ever exist${lg ? ` · ${left} left` : ''}. Numbered (#1–${pk.legend}) with a gold aura. Paid once with your wallet.`
