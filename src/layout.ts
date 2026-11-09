@@ -19,7 +19,11 @@ export const SPECIES = [
   { id: 'frog', name: 'Froggo', emoji: '🐸' },
   { id: 'cat', name: 'Kitty', emoji: '🐱' },
   { id: 'capy', name: 'Capy', emoji: '🦫' },
+  { id: 'guy', name: 'Guy', emoji: '🧑' },
+  { id: 'girl', name: 'Girl', emoji: '👩' },
 ] as const;
+/** Order on the welcome card (humans first; index into SPECIES). */
+export const SPECIES_ORDER = [5, 6, 0, 1, 2, 3, 4];
 export const LIGHT_COUNT = 8;
 
 export const STONE_COUNT = 108;

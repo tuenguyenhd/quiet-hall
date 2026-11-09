@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { LIGHT_COUNT } from './layout';
 import { LIGHTS, ROBES } from './palette';
 import { addSleeves, buildRobe } from './body';
-import { buildCharacter, skinOf } from './species';
+import { HumanRig } from './human';
+import { HUMAN_SPECIES, buildCharacter, skinOf } from './species';
 
 // Shared geometry/materials: a small, round, hooded meditator in soft clay style.
 const G = {
@@ -50,6 +51,8 @@ export type SitState = 'idle' | 'sit';
 
 export class Avatar {
   static heightAt: (x: number, z: number) => number = () => 0;
+  /** true where seats are floor cushions (hall, tea house): humans sit on the cushion top there */
+  static cushionAt: (x: number, z: number) => boolean = () => false;
 
   root = new THREE.Group();
   target = new THREE.Vector3();
@@ -58,6 +61,7 @@ export class Avatar {
   moving = false;
 
   private body = new THREE.Group();
+  private human: HumanRig | null = null;
   private upper = new THREE.Group();
   private robe: THREE.Object3D;
   private feet: THREE.Mesh[] = [];
@@ -114,6 +118,13 @@ export class Avatar {
     this.upper.add(hands);
     this.body.add(this.upper);
     this.root.add(this.body);
+    // simple humans: a real animated model instead of the robed toy body
+    const hv = HUMAN_SPECIES.indexOf(sp);
+    if (hv >= 0) {
+      this.body.visible = false;
+      this.human = new HumanRig(hv === 1 && color % 2 ? 2 : hv, light);
+      this.root.add(this.human.root);
+    }
 
     // your light: a soft ring under you, and an aura while sitting
     this.baseRing = isSelf ? 0.85 : 0.55;
@@ -180,6 +191,7 @@ export class Avatar {
 
   greet() {
     this.greetT = 0;
+    this.human?.greet();
   }
 
   update(dt: number, t: number) {
@@ -193,7 +205,8 @@ export class Avatar {
       p.z += dz * k;
       this.root.rotation.y = lerpAngle(this.root.rotation.y, this.targetRy, k);
     }
-    p.y += (Avatar.heightAt(p.x, p.z) - p.y) * (1 - Math.exp(-dt * 12));
+    const yOff = this.human ? (Avatar.cushionAt(p.x, p.z) ? 0.28 - this.human.hipH : -this.human.hipH) * this.sitK : 0;
+    p.y += (Avatar.heightAt(p.x, p.z) + yOff - p.y) * (1 - Math.exp(-dt * 12));
 
     // sit blend
     const sitTarget = this.state === 'sit' ? 1 : 0;
@@ -221,6 +234,8 @@ export class Avatar {
         this.upper.rotation.x = 0;
       }
     }
+
+    this.human?.update(dt, this.sitK, this.moving && this.sitK < 0.2, this.bowT >= 0 ? Math.sin(Math.min(this.bowT / 1.6, 1) * Math.PI) : 0);
 
     // greet: a pulse of light
     let flash = 0;

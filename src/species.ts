@@ -40,6 +40,9 @@ function part(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: numb
   return o;
 }
 
+/** Species shown as real animated humans (see human.ts): Guy, Girl. */
+export const HUMAN_SPECIES = [5, 6];
+
 /** Fur / skin colour for hands. */
 export function skinOf(sp: number) {
   return ['#f3d7bf', '#e08a3c', '#7cc56a', '#b9b3c9', '#a3743f'][sp] ?? '#f3d7bf';

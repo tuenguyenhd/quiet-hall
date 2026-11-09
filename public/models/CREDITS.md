@@ -15,3 +15,6 @@ Textures in pine, maple-red, bush-*, flowers were downscaled to 512 px with `scr
 | bush-flower.glb | Bush with Flowers | https://poly.pizza/m/U1ymDy8tbY |
 | flowers.glb | Flowers | https://poly.pizza/m/NBUxHir6FJ |
 | bamboo.glb | Bamboo | https://poly.pizza/m/xBPj13w3JQ |
+| man.glb | Man (animated) | https://poly.pizza/m/HMnuH5geEG |
+| woman.glb | Woman (animated) | https://poly.pizza/m/AQsd9ngvKU |
+| woman-dress.glb | Woman in Dress (animated) | https://poly.pizza/m/zMyPlQXBzq |

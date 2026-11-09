@@ -10,7 +10,7 @@ import { audio, haptic } from './audio';
 import { Net, type Msg } from './net';
 import { Meditation } from './meditation';
 import { LIGHTS } from './palette';
-import { LIGHT_COUNT, SPECIES } from './layout';
+import { LIGHT_COUNT, SPECIES, SPECIES_ORDER } from './layout';
 import { setupFrens } from './frens';
 import { setupAnimals } from './animals';
 import { inviteUrl, makeCard, shareCard, shareInvite } from './share';
@@ -64,6 +64,10 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400);
 const world = buildWorld(scene, renderer.shadowMap.enabled, lowPower);
 Avatar.heightAt = world.heightAt;
+Avatar.cushionAt = (x, z) => {
+  const id = world.placeAt(x, z)?.id;
+  return id === 'hall' || id === 'tea';
+};
 
 function resize() {
   const w = innerWidth;
@@ -79,7 +83,7 @@ resize();
 // ---------- me ----------
 let colorIdx = Number(store.get('color') ?? NaN);
 if (!(Number.isInteger(colorIdx) && colorIdx >= 0 && colorIdx < LIGHT_COUNT * SPECIES.length)) {
-  colorIdx = (1 + Math.floor(Math.random() * (SPECIES.length - 1))) * LIGHT_COUNT + Math.floor(Math.random() * LIGHT_COUNT);
+  colorIdx = SPECIES_ORDER[Math.floor(Math.random() * SPECIES_ORDER.length)] * LIGHT_COUNT + Math.floor(Math.random() * LIGHT_COUNT);
 }
 let me = new Avatar(colorIdx, true);
 const frens = setupFrens(scene, world.heightAt, world.clickables);
@@ -493,7 +497,8 @@ function rebuildMe() {
   me.root.rotation.y = ry;
   scene.add(me.root);
 }
-SPECIES.forEach((sp, i) => {
+SPECIES_ORDER.forEach((i) => {
+  const sp = SPECIES[i];
   const b = document.createElement('button');
   b.innerHTML = `<span></span><small></small>`;
   b.querySelector('span')!.textContent = sp.emoji;
@@ -860,15 +865,17 @@ const lineup: Avatar[] = [];
 // dev-only: ?lineup shows every character (front row standing, back row sitting) in front of you
 if (import.meta.env.DEV && params.has('lineup')) {
   const p = me.root.position;
+  const cushions = world.seats.filter((x) => x.place === 'hall');
   SPECIES.forEach((_, i) => {
-    for (const row of [0, 1]) {
+    for (const row of params.get('lineup') === 'seated' ? [1] : [0, 1]) {
       const a = new Avatar(i * LIGHT_COUNT + ((i * 3 + row * 2) % LIGHT_COUNT), false);
-      const x = p.x + (i - 2) * 1.45;
-      const z = p.z - 4.6 - row * 1.8;
+      const seat = cushions[cushions.length - 6 + ((i + 3) % 6)];
+      const x = row && seat && i < 6 ? seat.pos.x : p.x + (i - 3) * 1.3;
+      const z = row && seat && i < 6 ? seat.pos.z : p.z - 4.6;
       a.root.position.set(x, world.heightAt(x, z), z);
       a.target.copy(a.root.position);
-      a.targetRy = a.root.rotation.y = row ? 0 : Math.PI * 0.08 * (i - 2);
-      a.state = row ? 'sit' : 'idle';
+      a.targetRy = a.root.rotation.y = row ? Math.PI : Math.PI * 0.06 * (i - 3);
+      a.state = row && i < 6 ? 'sit' : 'idle';
       scene.add(a.root);
       lineup.push(a);
     }
@@ -877,4 +884,4 @@ if (import.meta.env.DEV && params.has('lineup')) {
 }
 
 // tiny debug hook for automated checks
-(window as unknown as { __qh: unknown }).__qh = { scene, animals, others, stats, net, me: () => me, renderer };
+(window as unknown as { __qh: unknown }).__qh = { lineup: () => lineup, scene, animals, others, stats, net, me: () => me, renderer };
