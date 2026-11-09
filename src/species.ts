@@ -36,7 +36,7 @@ function part(geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: numb
   o.position.set(x, y, z);
   if (Array.isArray(s)) o.scale.set(...s);
   else o.scale.setScalar(s);
-  o.castShadow = true;
+  o.castShadow = geo === G.head; // small parts (eyes, ears, shades) don't need shadows
   return o;
 }
 

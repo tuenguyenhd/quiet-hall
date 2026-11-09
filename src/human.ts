@@ -1,6 +1,7 @@
 // Simple humans: CC0 Quaternius "Man" / "Woman" / "Woman in Dress" (poly.pizza), with real walk, idle,
 // sit and clap animations. The shirt takes your light colour. Bow is done on the torso bone.
 import * as THREE from 'three';
+import { own } from './dispose';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
@@ -26,10 +27,21 @@ export class HumanRig {
   private cur: THREE.AnimationAction | null = null;
   private torso: THREE.Bone | null = null;
   private clapUntil = 0;
+  private dead = false;
+
+  /** stop animations and free the cloned skeleton + shirt material (Avatar.dispose frees the rest) */
+  dispose() {
+    this.dead = true;
+    if (this.mixer) {
+      this.mixer.stopAllAction();
+      this.mixer.uncacheRoot(this.mixer.getRoot());
+    }
+  }
 
   constructor(variant: number, shirt: string) {
     load(HUMAN_URLS[variant % HUMAN_URLS.length])
       .then((g) => {
+        if (this.dead) return;
         const obj = SkeletonUtils.clone(g.scene);
         obj.traverse((o) => {
           const m = o as THREE.SkinnedMesh;
@@ -38,7 +50,7 @@ export class HumanRig {
             m.frustumCulled = false;
             const mats = (Array.isArray(m.material) ? m.material : [m.material]).map((mt) => {
               if (/shirt|dress|top/i.test(mt.name)) {
-                const c = (mt as THREE.MeshStandardMaterial).clone();
+                const c = own((mt as THREE.MeshStandardMaterial).clone());
                 c.color.set(shirt);
                 return c;
               }

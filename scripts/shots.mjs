@@ -66,8 +66,10 @@ for (const place of PLACES) {
   }
   // optional: EVAL="js" runs in the page after load (e.g. move the player), then waits a little
   if (process.env.EVAL) {
-    await ev(process.env.EVAL);
+    const out = await ev(process.env.EVAL);
+    if (out !== undefined) console.log(`${place} EVAL →`, typeof out === 'string' ? out : JSON.stringify(out));
     await wait(Number(process.env.EVAL_WAIT ?? 2500));
+    if (process.env.EVAL_AFTER) console.log(`${place} AFTER →`, JSON.stringify(await ev(process.env.EVAL_AFTER)));
   }
   // hide the HUD toasts so the world is visible
   await ev(`document.querySelectorAll('.toast,.hint').forEach(e=>e.style.display='none')`);

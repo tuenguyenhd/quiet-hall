@@ -61,7 +61,8 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, lowPower ? 1 : 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.02;
-renderer.shadowMap.enabled = !params.has('noshadow');
+// shadows roughly double draw calls: off in light mode (Seeker-class phones decide via perfGuard)
+renderer.shadowMap.enabled = !params.has('noshadow') && !lowPower;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
@@ -1056,6 +1057,11 @@ function perfGuard(ms: number) {
   const fps = (pgFrames * 1000) / pgTime;
   if (fps < 35) {
     renderer.setPixelRatio(1);
+    renderer.shadowMap.enabled = false; // right away, not only after a reload
+    scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (m) for (const x of Array.isArray(m) ? m : [m]) x.needsUpdate = true;
+    });
     store.set('lowgfx', '1');
   }
 }

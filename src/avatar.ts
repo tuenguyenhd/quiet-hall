@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BLESS, LIGHT_COUNT } from './layout';
 import { BlessFx } from './effects';
 import { Pet } from './pets';
+import { disposeOwned, own } from './dispose';
 import { LIGHTS, ROBES } from './palette';
 import { addSleeves, buildRobe } from './body';
 import { DegenRig } from './degen';
@@ -96,12 +97,12 @@ export class Avatar {
   ) {
     const robeColor = ROBES[color % ROBES.length];
     const light = LIGHTS[color % LIGHTS.length];
-    this.robeMat = new THREE.MeshStandardMaterial({ color: robeColor, roughness: 0.88 });
-    const hoodMat = new THREE.MeshStandardMaterial({
+    this.robeMat = own(new THREE.MeshStandardMaterial({ color: robeColor, roughness: 0.88 }));
+    const hoodMat = own(new THREE.MeshStandardMaterial({
       color: new THREE.Color(robeColor).multiplyScalar(0.9),
       roughness: 0.9,
       side: THREE.DoubleSide,
-    });
+    }));
 
     const built = buildRobe(this.robeMat, ROBES[(color + 3) % ROBES.length], light);
     this.robe = built.robe;
@@ -125,7 +126,7 @@ export class Avatar {
     const sp = Math.floor(color / LIGHT_COUNT);
     buildCharacter(sp, this.upper, this.body, robeColor);
     addSleeves(this.upper, this.robeMat, built.sash);
-    const hands = new THREE.Mesh(G.hands, sp ? new THREE.MeshStandardMaterial({ color: skinOf(sp), roughness: 0.85 }) : M.skin);
+    const hands = new THREE.Mesh(G.hands, sp ? own(new THREE.MeshStandardMaterial({ color: skinOf(sp), roughness: 0.85 })) : M.skin);
     hands.position.set(0, 0.0, 0.34);
     hands.scale.set(0.9, 1.2, 0.8);
     this.upper.add(hands);
@@ -214,13 +215,14 @@ export class Avatar {
     if (supporter && !this.halo) {
       this.halo = new THREE.Mesh(
         G.halo,
-        new THREE.MeshBasicMaterial({ color: '#ffe2b0', transparent: true, opacity: 0.55, depthWrite: false }),
+        own(new THREE.MeshBasicMaterial({ color: '#ffe2b0', transparent: true, opacity: 0.55, depthWrite: false })),
       );
       this.halo.rotation.x = -Math.PI / 2;
       this.halo.position.y = 0.035;
       this.root.add(this.halo);
     } else if (!supporter && this.halo) {
       this.halo.removeFromParent();
+      (this.halo.material as THREE.Material).dispose();
       this.halo = null;
     }
   }
@@ -313,7 +315,10 @@ export class Avatar {
   dispose() {
     this.pet?.dispose();
     this.blessFx?.dispose();
+    this.human?.dispose();
     this.root.removeFromParent();
+    // the halo may be detached already; everything per-avatar (robe, hood, hands, sash, cloned skeletons…) is freed here
+    disposeOwned(this.root);
     this.robeMat.dispose();
     this.ringMat.dispose();
     this.auraMat.dispose();

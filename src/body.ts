@@ -2,6 +2,7 @@
 // chest and back, collar, mala beads, sleeves to the hands, and a glowing ensō on the back in your light colour
 // (the camera sits behind you, so the back carries your identity).
 import * as THREE from 'three';
+import { own } from './dispose';
 
 const PROFILE = [
   [0.001, 0],
@@ -35,7 +36,7 @@ const ring = (geo: THREE.BufferGeometry, mat: THREE.Material, y: number, tiltX =
   const m = new THREE.Mesh(geo, mat);
   m.rotation.set((flat ? 0 : Math.PI / 2) + tiltX, 0, tiltZ);
   m.position.y = y;
-  m.castShadow = true;
+  m.castShadow = false; // thin bands: the robe already casts the shadow
   return m;
 };
 
@@ -43,8 +44,8 @@ const ring = (geo: THREE.BufferGeometry, mat: THREE.Material, y: number, tiltX =
 export function buildRobe(robeMat: THREE.MeshStandardMaterial, sashColor: string, light: string) {
   const robe = new THREE.Mesh(G.robe, robeMat);
   robe.castShadow = true;
-  const sash = new THREE.MeshStandardMaterial({ color: sashColor, roughness: 0.75, side: THREE.DoubleSide });
-  const trimMat = new THREE.MeshStandardMaterial({ color: light, emissive: light, emissiveIntensity: 0.6, roughness: 0.5, side: THREE.DoubleSide });
+  const sash = own(new THREE.MeshStandardMaterial({ color: sashColor, roughness: 0.75, side: THREE.DoubleSide }));
+  const trimMat = own(new THREE.MeshStandardMaterial({ color: light, emissive: light, emissiveIntensity: 0.6, roughness: 0.5, side: THREE.DoubleSide }));
   robe.add(ring(G.trim, trimMat, 0.045, 0, 0, true));
   robe.add(ring(G.belt, sash, 0.47, 0, 0, true));
   // kasaya: a broad band from the left shoulder to the right hip, wrapping the back too
@@ -69,7 +70,7 @@ export function buildRobe(robeMat: THREE.MeshStandardMaterial, sashColor: string
   gold.position.set(0, 0.79, 0.33);
   robe.add(gold);
   // glowing ensō on the back
-  const enso = new THREE.Mesh(G.enso, new THREE.MeshBasicMaterial({ color: light, toneMapped: false, side: THREE.DoubleSide }));
+  const enso = new THREE.Mesh(G.enso, own(new THREE.MeshBasicMaterial({ color: light, toneMapped: false, side: THREE.DoubleSide })));
   enso.position.set(0, 0.74, -0.352);
   enso.rotation.set(-0.12, Math.PI, 0);
   enso.scale.setScalar(1.5);
@@ -91,7 +92,7 @@ export function addSleeves(upper: THREE.Group, robeMat: THREE.Material, sash: TH
     s.quaternion.copy(q);
     s.position.copy(a).addScaledVector(dir, len / 2);
     s.scale.set(1, len / 0.38, 1);
-    s.castShadow = true;
+    s.castShadow = false;
     const c = new THREE.Mesh(G.cuff, sash);
     c.quaternion.copy(q).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
     c.position.copy(a).addScaledVector(dir, len * 0.86);

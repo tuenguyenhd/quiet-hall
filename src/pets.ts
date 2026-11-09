@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { loadAnimal, type AnimalInst } from './animals';
 import { lerpAngle } from './avatar';
 import { popEmoji } from './effects';
+import { disposeOwned } from './dispose';
 import { PETS } from './layout';
 
 /** size relative to the wandering animals (pets are a bit smaller, frogs a bit bigger) */
@@ -91,7 +92,11 @@ export class Pet {
 
   dispose() {
     this.dead = true;
-    this.inst?.mixer.stopAllAction();
+    if (this.inst) {
+      this.inst.mixer.stopAllAction();
+      this.inst.mixer.uncacheRoot(this.inst.mixer.getRoot());
+    }
     this.root.removeFromParent();
+    disposeOwned(this.root); // cloned skeletons (bone textures)
   }
 }

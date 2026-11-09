@@ -2,6 +2,7 @@
 // blocks with vertex colours. One merged mesh for body+head+gear and two legs = 3 draw calls, no textures,
 // no model files. Animation is deliberately choppy (8 fps "stop-motion").
 import * as THREE from 'three';
+import { own } from './dispose';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // ---------- traits ----------
@@ -272,7 +273,7 @@ export function buildDegen(t: Traits) {
   if (t.acc === 'Backpack') parts.push(box(0.4, 0.42, 0.16, '#ff7a3d', 0, 0.32, -0.24));
   if (t.acc === 'Cape') parts.push(box(0.56, 0.7, 0.03, '#e5484d', 0, 0.2, -0.19, 0.12));
 
-  const torso = new THREE.Mesh(mergeGeometries(parts), MAT);
+  const torso = new THREE.Mesh(own(mergeGeometries(parts)), MAT);
   torso.castShadow = true;
   parts.forEach((p) => p.dispose());
 
@@ -292,7 +293,8 @@ export function buildDegen(t: Traits) {
   let lasers: THREE.Mesh | null = null;
   if (t.eyes === 'Laser') {
     lasers = new THREE.Mesh(
-      mergeGeometries([-1, 1].map((sx) => prep(new THREE.CylinderGeometry(0.012, 0.03, 3, 5), '#ff2a2a', sx * 0.11, hy + 0.04, fz + 1.5, Math.PI / 2))),
+      own(mergeGeometries([-1, 1].map((sx) => prep(new THREE.CylinderGeometry(0.012, 0.03, 3, 5), '#ff2a2a', sx * 0.11, hy + 0.04, fz + 1.5, Math.PI / 2))),
+      ) as THREE.BufferGeometry,
       LASER,
     );
   }
@@ -325,6 +327,10 @@ export class DegenRig {
 
   greet() {
     this.hopUntil = performance.now() + 900;
+  }
+
+  dispose() {
+    /* torso + laser geometry are tagged `own`; Avatar.dispose frees them */
   }
 
   update(dt: number, sitK: number, moving: boolean, bow: number) {

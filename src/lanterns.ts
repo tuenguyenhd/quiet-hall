@@ -38,6 +38,9 @@ export class Lanterns {
   private items = new Map<string, { d: LanternData; obj: THREE.Group; seed: number }>();
   private bodyG = new THREE.CylinderGeometry(0.22, 0.17, 0.42, 10, 1, true);
   private capG = new THREE.CylinderGeometry(0.06, 0.24, 0.07, 10);
+  /** one material set per paper colour (8 colours + gold), shared by every lantern */
+  private mats = new Map<string, { body: THREE.MeshStandardMaterial; halo: THREE.SpriteMaterial }>();
+  private capMat = new THREE.MeshStandardMaterial({ color: '#5a3d2a' });
 
   constructor(scene: THREE.Scene) {
     scene.add(this.group);
@@ -48,13 +51,19 @@ export class Lanterns {
     const special = d.tier !== 'free';
     const color = new THREE.Color(special ? '#ffd36b' : PAPER[d.c % PAPER.length]);
     const obj = new THREE.Group();
-    const body = new THREE.Mesh(
-      this.bodyG,
-      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2.2, side: THREE.DoubleSide, transparent: true, opacity: 0.92 }),
-    );
-    const cap = new THREE.Mesh(this.capG, new THREE.MeshStandardMaterial({ color: '#5a3d2a' }));
+    const key = color.getHexString();
+    let mats = this.mats.get(key);
+    if (!mats) {
+      mats = {
+        body: new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2.2, side: THREE.DoubleSide, transparent: true, opacity: 0.92 }),
+        halo: new THREE.SpriteMaterial({ map: glow(), color, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending }),
+      };
+      this.mats.set(key, mats);
+    }
+    const body = new THREE.Mesh(this.bodyG, mats.body);
+    const cap = new THREE.Mesh(this.capG, this.capMat);
     cap.position.y = 0.24;
-    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow(), color, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending }));
+    const halo = new THREE.Sprite(mats.halo);
     halo.scale.setScalar(special ? 1.4 : 1.1);
     obj.add(body, cap, halo);
     if (special) obj.scale.setScalar(1.45);

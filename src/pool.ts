@@ -118,12 +118,18 @@ export class PoolRig {
   private t = 0;
   private hopUntil = 0;
   private baseY = 0;
+  private dead = false;
+
+  dispose() {
+    this.dead = true; // skeletons are freed by Avatar.dispose (disposeOwned); materials are shared per model
+  }
 
   constructor(char: PoolChar) {
     this.char = char;
     this.root.add(this.body);
     load(char.file)
       .then((g) => {
+        if (this.dead) return;
         const obj = SkeletonUtils.clone(g.scene);
         obj.traverse((o) => {
           const m = o as THREE.Mesh;

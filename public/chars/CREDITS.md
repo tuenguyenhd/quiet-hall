@@ -7,7 +7,6 @@ All models from Sketchfab under the licence shown (CC BY 4.0 = credit required).
 | Samurai | gameburikb99 | CC Attribution | https://sketchfab.com/3d-models/samurai-23c7f00bc1954faca1a63f2e7d14b93f |
 | Low Poly School Boy [Zombie Apocalypse, Rigged] | micaelsampaio | CC Attribution | https://sketchfab.com/3d-models/low-poly-school-boy-zombie-apocalypse-rigged-6afb32851a044c5da1109b42d55f2b4c |
 | Low Poly Scout Girl (Apocalypse | Rigged) | micaelsampaio | CC Attribution | https://sketchfab.com/3d-models/low-poly-scout-girl-apocalypse-rigged-e388c7898cb7465ab43d0cd2a53cd91a |
-| Low-poly Ninja | danieldarko | CC Attribution | https://sketchfab.com/3d-models/low-poly-ninja-54783c019894430bb163e02fff915fe9 |
 | Low Poly Wizard Girl | micaelsampaio | CC Attribution | https://sketchfab.com/3d-models/low-poly-wizard-girl-f432be31444a4063aa2e24e28a123e6d |
 | Low Poly Mage Rigged Free | madtrollstudio | CC Attribution | https://sketchfab.com/3d-models/low-poly-mage-rigged-free-10771a1d02a145df95824b483515eeb6 |
 | Twelve the "robot" (Low poly) | TwistedY | CC Attribution | https://sketchfab.com/3d-models/twelve-the-robot-low-poly-4170f970674f48b9932ff4a450564e51 |
@@ -19,7 +18,6 @@ All models from Sketchfab under the licence shown (CC BY 4.0 = credit required).
 | Small Blue Robot | ilkkakooo | CC Attribution | https://sketchfab.com/3d-models/small-blue-robot-0d07f45776594659966fbb5ef2a476cd |
 | low poly Samurai | Kavinda.Attanayake | CC Attribution | https://sketchfab.com/3d-models/low-poly-samurai-a5cb9b25424d45c9972fc4de19969287 |
 | Beebo - Robotic Bee Character | PolytricityLtd | CC Attribution | https://sketchfab.com/3d-models/beebo-robotic-bee-character-4560d12583fe45c7a87797f6c77ff288 |
-| Knight | fermit04ka | CC Attribution | https://sketchfab.com/3d-models/knight-de0f32d21eef407cb789f139edd1a853 |
 | Frost Mage | zhaohaoxuanzhao16 | CC Attribution | https://sketchfab.com/3d-models/frost-mage-0fa86d697034424486af4a06324e12b9 |
 | Fhayra - Lowpoly model | dicenete | CC Attribution | https://sketchfab.com/3d-models/fhayra-lowpoly-model-469c63adc19a45d39a2d5848af43c919 |
 | Ninja (Red) | JumpingJax | CC Attribution | https://sketchfab.com/3d-models/ninja-red-1a62fc6f786b4b498b6807100421bf73 |
@@ -28,12 +26,7 @@ All models from Sketchfab under the licence shown (CC BY 4.0 = credit required).
 | Ninja (Yellow) | JumpingJax | CC Attribution | https://sketchfab.com/3d-models/ninja-yellow-52bb5f8760f1492b869659b809e98c4a |
 | Astronaut | wearemonsters | CC Attribution | https://sketchfab.com/3d-models/astronaut-e4bb4fdd830d460b9f70ef6f43de4706 |
 | Chibi flower girl | CrunchyBirb145 | CC Attribution | https://sketchfab.com/3d-models/chibi-flower-girl-fcb22c3b80314d91b514e854a4d26369 |
-| Ninja (Blue) | JumpingJax | CC Attribution | https://sketchfab.com/3d-models/ninja-blue-11b543f46eaa4666aa2a313732a337d1 |
-| Ninja (Green) | JumpingJax | CC Attribution | https://sketchfab.com/3d-models/ninja-green-77f2df21c14c40188ea4405b6aeca4a5 |
 | Sakura | JaxArt | CC Attribution | https://sketchfab.com/3d-models/sakura-2eef0e83fb2243b0be3b7692e5feb696 |
-| Black Samurai | 11maxghost | CC Attribution | https://sketchfab.com/3d-models/black-samurai-07dd21c7967d4000bc52003eae8634d6 |
-| Lowpoly Ninja | ackermanngue | CC Attribution | https://sketchfab.com/3d-models/lowpoly-ninja-5e9f55ca84e3418088410bec28863676 |
-| Astronaut | JumpingJax | CC Attribution | https://sketchfab.com/3d-models/astronaut-6f131d65b0924144b4503c686d3bfc51 |
 | Cartoon | Parrotsbay | CC Attribution | https://sketchfab.com/3d-models/cartoon-9576fec57ada45e4aeb330bdb4a5703a |
 | Chibi Low Poly | jadepaz | CC Attribution | https://sketchfab.com/3d-models/chibi-low-poly-e6bbc09be322473b90d4fb7aadddab89 |
 | Cyber Punk Pink Samurai Girl | lxhwpp | CC Attribution | https://sketchfab.com/3d-models/cyber-punk-pink-samurai-girl-f740ec1f51c24cc2a80ec2d62c9a1f79 |
