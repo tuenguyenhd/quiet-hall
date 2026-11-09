@@ -860,6 +860,23 @@ function faceOther() {
   me.root.rotation.y = Math.atan2(a.root.position.x - p.x, a.root.position.z - p.z);
 }
 $('btn-pump').addEventListener('click', () => pump.open());
+
+// every sheet closes by tapping outside the card or pressing Escape (not only its Close button at the bottom).
+// It clicks the sheet's own close button so any extra close logic (e.g. ending a pet try-on) still runs.
+const closeBtn = (o: Element) => o.querySelector<HTMLElement>('[data-close], #btn-cancel');
+for (const o of document.querySelectorAll<HTMLElement>('.overlay')) {
+  o.addEventListener('click', (e) => {
+    if (e.target === o) closeBtn(o)?.click();
+  });
+}
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const open = [...document.querySelectorAll<HTMLElement>('.overlay:not(.hidden), .fren-mini:not(.hidden)')].filter((o) => closeBtn(o));
+  // the one on top: highest z-index, then the last in the page
+  open.sort((a, b) => (Number(getComputedStyle(a).zIndex) || 0) - (Number(getComputedStyle(b).zIndex) || 0));
+  const top = open.at(-1);
+  if (top) closeBtn(top)!.click();
+});
 $('btn-pl-chat').addEventListener('click', () => {
   $('playersheet').classList.add('hidden');
   chat.whisper(plId, names.get(plId) ?? 'Someone');

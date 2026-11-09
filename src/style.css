@@ -1630,3 +1630,44 @@ body:has(.fren-mini:not(.hidden)) .chat {
 .act.pump-act {
   background: #14f195;
 }
+/* PumpHall: the header (with ✕) stays on screen while the long sheet scrolls */
+.card.pump {
+  padding-top: 0;
+}
+.card.pump .pump-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 -24px 6px;
+  padding: 18px 24px 10px;
+  background: var(--paper);
+  border-bottom: 2px dashed rgba(22, 13, 46, 0.15);
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.card.pump .pump-head h2 {
+  flex: 1;
+  text-align: left;
+}
+.sheet-x {
+  order: 2;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: #fff;
+  box-shadow: 2px 2px 0 var(--ink);
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ink);
+  cursor: pointer;
+}
+.pump-tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #ffe14d;
+  color: #160d2e;
+}

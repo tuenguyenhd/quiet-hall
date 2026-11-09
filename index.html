@@ -242,7 +242,11 @@
     </section>
     <section id="pumpsheet" class="overlay hidden">
       <div class="card pump">
-        <div class="pump-head"><h2>📈 PumpHall</h2><span class="tag">just for fun · no money · no prizes</span></div>
+        <div class="pump-head">
+          <h2>📈 PumpHall</h2>
+          <button class="sheet-x" data-close="pumpsheet" aria-label="Close">✕</button>
+        </div>
+        <span class="tag pump-tag">just for fun · no money · no prizes</span>
         <div id="pump-status" class="pump-status hidden"></div>
         <div class="chips" id="pump-markets">
           <button data-m="SOL" class="on">SOL · 5 min</button>

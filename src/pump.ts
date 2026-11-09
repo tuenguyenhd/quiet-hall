@@ -153,7 +153,7 @@ export function setupPump(h: Host) {
     const lm = s.live.mine;
     $('pump-live').innerHTML =
       `<b>Live</b> ${hhmm(s.live.start)}–${hhmm(s.live.end)} · ends in <b>${fmtT(s.live.end - t)}</b><br>` +
-      `Locked at <b>$${fmtP(s.live.lock)}</b>${s.live.lock != null ? ` <a href="${s.live.verifyLock}" target="_blank" rel="noopener">verify</a>` : ''}` +
+      (s.live.lock != null ? `Locked at <b>$${fmtP(s.live.lock)}</b> <a href="${s.live.verifyLock}" target="_blank" rel="noopener">verify</a>` : 'Price locking… (a few seconds)') +
       ` · crowd ⬆${s.live.up} ⬇${s.live.down}` +
       (lm ? ` · you: <b class="${lm.dir}">${lm.dir === 'up' ? '⬆ UP' : '⬇ DOWN'}</b>` : '');
     // next round: the one you can pick
