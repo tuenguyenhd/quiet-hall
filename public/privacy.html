@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · Quiet Hall</title>
+<style>
+@font-face{font-family:'Lilita One';src:url('/fonts/LilitaOne.woff2') format('woff2');font-display:swap}
+:root{--ink:#160d2e;--paper:#fffaf0;--bg:#f3eefe;--accent:#9945ff}
+@media (prefers-color-scheme: dark){:root{--ink:#f3eefe;--paper:#1d1438;--bg:#120b24;--accent:#14f195}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,sans-serif}
+main{max-width:720px;margin:0 auto;padding:24px 16px 64px}
+.card{background:var(--paper);border:2.5px solid var(--ink);border-radius:20px;box-shadow:5px 5px 0 var(--ink);padding:20px 22px}
+h1,h2{font-family:'Lilita One',system-ui,sans-serif;font-weight:400;line-height:1.15}
+h1{font-size:40px;margin:8px 0 4px} h2{font-size:22px;margin:28px 0 6px}
+a{color:var(--accent)} .small{opacity:.75;font-size:14px} li{margin:4px 0}
+</style></head><body><main>
+<p><a href="/">← Quiet Hall</a></p>
+<h1>Privacy</h1><p class="small">Last updated 9 November 2026</p>
+<div class="card">
+<p>Quiet Hall is a shared meditation space. You can use it without an account, and we collect as little as we can.</p>
+<h2>What stays on your phone</h2>
+<ul><li>A random visitor id, your character, light colour, pet and settings, kept in your browser storage so you look the same next time.</li>
+<li>Your badges and sit history (streaks) — they never leave your phone.</li></ul>
+<h2>What our server sees</h2>
+<ul><li><b>While you are in the hall:</b> your position, character and whether you are sitting, so other people can see you. This is not stored after you leave.</li>
+<li><b>Anonymous totals:</b> how many people sat today and for how long (no names, no ids).</li>
+<li><b>Your IP address:</b> used briefly to limit abuse (for example, free lanterns per network per day). Daily counters are kept for a day or two.</li>
+<li><b>Things you choose to make public:</b> a first name on a lantern, stone or tree, and the line you pick. Everyone in the hall can see these.</li>
+<li><b>Pets and blessings</b> you got are stored against your visitor id and, if you paid with a wallet, that wallet address, so they come back on your other devices.</li></ul>
+<h2>Wallets and payments</h2>
+<ul><li>Connecting or signing in with a Solana wallet is optional. If you do, we store your public wallet address and whether it holds a Seeker Genesis Token (for the gold light and Seeker perks). We never see your private keys or seed phrase.</li>
+<li>Payments happen on the Solana blockchain. Blockchain transactions are public and permanent; we cannot change or delete them.</li>
+<li>Stones and trees are NFTs minted to your wallet. Their owner is public on chain and shown in the hall.</li></ul>
+<h2>What we don't do</h2>
+<ul><li>No ads, no tracking pixels, no analytics SDKs, no selling or sharing of data.</li>
+<li>No chat or free-text messages — only preset wishes and lines.</li></ul>
+<h2>Services we use</h2>
+<ul><li>Cloudflare (hall server and storage) and Vercel (hosting the app).</li>
+<li>Helius (Solana RPC) to check payments and Seeker tokens.</li></ul>
+<h2>Children</h2>
+<p>Quiet Hall is not directed at children under 13, and we do not knowingly collect their data. Payments require a crypto wallet and are meant for adults.</p>
+<h2>Your choices</h2>
+<ul><li>Clear your browser/app storage to reset your visitor id and settings.</li>
+<li>Sign out of your wallet in your profile at any time.</li>
+<li>Email us to delete the records linked to your visitor id or wallet (on-chain data cannot be deleted).</li></ul>
+</div>
+<p class="small">Questions: <a href="mailto:SUPPORT_EMAIL">SUPPORT_EMAIL</a></p>
+</main></body></html>

@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { b64, decodeText, parseSiws, readSession, signSession, verifySignature } from './auth';
 import { Ledger, priceTable, type SpotOwner } from './ledger';
+import { serverRpc } from './solana';
 import { BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
 
 export { Ledger };
@@ -26,6 +27,8 @@ export interface Env {
   LOAD_TEST_KEY?: string;
   /** Devnet treasury secret key (base58) that pays for and signs NFT mints. Secret. */
   DEV_NET_SOL?: string;
+  /** Mainnet: treasury secret key (base58) for minting; preferred over DEV_NET_SOL. Secret. */
+  TREASURY_KEY?: string;
   STONE_COLLECTION?: string;
   TREE_COLLECTION?: string;
   /** Base URL used in NFT metadata links. */
@@ -127,7 +130,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   if (path === '/api/spots') {
     // owners follow the chain (marketplace sales / transfers); cheap, throttled inside
     await L.syncOwners(new URL(req.url).searchParams.get('refresh') === '1');
-    const sell = !!(env.DEV_NET_SOL && env.STONE_COLLECTION && env.TREE_COLLECTION);
+    const sell = !!((env.TREASURY_KEY || env.DEV_NET_SOL) && env.STONE_COLLECTION && env.TREE_COLLECTION);
     const strip = (o: Record<number, SpotOwner>) =>
       Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { owner: v.owner, name: v.name, line: v.line, asset: v.asset ?? null }]));
     return json({ stone: strip(await L.spots('stone')), tree: strip(await L.spots('tree')), prices: priceTable(env), onSale: sell, cluster: env.SOLANA_CLUSTER });
@@ -201,6 +204,20 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       pid: typeof body.pid === 'string' ? body.pid : undefined,
     });
     return 'error' in o ? json(o, 400) : json(o);
+  }
+  if (path === '/api/rpc') {
+    // tiny RPC relay for the app (blockhash + send) through the server's RPC key; public mainnet RPC throttles browsers
+    const method = body.method;
+    if (method !== 'getLatestBlockhash' && method !== 'sendTransaction') return json({ error: 'method not allowed' }, 400);
+    if (await L.limitedIp(ip)) return json({ error: 'Too many requests' }, 429);
+    const params = Array.isArray(body.params) ? body.params.slice(0, 2) : [];
+    if (method === 'sendTransaction' && !(typeof params[0] === 'string' && params[0].length < 2000)) return json({ error: 'bad tx' }, 400);
+    const r = await fetch(serverRpc(env, 'cluster'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: body.id ?? 1, method, params }),
+    });
+    return new Response(r.body, { status: r.status, headers: { 'content-type': 'application/json' } });
   }
   if (path === '/api/tip/confirm') {
     const r = await L.confirmOrder(String(body.id ?? ''), typeof body.signature === 'string' ? body.signature : undefined);

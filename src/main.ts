@@ -1117,4 +1117,4 @@ if (import.meta.env.DEV && params.has('lineup')) {
 }
 
 // tiny debug hook for automated checks
-(window as unknown as { __qh: unknown }).__qh = { lineup: () => lineup, scene, animals, controls, frens, items, others, stats, net, me: () => me, renderer };
+(window as unknown as { __qh: unknown }).__qh = { lineup: () => lineup, scene, animals, controls, frens, items, openFren, others, stats, net, me: () => me, renderer };

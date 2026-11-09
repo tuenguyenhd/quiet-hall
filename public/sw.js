@@ -1,6 +1,6 @@
 // Quiet Hall service worker: the hall, timer, breathing and sounds work offline.
 // Page = network-first (so updates arrive), assets = cache-first (hashed file names).
-const CACHE = 'qh-v2';
+const CACHE = 'qh-v3';
 const CORE = ['/', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png', '/icon-512.png',
   '/fonts/zen-maru-400.woff2', '/fonts/zen-maru-500.woff2', '/fonts/zen-maru-700.woff2',
   '/fonts/zen-mincho-400.woff2', '/fonts/zen-mincho-600.woff2'];
@@ -33,11 +33,14 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(req)
         .then((r) => {
-          const copy = r.clone();
-          caches.open(CACHE).then((c) => c.put('/', copy));
+          // only the app page is the offline fallback (not /privacy.html etc.)
+          if (url.pathname === '/' && r.ok) {
+            const copy = r.clone();
+            caches.open(CACHE).then((c) => c.put('/', copy));
+          }
           return r;
         })
-        .catch(() => caches.match('/')),
+        .catch(async () => (await caches.match(url.pathname === '/' ? '/' : req)) ?? caches.match('/')),
     );
     return;
   }

@@ -6,3 +6,11 @@ dist
 .vercel
 shots
 .worktrees
+
+# Seeker APK (solana-mobile webshell): never commit signing keys or build output
+*.keystore
+*.jks
+android/app/build/
+android/.gradle/
+android/build/
+*.apk

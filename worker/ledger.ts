@@ -125,6 +125,11 @@ export class Ledger extends DurableObject<Env> {
     for (let i = 0; i < del.length; i += 128) await this.ctx.storage.delete(del.slice(i, i + 128));
   }
 
+  /** RPC relay limit: 60 calls per IP per minute. */
+  async limitedIp(ip: string) {
+    return this.limited(`rpc:${ip}`, 60);
+  }
+
   async newNonce(ip: string): Promise<string | null> {
     if (await this.limited(`nonce:${ip}`, 20)) return null;
     const n = hex(rand(12));
@@ -180,7 +185,7 @@ export class Ledger extends DurableObject<Env> {
     let name: string | undefined;
     let line: string | undefined;
     if (kind === 'stone' || kind === 'tree') {
-      if (!this.env.DEV_NET_SOL || !this.env.STONE_COLLECTION || !this.env.TREE_COLLECTION) return { error: 'Stones and trees are not on sale yet.' };
+      if (!(this.env.TREASURY_KEY || this.env.DEV_NET_SOL) || !this.env.STONE_COLLECTION || !this.env.TREE_COLLECTION) return { error: 'Stones and trees are not on sale yet.' };
       spot = Math.floor(Number(meta.spot));
       const max = kind === 'stone' ? STONE_COUNT : TREE_COUNT;
       if (!(spot >= 0 && spot < max)) return { error: 'No such spot' };
@@ -265,7 +270,7 @@ export class Ledger extends DurableObject<Env> {
     rec = rec ?? { owner: o.payer, name: o.name ?? '', line: o.line ?? '' };
     if (!rec.asset) {
       try {
-        const treasury = await treasurySigner(this.env.DEV_NET_SOL!);
+        const treasury = await treasurySigner((this.env.TREASURY_KEY || this.env.DEV_NET_SOL)!);
         const collection = o.kind === 'stone' ? this.env.STONE_COLLECTION! : this.env.TREE_COLLECTION!;
         const label = o.kind === 'stone' ? 'Stone' : 'Tree';
         const m = await mintSpotAsset({

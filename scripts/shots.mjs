@@ -51,7 +51,7 @@ const cmd = (method, params = {}) =>
 const ev = async (expression) => (await cmd('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })).result?.result?.value;
 await cmd('Runtime.enable');
 await cmd('Page.enable');
-await cmd('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1.5, mobile: true });
+await cmd('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: Number(process.env.DPR ?? 1.5), mobile: true });
 
 // special names: "welcome" (first screen), "sheet-<id>" (open a sheet, e.g. sheet-lanternsheet), "fren-<n>" (look at resident n)
 for (const place of PLACES) {

@@ -31,7 +31,7 @@ import {
   type SolanaSignAndSendTransactionFeature,
   type SolanaSignTransactionFeature,
 } from '@solana/wallet-standard-features';
-import { apiPost } from './api';
+import { apiPost, apiUrl } from './api';
 
 export interface Order {
   id: string;
@@ -58,7 +58,8 @@ function withReference(ix: Instruction, reference: string): Instruction {
 
 /** Builds the transfer, asks the wallet to sign + send it, returns the transaction signature. */
 export async function sendTip(w: Wallet, account: WalletAccount, o: Order): Promise<string> {
-  const rpc = createSolanaRpc(RPC[o.cluster] ?? RPC.devnet);
+  // blockhash + send go through the hall server's RPC (public RPC throttles browsers, esp. mainnet)
+  const rpc = createSolanaRpc(apiUrl('/api/rpc'));
   const payer = createNoopSigner(address(account.address));
   let ixs: Instruction[];
   if (o.currency === 'SOL') {
