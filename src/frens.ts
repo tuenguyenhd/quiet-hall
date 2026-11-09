@@ -81,7 +81,7 @@ export function setupFrens(scene: THREE.Scene, heightAt: (x: number, z: number) 
     scene.add(a.root);
     clickables.push(a.root);
     const bubble = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false, fog: false, toneMapped: false }));
-    bubble.scale.set(3.6, 1.125, 1);
+    bubble.scale.set(3.0, 0.94, 1);
     bubble.renderOrder = 10;
     bubble.position.y = 2.25;
     bubble.visible = false;

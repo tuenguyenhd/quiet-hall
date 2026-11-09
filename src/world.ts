@@ -128,6 +128,64 @@ function terrain(x: number, z: number) {
   return h;
 }
 
+/** Sticker mural for the back wall of the hall (seen from the Lookout). */
+function muralTexture(aspect: number) {
+  const W = 1536;
+  const Hh = Math.round(W / aspect);
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = Hh;
+  const g = c.getContext('2d')!;
+  const draw = () => {
+    const sky = g.createLinearGradient(0, 0, 0, Hh);
+    sky.addColorStop(0, '#5b3fd0');
+    sky.addColorStop(0.55, '#ff8fc7');
+    sky.addColorStop(1, '#ffd36b');
+    g.fillStyle = sky;
+    g.fillRect(0, 0, W, Hh);
+    // sun with the Solana gradient
+    const sun = g.createLinearGradient(W / 2 - 120, 0, W / 2 + 120, 0);
+    sun.addColorStop(0, '#9945ff');
+    sun.addColorStop(1, '#14f195');
+    g.fillStyle = sun;
+    g.beginPath();
+    g.arc(W / 2, Hh * 0.62, Hh * 0.36, Math.PI, 0);
+    g.fill();
+    // hills
+    g.fillStyle = '#2a1a5e';
+    g.beginPath();
+    g.moveTo(0, Hh);
+    for (let x = 0; x <= W; x += 24) g.lineTo(x, Hh * 0.72 + Math.sin(x * 0.006) * 22 + Math.sin(x * 0.017) * 10);
+    g.lineTo(W, Hh);
+    g.fill();
+    // words
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineJoin = 'round';
+    g.font = `400 ${Math.round(Hh * 0.3)}px "Lilita One", system-ui, sans-serif`;
+    g.lineWidth = Hh * 0.05;
+    g.strokeStyle = '#160d2e';
+    g.strokeText('✦ sit together ✦', W / 2, Hh * 0.3);
+    g.fillStyle = '#fffaf0';
+    g.fillText('✦ sit together ✦', W / 2, Hh * 0.3);
+    g.font = `400 ${Math.round(Hh * 0.12)}px "Lilita One", system-ui, sans-serif`;
+    g.fillStyle = '#ffe14d';
+    g.fillText('gm from the lookout', W / 2, Hh * 0.86);
+    // sticker border
+    g.lineWidth = Hh * 0.04;
+    g.strokeRect(Hh * 0.02, Hh * 0.02, W - Hh * 0.04, Hh - Hh * 0.04);
+  };
+  draw();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  document.fonts?.load('400 60px "Lilita One"').then(() => {
+    draw();
+    t.needsUpdate = true;
+  });
+  return t;
+}
+
 export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boolean): World {
   const R = rng(7);
   const obstacles: Obstacle[] = [];
@@ -286,6 +344,15 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   add(mesh(new THREE.CircleGeometry(2.3, 56), moonMat, 0, H + 3.2, HZ - HD + 0.31), hall, false, false);
   add(mesh(new THREE.TorusGeometry(2.33, 0.1, 8, 56), wood, 0, H + 3.2, HZ - HD + 0.32), hall);
   for (let x = -HW; x <= HW; x += 0.9) obstacles.push({ x, z: HZ - HD + 0.1, r: 0.55 });
+  // the back of the hall faces the Lookout: a big sticker mural instead of a plain wall
+  {
+    const mw = HW * 2 - 1.6;
+    const mh = 4.2;
+    const mural = new THREE.Mesh(new THREE.PlaneGeometry(mw, mh), new THREE.MeshBasicMaterial({ map: muralTexture(mw / mh), toneMapped: false }));
+    mural.position.set(0, H + 2.7, HZ - HD - 0.02);
+    mural.rotation.y = Math.PI;
+    hall.add(mural);
+  }
   for (const sx of [-1, 1]) {
     add(mesh(new THREE.BoxGeometry(0.25, 1.0, HD * 2 - 1), wood, sx * (HW - 0.15), H + 0.5, HZ - 0.5), hall);
     for (let z = HZ - HD + 0.5; z <= HZ + HD - 1.2; z += 0.9) obstacles.push({ x: sx * (HW - 0.15), z, r: 0.5 });

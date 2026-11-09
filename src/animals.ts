@@ -16,7 +16,7 @@ export interface Kind {
 }
 const KINDS: Record<string, Kind> = {
   shiba: { url: '/models/shiba.glb', height: 0.9, speed: 0.9, walk: 'Walk', idles: ['Idle', 'Idle_2', 'Eating', 'Idle_2_HeadLow'] },
-  husky: { url: '/models/husky.glb', height: 1.0, speed: 1.0, walk: 'Walk', idles: ['Idle', 'Idle_2', 'Eating'] },
+  husky: { url: '/models/husky.glb', height: 1.0, speed: 1.0, walk: 'Walk', idles: ['Idle', 'Idle_2', 'Eating', 'Idle_2_HeadLow'] },
   frog: { url: '/models/frog.glb', height: 0.34, speed: 1.4, walk: 'Frog_Jump', idles: ['Frog_Idle'], hop: true },
 };
 

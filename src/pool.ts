@@ -9,6 +9,8 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import POOL from './chars.json';
 
 export interface PoolChar {
+  /** standing height in metres (chibis are smaller; default 1.55) */
+  h?: number;
   id: string;
   file: string;
   name: string;
@@ -112,7 +114,7 @@ function findLimbs(root: THREE.Object3D): Limb[] {
 
 export class PoolRig {
   root = new THREE.Group();
-  hipH = HEIGHT * 0.32;
+  hipH: number;
   char: PoolChar;
   private body = new THREE.Group();
   private limbs: Limb[] = [];
@@ -127,6 +129,7 @@ export class PoolRig {
 
   constructor(char: PoolChar) {
     this.char = char;
+    this.hipH = (char.h ?? HEIGHT) * 0.32;
     this.root.add(this.body);
     load(char.file)
       .then((g) => {
@@ -148,7 +151,7 @@ export class PoolRig {
         });
         obj.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(obj, true);
-        const k = HEIGHT / Math.max(0.001, box.max.y - box.min.y);
+        const k = (this.char.h ?? HEIGHT) / Math.max(0.001, box.max.y - box.min.y);
         const wrap = new THREE.Group();
         wrap.add(obj);
         wrap.scale.setScalar(k);

@@ -401,11 +401,17 @@ export function buildPlaces(ctx: WorldCtx & { focus: THREE.Vector3 }) {
     const rock = mesh(new THREE.CylinderGeometry(0.9, 1.15, 0.5, 9), mat('#9e9b8d', { flatShading: true }), x, y0 + 0.15, z);
     add(rock, scene);
     ctx.addSeat({ id: 'lookout-rock', x, y: y0 + 0.4, z, ry: 0, place: 'lookout' }, rock);
+    // cairn: each stone sits on the one below (squashed spheres, half-height = 0.6 × radius)
+    let cy = terrain(x + 2.4, z - 0.6) - 0.04;
     for (let i = 0; i < 5; i++) {
       const s = 0.32 - i * 0.05;
-      const c = mesh(new THREE.SphereGeometry(s, 10, 8), stoneM, x + 2.4, terrain(x + 2.4, z - 0.6) + 0.2 + i * 0.36, z - 0.6);
+      const h = 0.6 * s;
+      cy += h;
+      const c = mesh(new THREE.SphereGeometry(s, 10, 8), stoneM, x + 2.4 + (i % 2 ? 0.03 : -0.02), cy, z - 0.6);
       c.scale.y = 0.6;
+      c.rotation.y = i * 0.9;
       add(c, scene);
+      cy += h - 0.03; // tiny overlap so nothing floats
     }
     obstacles.push({ x: x + 2.4, z: z - 0.6, r: 0.4 });
     const pine = new THREE.Group();

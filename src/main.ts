@@ -669,6 +669,7 @@ function renderPets() {
         petPick = i;
         if (owned) choosePet(i);
         if (!owned && !inSheet) return openPets();
+        previewPet();
         renderPets();
       });
       el.appendChild(b);
@@ -683,11 +684,28 @@ function renderPets() {
   $('btn-adopt').textContent = `Adopt ${PETS[petPick].name}${price ? ' · ' + price : ''}`;
   ($('btn-adopt') as HTMLButtonElement).disabled = !items.onSale;
 }
+/** try-on: a locked pet walks beside you (only on your screen) while the sheet is open; the sheet moves down so you can see it */
+function previewPet() {
+  const trying = petPick > 0 && !myPets.includes(petPick);
+  $('petsheet').classList.toggle('peek', trying);
+  viewLift = trying ? 1 : 0;
+  $('pet-try').textContent = trying ? `Trying on: ${PETS[petPick].name} ✦` : 'Your pet';
+  me.setPet(trying ? petPick : myPet);
+  if (trying) setTimeout(() => me.pet?.pat(), 900);
+}
+function endPreview() {
+  $('petsheet').classList.remove('peek');
+  viewLift = 0;
+  $('pet-try').textContent = 'Your pet';
+  me.setPet(myPet);
+}
 function openPets() {
   $('pet-status').textContent = '';
   renderPets();
+  previewPet();
   $('petsheet').classList.remove('hidden');
 }
+for (const b of document.querySelectorAll('#petsheet [data-close]')) b.addEventListener('click', endPreview);
 renderPets();
 items.onPayChange = () => renderPets();
 $('btn-pet').addEventListener('click', () => {
@@ -695,6 +713,7 @@ $('btn-pet').addEventListener('click', () => {
   openPets();
 });
 $('btn-pat').addEventListener('click', () => {
+  endPreview();
   $('petsheet').classList.add('hidden');
   if (!me.pet) return toast('Pick a pet first 🐾');
   me.pet.pat();
@@ -712,6 +731,8 @@ $('btn-adopt').addEventListener('click', async () => {
   myPets = [...new Set([...myPets, k])];
   store.set('pets', JSON.stringify(myPets));
   choosePet(k);
+  $('petsheet').classList.remove('peek');
+  viewLift = 0;
   renderPets();
   say(`${PETS[k].name} is yours ✦ say hi!`);
   setTimeout(() => me.pet?.pat(), 1200);
@@ -997,6 +1018,8 @@ function netTick(now: number) {
 const camLook = new THREE.Vector3();
 const camWant = new THREE.Vector3();
 let camInit = false;
+let viewLift = 0;
+let viewLiftK = 0;
 function updateCamera(dt: number) {
   const p = me.root.position;
   let zoom = controls.zoom;
@@ -1030,7 +1053,9 @@ function updateCamera(dt: number) {
     p.y + 1.0 + zoom * Math.sin(pitch),
     p.z + Math.cos(yaw) * zoom * Math.cos(pitch),
   );
-  const look = new THREE.Vector3(p.x, p.y + 1.0, p.z);
+  // viewLift > 0 shows you higher on screen (pet try-on: the sheet covers the bottom half)
+  viewLiftK += (viewLift - viewLiftK) * (1 - Math.exp(-dt * 5));
+  const look = new THREE.Vector3(p.x, p.y + 1.0 - viewLiftK * 2.2, p.z);
   if (!camInit) {
     camera.position.copy(camWant);
     camLook.copy(look);

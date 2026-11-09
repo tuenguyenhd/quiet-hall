@@ -10,7 +10,7 @@ import { PETS } from './layout';
 /** size relative to the wandering animals (pets are a bit smaller, frogs a bit bigger) */
 const SCALE: Record<string, number> = { shiba: 0.62, husky: 0.6, frog: 0.9 };
 /** idle clip to use while the owner sits */
-const SIT: Record<string, string> = { shiba: 'Idle_2_HeadLow', husky: 'Idle_2', frog: 'Frog_Idle' };
+const SIT: Record<string, string> = { shiba: 'Idle_2_HeadLow', husky: 'Idle_2_HeadLow', frog: 'Frog_Idle' }; // no sit clips: head-low rest
 
 export class Pet {
   root = new THREE.Group();

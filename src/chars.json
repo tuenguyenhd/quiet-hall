@@ -90,15 +90,6 @@
     "tier": 3
   },
   {
-    "id": "low-poly-cat-f10a",
-    "file": "/chars/low-poly-cat-f10a.glb",
-    "name": "Low Poly Cat",
-    "by": "lizard-wizard",
-    "license": "CC Attribution",
-    "source": "https://sketchfab.com/3d-models/low-poly-cat-f10a23388e114300af94ca28c6a8906b",
-    "tier": 3
-  },
-  {
     "id": "small-blue-robot-0d07",
     "file": "/chars/small-blue-robot-0d07.glb",
     "name": "Small Blue Robot",
@@ -150,7 +141,8 @@
     "by": "JumpingJax",
     "license": "CC Attribution",
     "source": "https://sketchfab.com/3d-models/ninja-red-1a62fc6f786b4b498b6807100421bf73",
-    "tier": 4
+    "tier": 4,
+    "h": 1.2
   },
   {
     "id": "mushroom-npc-low-poly-animat-88bb",
@@ -177,7 +169,8 @@
     "by": "JumpingJax",
     "license": "CC Attribution",
     "source": "https://sketchfab.com/3d-models/ninja-yellow-52bb5f8760f1492b869659b809e98c4a",
-    "tier": 4
+    "tier": 4,
+    "h": 1.2
   },
   {
     "id": "astronaut-e4bb",
@@ -195,7 +188,8 @@
     "by": "CrunchyBirb145",
     "license": "CC Attribution",
     "source": "https://sketchfab.com/3d-models/chibi-flower-girl-fcb22c3b80314d91b514e854a4d26369",
-    "tier": 4
+    "tier": 4,
+    "h": 1.15
   },
   {
     "id": "sakura-2eef",
@@ -222,7 +216,8 @@
     "by": "jadepaz",
     "license": "CC Attribution",
     "source": "https://sketchfab.com/3d-models/chibi-low-poly-e6bbc09be322473b90d4fb7aadddab89",
-    "tier": 4
+    "tier": 4,
+    "h": 1.15
   },
   {
     "id": "cyber-punk-pink-samurai-girl-f740",

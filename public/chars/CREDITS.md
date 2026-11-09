@@ -14,7 +14,6 @@ All models from Sketchfab under the licence shown (CC BY 4.0 = credit required).
 | Male Avatar - Voxel | YogoshimoMoritz | CC Attribution | https://sketchfab.com/3d-models/male-avatar-voxel-88bf1628fc5e449aa9456280f3a73182 |
 | Bit.Bot - Prototype Ver. | YogoshimoMoritz | CC Attribution | https://sketchfab.com/3d-models/bitbot-prototype-ver-c90510150d914f108f2f834b832dfac6 |
 | Voxel Pinguin Game Character | danidesa | CC Attribution | https://sketchfab.com/3d-models/voxel-pinguin-game-character-6a5fda0bdaae46c2819fef80039cde4b |
-| Low Poly Cat | lizard-wizard | CC Attribution | https://sketchfab.com/3d-models/low-poly-cat-f10a23388e114300af94ca28c6a8906b |
 | Small Blue Robot | ilkkakooo | CC Attribution | https://sketchfab.com/3d-models/small-blue-robot-0d07f45776594659966fbb5ef2a476cd |
 | low poly Samurai | Kavinda.Attanayake | CC Attribution | https://sketchfab.com/3d-models/low-poly-samurai-a5cb9b25424d45c9972fc4de19969287 |
 | Beebo - Robotic Bee Character | PolytricityLtd | CC Attribution | https://sketchfab.com/3d-models/beebo-robotic-bee-character-4560d12583fe45c7a87797f6c77ff288 |
