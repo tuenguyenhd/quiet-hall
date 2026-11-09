@@ -36,6 +36,7 @@
         <div class="pill place hidden" id="place"></div>
         <button class="pill world" id="world" aria-label="World Sit" title="World Sit: everyone sits together once a day"></button>
         <button class="pill" id="btn-wallet" aria-label="Wallet" title="Wallet: sign in, Seeker gold light"><span class="wdot"></span><span id="wallet-text">👛</span></button>
+        <button class="pill" id="btn-chat" aria-label="Chat on/off" title="Hide chat">💬<b id="chat-unread" class="unread hidden"></b></button>
         <span class="grow"></span>
         <button class="pill hidden" id="btn-install" aria-label="Install app" title="Install Quiet Hall">📲</button>
         <button class="pill" id="btn-badges" aria-label="Badges">🏅 <b id="badge-count">0</b></button>
@@ -51,6 +52,15 @@
       <button class="act" id="btn-greet"><span class="ico">✧</span><span>Greet</span></button>
     </div>
 
+    <!-- global chat (bottom-left); 💬 in the top bar hides it -->
+    <div id="chat" class="chat hidden">
+      <div id="chat-log" class="chat-log" aria-live="polite"></div>
+      <form id="chat-form" class="chat-form" autocomplete="off">
+        <button type="button" id="chat-to" class="chat-to hidden"></button>
+        <input id="chat-input" class="chat-input" enterkeyhint="send" placeholder="Say gm…" aria-label="Chat message" />
+        <button type="submit" class="chat-send" aria-label="Send">➤</button>
+      </form>
+    </div>
     <div id="hint" class="hint hidden">Tap to walk · drag to look · tap a cushion (or Sit) to sit</div>
     <div id="toast" class="toast"></div>
 
@@ -59,7 +69,7 @@
         <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18.4 6.6A8 8 0 1 0 20 11.2"/><circle cx="12" cy="8.4" r="1.7"/><path d="M8.3 16.4c.4-3.1 1.8-4.8 3.7-4.8s3.3 1.7 3.7 4.8M7 16.4h10"/></svg>
         <h1>Quiet Hall</h1>
         <p class="lead"><span class="gm">gm.</span> Sit together in silence.</p>
-        <p class="small">No sign-up. No chat. Just touch (digital) grass with people around the world.</p>
+        <p class="small">No sign-up. Sit in silence, or say gm in the chat (you can hide it). Just touch (digital) grass with people around the world.</p>
         <div class="label">Pick your fren</div>
         <div id="species" class="species"></div>
         <div id="degen-row" class="degen-row hidden">
@@ -167,12 +177,10 @@
     <section id="lanternsheet" class="overlay hidden">
       <div class="card">
         <h2>Light a lantern</h2>
-        <p class="small">It floats over the lake for everyone to see. Your free lantern glows for 1 minute, one per day.</p>
+        <p class="small">A golden lantern with your wish floats over the lake for everyone to see. Premium: 24 hours or 7 days.</p>
         <div class="label">Your wish</div>
         <div class="chips" id="wishes"></div>
         <input class="field" id="lantern-name" maxlength="16" placeholder="A name (optional)" autocomplete="off" />
-        <button class="primary" id="btn-light">Light it (free)</button>
-        <div class="label">Special lanterns · golden, bigger</div>
         <div class="chips paywith"></div>
         <div class="paid-row">
           <button class="secondary" data-tier="lantern24">24 h · <b class="price" data-k="lantern24"></b></button>
@@ -215,6 +223,50 @@
       </div>
     </section>
 
+    <!-- tap another player: small menu (chat / wave / bow / mute) -->
+    <section id="playersheet" class="fren-mini hidden" aria-label="Player menu">
+      <div class="fm-card">
+        <div class="fm-head">
+          <b id="pl-name">Player</b>
+          <small id="pl-desc"></small>
+          <button class="fm-x" data-close="playersheet" aria-label="Close">✕</button>
+        </div>
+        <div class="fm-row">
+          <button id="btn-pl-chat" class="go">💬 Chat</button>
+          <button id="btn-pl-wave">👋 Wave</button>
+          <button id="btn-pl-bow">⌒ Bow</button>
+          <button id="btn-pl-mute">🔇 Mute</button>
+        </div>
+      </div>
+    </section>
+    <section id="pumpsheet" class="overlay hidden">
+      <div class="card pump">
+        <div class="pump-head"><h2>📈 PumpHall</h2><span class="tag">just for fun · no money · no prizes</span></div>
+        <div class="chips" id="pump-markets">
+          <button data-m="SOL" class="on">SOL · 5 min</button>
+          <button data-m="SKR">SKR · 15 min</button>
+        </div>
+        <div id="pump-price" class="pump-price">…</div>
+        <p class="small" id="pump-live"></p>
+        <div class="label" id="pump-q">Up or down?</div>
+        <div class="pump-pick">
+          <button class="up" id="btn-pump-up">⬆ UP</button>
+          <button class="down" id="btn-pump-down">⬇ DOWN</button>
+        </div>
+        <p class="small" id="pump-closes"></p>
+        <div class="label">Last rounds</div>
+        <ul class="pump-list" id="pump-past"></ul>
+        <div class="label">Leaderboard</div>
+        <div class="chips" id="pump-boards">
+          <button data-b="week" class="on">This week</button>
+          <button data-b="all">All time</button>
+        </div>
+        <ol class="pump-list board" id="pump-board"></ol>
+        <p class="small" id="pump-me"></p>
+        <p class="small fine">Right call = 10 pts, +2 per win in a row (max +10). Wrong or flat = 0, never minus. Prices: Coinbase public 1-minute candles (close of the last minute before the round starts / ends); tap verify to check. Not financial advice.</p>
+        <button class="ghost" data-close="pumpsheet">Close</button>
+      </div>
+    </section>
     <section id="spotsheet" class="overlay hidden">
       <div class="card">
         <div class="label" id="spot-kind">Stone</div>

@@ -140,11 +140,6 @@ export function setupItems(h: ItemsHooks) {
     lStatus('');
     $('lanternsheet').classList.remove('hidden');
   });
-  $('btn-light').addEventListener('click', () => {
-    if (!h.online()) return lStatus('Offline. Lanterns need the hall connection.', true);
-    h.send({ t: 'lantern', wish, name: cleanName(($('lantern-name') as HTMLInputElement).value) });
-    lStatus('Lighting…');
-  });
   for (const b of document.querySelectorAll<HTMLElement>('#lanternsheet [data-tier]')) {
     b.addEventListener('click', async () => {
       const r = await buy({ kind: b.dataset.tier! }, lStatus);
@@ -166,9 +161,9 @@ export function setupItems(h: ItemsHooks) {
       h.world.setOwned(kind, m);
     }
     onSpots?.();
-    // paid lanterns need the same on-chain setup as stones/trees
+    // lanterns are premium only: without payments switched on, say so instead of showing buttons
     document.querySelector('#lanternsheet .paid-row')?.classList.toggle('hidden', !spots.onSale);
-    document.querySelector('#lanternsheet .paid-row')?.previousElementSibling?.classList.toggle('hidden', !spots.onSale);
+    if (!spots.onSale) lStatus('Lanterns open soon.');
     renderPay();
   }
   const lines = $('spot-lines');

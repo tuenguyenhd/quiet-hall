@@ -22,8 +22,10 @@ a{color:var(--accent)} .small{opacity:.75;font-size:14px} li{margin:4px 0}
 <h2>What our server sees</h2>
 <ul><li><b>While you are in the hall:</b> your position, character and whether you are sitting, so other people can see you. This is not stored after you leave.</li>
 <li><b>Anonymous totals:</b> how many people sat today and for how long (no names, no ids).</li>
-<li><b>Your IP address:</b> used briefly to limit abuse (for example, free lanterns per network per day). Daily counters are kept for a day or two.</li>
+<li><b>Your IP address:</b> used briefly to limit abuse (for example, free blessings per network per day, and PumpHall picks per network per round). Daily counters are kept for a day or two.</li>
 <li><b>Things you choose to make public:</b> a first name on a lantern, stone or tree, and the line you pick. Everyone in the hall can see these.</li>
+<li><b>Chat:</b> your display name and the lines you send go to everyone in the hall (whispers only to the person you picked). Recent public lines are kept in the server's memory for up to 30 minutes so newcomers see the conversation, then dropped. Links and wallet addresses are removed.</li>
+<li><b>PumpHall:</b> your picks, points and display name are stored against your visitor id (and the network IP of each pick, to stop one person picking both sides). The leaderboard shows your display name and a short tag, never your visitor id.</li>
 <li><b>Pets and blessings</b> you got are stored against your visitor id and, if you paid with a wallet, that wallet address, so they come back on your other devices.</li></ul>
 <h2>Wallets and payments</h2>
 <ul><li>Connecting or signing in with a Solana wallet is optional. If you do, we store your public wallet address and whether it holds a Seeker Genesis Token (for the gold light and Seeker perks). We never see your private keys or seed phrase.</li>
@@ -31,9 +33,10 @@ a{color:var(--accent)} .small{opacity:.75;font-size:14px} li{margin:4px 0}
 <li>Stones and trees are NFTs minted to your wallet. Their owner is public on chain and shown in the hall.</li></ul>
 <h2>What we don't do</h2>
 <ul><li>No ads, no tracking pixels, no analytics SDKs, no selling or sharing of data.</li>
-<li>No chat or free-text messages — only preset wishes and lines.</li></ul>
+<li>Chat is optional: tap 💬 to hide it, or mute anyone from their menu.</li></ul>
 <h2>Services we use</h2>
 <ul><li>Cloudflare (hall server and storage) and Vercel (hosting the app).</li>
+<li>Coinbase Exchange public market data (SOL and SKR prices for PumpHall). Our server asks for prices; nothing about you is sent.</li>
 <li>Helius (Solana RPC) to check payments and Seeker tokens.</li></ul>
 <h2>Children</h2>
 <p>Quiet Hall is not directed at children under 13, and we do not knowingly collect their data. Payments require a crypto wallet and are meant for adults.</p>

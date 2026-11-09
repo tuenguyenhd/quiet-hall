@@ -30,6 +30,15 @@ class_name = "Ledger"
 tag = "v2"
 new_sqlite_classes = ["Ledger"]
 
+# PumpHall: fun-only price predictions (rounds, picks, leaderboard)
+[[durable_objects.bindings]]
+name = "PUMP"
+class_name = "Pump"
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Pump"]
+
 # Devnet first. Switch these (and use a paid RPC) for mainnet.
 [vars]
 SOLANA_CLUSTER = "devnet"

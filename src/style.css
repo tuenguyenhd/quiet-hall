@@ -1371,3 +1371,229 @@ button.founder.taken {
   box-shadow: none;
   font-size: 13px;
 }
+
+/* ---------- chat (bottom-left; hidden with 💬) ---------- */
+.chat {
+  position: fixed;
+  left: 10px;
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 92px);
+  width: min(340px, calc(100vw - 20px));
+  z-index: 12;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.chat-log {
+  pointer-events: auto;
+  max-height: 7.6em;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.25;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 6px rgba(0, 0, 0, 0.5);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 1.4em);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 1.4em);
+  scrollbar-width: none;
+}
+.chat-log:empty {
+  display: none;
+}
+.chat-log .cl {
+  overflow-wrap: anywhere;
+}
+.chat-log .cl b {
+  font-family: var(--pop);
+  font-weight: 400;
+  color: #ffe14d;
+  cursor: pointer;
+}
+.chat-log .cl.me b {
+  color: #9be7ff;
+}
+.chat-log .cl.wh {
+  color: #ffc4f2;
+}
+.chat-log .cl.wh b {
+  color: #ff8fe0;
+}
+.chat-form {
+  pointer-events: auto;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 17px;
+  border: 2px solid var(--ink);
+  background: rgba(255, 250, 240, 0.9);
+  color: var(--ink);
+  font-size: 16px; /* 16px: no zoom on iOS */
+}
+.chat-send,
+.chat-to {
+  height: 34px;
+  border-radius: 17px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--pop);
+  padding: 0 10px;
+}
+.chat-to {
+  max-width: 40%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: #ffd6f3;
+  font-size: 12px;
+}
+#btn-chat {
+  position: relative;
+}
+#btn-chat.off {
+  opacity: 0.55;
+}
+.unread {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: #ff4d6d;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+.bubble {
+  position: fixed;
+  left: 0;
+  top: 0;
+  max-width: 200px;
+  padding: 5px 10px;
+  border-radius: 14px;
+  border: 2px solid var(--ink);
+  background: #fffaf0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.2;
+  pointer-events: none;
+  z-index: 11;
+  box-shadow: 2px 2px 0 var(--ink);
+  overflow-wrap: anywhere;
+}
+/* the open chat makes room: hide it while a small menu is open above the action bar */
+body:has(.fren-mini:not(.hidden)) .chat {
+  display: none;
+}
+
+/* ---------- PumpHall sheet ---------- */
+.card.pump {
+  max-height: min(88vh, 760px);
+  overflow-y: auto;
+}
+.pump-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pump-head h2 {
+  margin: 0;
+}
+.pump-head .tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #ffe14d;
+  color: #160d2e;
+}
+.pump-price {
+  font-family: var(--pop);
+  font-size: 40px;
+  text-align: center;
+  margin: 6px 0 0;
+}
+.pump-price.up,
+.pump b.up {
+  color: #0aa86b;
+}
+.pump-price.down,
+.pump b.down {
+  color: #e5484d;
+}
+.pump-pick {
+  display: flex;
+  gap: 10px;
+  margin: 6px 0;
+}
+.pump-pick button {
+  flex: 1;
+  min-height: 56px;
+  border: var(--edge);
+  border-radius: 16px;
+  box-shadow: var(--hard);
+  font-family: var(--pop);
+  font-size: 22px;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+.pump-pick .up {
+  background: #14c47f;
+}
+.pump-pick .down {
+  background: #ff4d6d;
+}
+.pump-pick button:disabled {
+  opacity: 0.4;
+  box-shadow: none;
+}
+.pump-list {
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.pump-list li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.12);
+  flex-wrap: wrap;
+}
+.pump-list a {
+  margin-left: auto;
+  font-size: 11px;
+}
+.pump-list.board li b {
+  margin-left: auto;
+  font-family: var(--pop);
+  font-weight: 400;
+}
+.pump-list.board li span {
+  width: 1.6em;
+  text-align: center;
+}
+.pump-list.board li small {
+  opacity: 0.5;
+}
+.pump-list.board li.you {
+  background: #fff3b0;
+  border-radius: 6px;
+}
+.pump .fine {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.chat-log .cl.sys {
+  color: #d9ccff;
+  font-size: 12px;
+}

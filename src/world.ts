@@ -4,8 +4,9 @@ import { add, fbm, mat, mesh, rng, segDist, smoothstep, textTexture } from './bu
 import { addBrandBanners } from './brand';
 import { dressWorld } from './world-assets';
 import { buildTeasers } from './teasers';
+import { buildPumpHall, type BoardData } from './pumphall';
 import { stickerWallTexture } from './stickers';
-import { TEASERS, BELL, BOUNDS, COURT, GARDEN, GROVE, HALL, HALL_CUSHIONS, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
+import { PUMP, TEASERS, BELL, BOUNDS, COURT, GARDEN, GROVE, HALL, HALL_CUSHIONS, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
 import { buildPlaces, labelSprite } from './places';
 
 export interface Obstacle {
@@ -59,6 +60,8 @@ export interface World {
   placeAt(x: number, z: number): PlaceInfo | null;
   setOwned(kind: 'stone' | 'tree' | 'cushion' | 'banner', owned: Map<number, { name: string; line: string }>): void;
   swingBell(): void;
+  setPumpBoard(d: BoardData): void;
+  pumpPos: THREE.Vector3;
   setTheme(theme: Theme): void;
   update(t: number, dt: number, focus: THREE.Vector3): void;
   /** the place module's hooks (stones/trees ownership display) */
@@ -101,6 +104,11 @@ export const PATHS: [number, number][][] = [
     [-26, -64],
     [-12, -100],
     [0, LOOKOUT.z + LOOKOUT.r * 0.63],
+  ],
+  // the second road from spawn: south to PumpHall
+  [
+    [0, COURT.z + 30],
+    [0, PUMP.z - PUMP.r + 2],
   ],
   // to the coming-soon areas (they end at a rope)
   [
@@ -667,6 +675,8 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   sign(6.8, COURT.z - 1, 0.5, ['Garden →']);
   sign(-HW - 2.5, HZ + HD - 3, -0.6, ['← Maple Grove', '↑ Lookout']);
   sign(HW + 2.5, HZ + HD - 3, 0.6, ['Tea House →']);
+  // the fork where you arrive: mindfulness one way, the fun-only prediction hall the other
+  sign(3.4, COURT.z + 7, 0.25, ['↑ Quiet Hall · sit', '↓ PumpHall · predict']);
 
   // ---------- "built on Solana" / "made for Seeker" banners flanking the hall steps ----------
   addBrandBanners(scene, obstacles, terrain, [
@@ -678,6 +688,9 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   const spots = buildPlaces(ctx);
   // ---------- coming soon: Lotus Island, Sky Shrine, Night Market ----------
   buildTeasers({ scene, terrain, obstacles, clickables, blockers });
+  // ---------- PumpHall (south): fun-only price predictions ----------
+  const pumpHall = buildPumpHall({ scene, terrain, obstacles, clickables, blockers });
+  updaters.push((t) => pumpHall.update(t));
 
   // ---------- pines + rocks outside the places ----------
   const blocked = (x: number, z: number, pad = 0) =>
@@ -925,6 +938,8 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     swingBell() {
       swing = 1;
     },
+    setPumpBoard: (d) => pumpHall.setBoard(d),
+    pumpPos: new THREE.Vector3(PUMP.x, 0, PUMP.z),
     setTheme(theme) {
       const night = theme === 'night';
       const horizon = night ? '#231a46' : '#ffd9c4';

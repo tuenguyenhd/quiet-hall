@@ -1,14 +1,17 @@
 import { DurableObject } from 'cloudflare:workers';
 import { b64, decodeText, parseSiws, readSession, signSession, verifySignature } from './auth';
 import { Ledger, priceTable, type SpotOwner } from './ledger';
+import { Pump } from './pump';
 import { serverRpc } from './solana';
+import { PUMP_MARKETS, cleanChat, cleanPlayerName, defaultName, type PumpMarket } from '../src/layout';
 import { SPOTS, BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
 
-export { Ledger };
+export { Ledger, Pump };
 
 export interface Env {
   HALL: DurableObjectNamespace<Hall>;
   LEDGER: DurableObjectNamespace<Ledger>;
+  PUMP: DurableObjectNamespace<Pump>;
   ASSETS?: Fetcher;
   /** Secret for session tokens (.dev.vars locally, `wrangler secret put` in production). */
   SESSION_SECRET?: string;
@@ -69,6 +72,11 @@ interface Att {
   addr: string; // signed-in wallet ('' = anonymous)
   g: boolean; // verified Seeker owner -> gold light
   sp: boolean; // supporter (tipped)
+  nm: string; // display name (chat, PumpHall board)
+  ct: number; // last chat line (ms)
+  cw: number; // chat window start (ms)
+  cc: number; // chat lines in the window
+  lx: string; // last chat line (no copy-paste spam)
 }
 
 const MAX_ROOM = 400; // sockets per hall
@@ -111,8 +119,11 @@ async function inviteId(pid: string) {
   return [...h.slice(0, 6)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-const pub = (a: Att) => ({ id: a.id, color: a.c, sd: a.sd, pt: a.pt, ...(a.bu > Date.now() ? { bl: a.bl, bu: a.bu } : {}), x: r2(a.x), z: r2(a.z), ry: r2(a.ry), s: a.s, g: a.g, sp: a.sp });
+const pub = (a: Att) => ({ id: a.id, color: a.c, sd: a.sd, pt: a.pt, ...(a.bu > Date.now() ? { bl: a.bl, bu: a.bu } : {}), x: r2(a.x), z: r2(a.z), ry: r2(a.ry), s: a.s, g: a.g, sp: a.sp, nm: a.nm });
 const ledger = (env: Env) => env.LEDGER.get(env.LEDGER.idFromName('main'));
+/** PumpHall: one board for everyone; "t<id>" rooms are isolated boards for automated tests */
+const pumpRoom = (v: unknown) => (typeof v === 'string' && /^t[a-z0-9]{4,16}$/.test(v) ? v : 'main');
+const pump = (env: Env, room = 'main') => env.PUMP.get(env.PUMP.idFromName(room));
 
 function cors(req: Request, res: Response) {
   const h = new Headers(res.headers);
@@ -194,6 +205,22 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   if (req.method !== 'POST') return json({ error: 'Not found' }, 404);
   const body = await readJson(req);
 
+  if (path === '/api/pump/state') {
+    // POST so the private visitor id never sits in a URL / log
+    return json(await pump(env, pumpRoom(body.room)).state(typeof body.pid === 'string' ? body.pid : ''));
+  }
+  if (path === '/api/pump/pick') {
+    const m = String(body.m ?? '') as PumpMarket;
+    if (!(m in PUMP_MARKETS)) return json({ error: 'Unknown market' }, 400);
+    const r = await pump(env, pumpRoom(body.room)).pick(String(body.pid ?? ''), ip, body.name, Math.floor(num(body.seed)) >>> 0, m, Math.floor(num(body.k)), body.dir === 'down' ? 'down' : body.dir === 'up' ? 'up' : ('' as never));
+    return 'error' in r ? json(r, 400) : json(r);
+  }
+  if (path === '/api/pump/test-settle') {
+    // automated tests only: isolated test boards + the load-test key
+    const room = pumpRoom(body.room);
+    if (room === 'main' || !env.LOAD_TEST_KEY || body.key !== env.LOAD_TEST_KEY) return json({ error: 'Not found' }, 404);
+    return json(await pump(env, room).testSettle(String(body.m) as PumpMarket, Math.floor(num(body.k)), num(body.lock), num(body.close)));
+  }
   if (path === '/api/verify') {
     // Sign-In-With-Solana: the wallet signed a message containing our one-time nonce and this site's domain.
     if (!env.SESSION_SECRET) return json({ error: 'Server missing SESSION_SECRET' }, 500);
@@ -312,6 +339,8 @@ const LANTERN_MS = { free: LANTERN_FREE_MS, lantern24: 86400000, lantern7d: 7 * 
 const MAX_LANTERNS = 80;
 
 export class Hall extends DurableObject<Env> {
+  /** recent public chat (memory only; sent to newcomers so the box is not empty) */
+  private chatLog: { t: 'c'; id: string; n: string; x: string; at: number }[] = [];
   private today = utcDay();
   private minutes = 0;
   private sits = 0;
@@ -388,9 +417,8 @@ export class Hall extends DurableObject<Env> {
       if (!t) return send(ws, { t: 'lanternNo', reason: 'That lantern order is not paid or was already used.' });
       tier = t;
     } else {
-      if (!(await ledger(this.env).useFree('lantern', a.pid || a.id, a.ip))) {
-        return send(ws, { t: 'lanternNo', reason: 'You lit your free lantern today. Come back tomorrow, or light a special one.', paid: true });
-      }
+      // lanterns are premium only (no free tier since 2026-11-10)
+      return send(ws, { t: 'lanternNo', reason: 'Lanterns are a premium item: pick 24 h or 7 days.', paid: true });
     }
     const now = Date.now();
     // float somewhere over the lake (everyone sees the same spot)
@@ -404,7 +432,7 @@ export class Hall extends DurableObject<Env> {
       x: r2(LAKE.x + Math.cos(ang) * LAKE.rx * rr),
       z: r2(LAKE.z + Math.sin(ang) * LAKE.rz * rr),
       at: now,
-      until: now + (tier === 'free' && a.g ? FREE_SEEKER_MS : LANTERN_MS[tier]),
+      until: now + LANTERN_MS[tier],
       tier,
     };
     let list = await this.lanterns();
@@ -520,6 +548,11 @@ export class Hall extends DurableObject<Env> {
       addr: '',
       g: false,
       sp: false,
+      nm: '',
+      ct: 0,
+      cw: 0,
+      cc: 0,
+      lx: '',
     };
     server.serializeAttachment(a);
     return new Response(null, { status: 101, webSocket: client });
@@ -558,6 +591,7 @@ export class Hall extends DurableObject<Env> {
           a.since = now;
         }
         if (typeof m.pid === 'string' && PID_RE.test(m.pid)) a.pid = m.pid;
+        a.nm = cleanPlayerName(m.name) || defaultName(a.sd);
         a.inv = a.pid ? await inviteId(a.pid) : '';
         const b = a.pid ? await this.ctx.storage.get<{ f: number; u: number }>(`bless:${a.pid}`) : undefined;
         [a.bl, a.bu] = b && b.u > now ? [b.f, b.u] : [-1, 0];
@@ -592,6 +626,7 @@ export class Hall extends DurableObject<Env> {
           me: { g: a.g, sp: a.sp, bl: a.bl, bu: a.bu, pt: a.pt, pets: a.po, inv: a.inv, petNos: await ledger(this.env).petNumbers(a.pid, a.addr) },
           players: this.live(ws).map(pub),
           lanterns: await this.lanterns(),
+          chat: this.chatLog.filter((c) => now - c.at < 30 * 60000),
           stats: this.stats(),
         });
         this.broadcast({ t: 'join', p: pub(a) }, ws);
@@ -681,6 +716,47 @@ export class Hall extends DurableObject<Env> {
         if (!a.hello || (m.e !== 'bow' && m.e !== 'greet' && m.e !== 'pat')) return;
         ws.serializeAttachment(a);
         this.broadcast({ t: 'e', id: a.id, e: m.e }, ws);
+        return;
+      }
+      case 'name': {
+        if (!a.hello || now - a.ct < 3000) return;
+        const nm = cleanPlayerName(m.name) || defaultName(a.sd);
+        a.ct = now;
+        if (nm === a.nm) return void ws.serializeAttachment(a);
+        a.nm = nm;
+        ws.serializeAttachment(a);
+        this.broadcast({ t: 'nm', id: a.id, nm });
+        return;
+      }
+      case 'chat': {
+        if (!a.hello) return;
+        const x = cleanChat(m.x);
+        if (!x) return;
+        // slow mode: 1 line / 1.5 s, 6 lines / 20 s, no repeats within 30 s
+        if (now - a.cw > 20000) {
+          a.cw = now;
+          a.cc = 0;
+        }
+        if (now - a.ct < 1500 || a.cc >= 6) return send(ws, { t: 'chatNo', reason: 'Slow down a little 🍵' });
+        if (x === a.lx && now - a.ct < 30000) return send(ws, { t: 'chatNo', reason: 'You just said that.' });
+        a.ct = now;
+        a.cc++;
+        a.lx = x;
+        ws.serializeAttachment(a);
+        if (typeof m.to === 'string' && m.to) {
+          // whisper: only the two of you see it
+          const to = this.ctx.getWebSockets().find((w) => w !== ws && att(w)?.hello && att(w)?.id === m.to);
+          const b = to && att(to);
+          if (!to || !b) return send(ws, { t: 'chatNo', reason: 'They left.' });
+          const c = { t: 'c', id: a.id, n: a.nm, x, w: b.id, wn: b.nm, at: now };
+          send(to, c);
+          send(ws, c);
+          return;
+        }
+        const c = { t: 'c' as const, id: a.id, n: a.nm, x, at: now };
+        this.chatLog.push(c);
+        if (this.chatLog.length > 25) this.chatLog.shift();
+        this.broadcast(c);
         return;
       }
       case 'ring': {

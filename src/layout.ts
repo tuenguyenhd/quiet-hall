@@ -11,6 +11,8 @@ export const HALL = { z: -26, hw: 22, hd: 16, h: 0.9 };
 /** Courtyard in front of the hall (where you arrive). */
 export const COURT = { x: 0, z: 14, r: 22 };
 export const BELL = { x: 30, z: 4 };
+/** PumpHall: the fun-only price prediction hall, south of the courtyard (the second path from spawn). */
+export const PUMP = { x: 0, z: 100, r: 16 };
 export const BOUNDS = 164;
 /** Far rim where the ground rises into hills. */
 export const RIM = 176;
@@ -50,11 +52,12 @@ export interface PlaceInfo {
 const view = (x: number, z: number, dx: number, dz: number) => [x + dx, z + dz] as [number, number];
 export const PLACES: PlaceInfo[] = [
   { id: 'hall', name: 'Main Hall', x: 0, z: HALL.z, r: 24, hint: 'Tap a cushion to sit with others.', view: [0, HALL.z + HALL.hd - 4], look: [0, HALL.z] },
-  { id: 'court', name: 'Courtyard', x: COURT.x, z: COURT.z, r: COURT.r, hint: 'Paths lead to the lake, the garden, the grove and the tea house.', view: [0, COURT.z + 26], look: [0, COURT.z - 10] },
+  { id: 'court', name: 'Courtyard', x: COURT.x, z: COURT.z, r: COURT.r, hint: 'Two roads: north to the Quiet Hall (sit), south to PumpHall (predict, for fun).', view: [0, COURT.z + 26], look: [0, COURT.z - 10] },
   { id: 'lake', name: 'Lake', x: LAKE.x, z: LAKE.z, r: 23, hint: 'Sit at the end of the dock and listen to the water.', view: view(LAKE.x, LAKE.z, 20, -8), look: [LAKE.x, LAKE.z] },
   { id: 'garden', name: 'Stone Garden', x: GARDEN.x, z: GARDEN.z, r: 16, hint: 'Sit on a bench and follow the raked lines.', view: view(GARDEN.x, GARDEN.z, 0, 13.5), look: [GARDEN.x, GARDEN.z] },
   { id: 'grove', name: 'Maple Grove', x: GROVE.x, z: GROVE.z, r: 16, hint: 'Rest on the bench or the swing under the maples.', view: view(GROVE.x, GROVE.z, -3.4, 0.8), look: [GROVE.x - 14, GROVE.z + 2] },
   { id: 'tea', name: 'Tea House', x: TEA.x, z: TEA.z, r: 8, hint: 'Sit by the low table. The kettle is warm.', view: view(TEA.x, TEA.z, -7, 0.8), look: [TEA.x, TEA.z] },
+  { id: 'pump', name: 'PumpHall', x: PUMP.x, z: PUMP.z, r: PUMP.r + 2, hint: 'Tap the big board: guess SOL or SKR up or down. Just for fun, no money.', view: [PUMP.x, PUMP.z - 30], look: [PUMP.x, PUMP.z + 4] },
   { id: 'lookout', name: 'Lookout', x: LOOKOUT.x, z: LOOKOUT.z, r: 15, hint: 'One rock above the whole valley. Sit and watch the trees and the sky.', view: [0, LOOKOUT.z - 6], look: [0, -30] },
 ];
 
@@ -168,7 +171,7 @@ export const BLESS_PAID_MS = 86400000;
  * Ladder by scarcity and visibility: temporary < unlimited permanent < 108 stones < 64 trees < 6 banners < 24 cushions.
  */
 export const PRICE_SOL = {
-  bless24: 0.015,
+  bless24: 0.03,
   lantern24: 0.02,
   lantern7d: 0.06,
   pet: 0.035,
@@ -220,3 +223,55 @@ export const TEASERS = [
     text: 'The Night Market is being set up: stalls for pets, lanterns and frens from other Solana projects. Coming soon.',
   },
 ] as const;
+
+// ---------- PumpHall: fun-only price predictions ----------
+/** Markets. Prices come from Coinbase Exchange public 1-minute candles (anyone can check them).
+ *  SKR trades less often, so its rounds are longer. */
+export const PUMP_MARKETS = {
+  SOL: { product: 'SOL-USD', roundMin: 5 },
+  SKR: { product: 'SKR-USD', roundMin: 15 },
+} as const;
+export type PumpMarket = keyof typeof PUMP_MARKETS;
+/** picks close this long before a round locks */
+export const PUMP_CLOSE_MS = 30000;
+/** points: a right call earns 10, plus 2 per win in a row before it (max +10). Wrong or flat: 0. Never negative. */
+export const pumpPoints = (streakBefore: number) => 10 + Math.min(10, 2 * streakBefore);
+
+// ---------- chat ----------
+export const CHAT_MAX = 120;
+const BAD = /\b(f+u+c+k+\w*|sh+i+t+\w*|bitch\w*|cunt\w*|n+i+g+g+\w*|fag+\w*|retard\w*|whore\w*|slut\w*|dick\w*|pussy\w*|rape\w*)\b/giu;
+/** One chat line: no links or wallet addresses (scams), no control chars, swear words masked, ≤ CHAT_MAX chars. */
+export function cleanChat(s: unknown) {
+  if (typeof s !== 'string') return '';
+  const t = s
+    .normalize('NFC')
+    .replace(/[\p{C}]/gu, ' ')
+    .replace(/(\p{M}{2})\p{M}+/gu, '$1')
+    .replace(/\b(?:https?:\/\/|www\.)\S+/giu, '[link]')
+    .replace(/\b[\w-]+\.(?:com|io|xyz|net|org|app|gg|fun|so|me|co|ly|link|site|click|live|art)\b\S*/giu, '[link]')
+    .replace(/\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/g, '[address]')
+    .replace(BAD, (w) => w[0] + '•'.repeat(w.length - 1))
+    .replace(/\s+/g, ' ')
+    .trim();
+  return Array.from(t).slice(0, CHAT_MAX).join('').trim();
+}
+const ADJ = ['Calm', 'Quiet', 'Sunny', 'Misty', 'Gentle', 'Lucky', 'Sleepy', 'Brave', 'Soft', 'Happy', 'Cosmic', 'Mellow', 'Golden', 'Swift', 'Kind', 'Wild'];
+const NOUN = ['Otter', 'Panda', 'Fox', 'Koala', 'Crane', 'Capy', 'Frog', 'Shiba', 'Owl', 'Lotus', 'Maple', 'Pebble', 'Comet', 'Tiger', 'Whale', 'Bunny'];
+/** default display name from the character seed, e.g. "Calm Otter 42" */
+export function defaultName(seed: number) {
+  const s = seed >>> 0;
+  return `${ADJ[s % 16]} ${NOUN[(s >>> 4) % 16]} ${(s >>> 8) % 100}`;
+}
+/** A player's display name: letters, digits, spaces, ' - _; max 16 characters; swear words masked. '' = use defaultName. */
+export function cleanPlayerName(s: unknown) {
+  if (typeof s !== 'string') return '';
+  const t = s
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{M}\p{N} '\-_]/gu, '')
+    .replace(/(\p{M}{2})\p{M}+/gu, '$1')
+    .replace(/^\p{M}+/u, '')
+    .replace(/\s+/g, ' ')
+    .replace(BAD, (w) => w[0] + '•'.repeat(w.length - 1))
+    .trim();
+  return Array.from(t).slice(0, 16).join('').trim();
+}

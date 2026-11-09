@@ -1,4 +1,4 @@
-// Devnet end-to-end for hall items (spec 006 phase B): free lantern limit, paid lantern, buying a stone (real NFT mint).
+// Devnet end-to-end for hall items (spec 006 phase B): premium-only lanterns, paid lantern, buying a stone (real NFT mint).
 // The buyer is the devnet treasury key DEV_NET_SOL from .dev.vars (never printed). Spends ~0.03 devnet SOL.
 // Usage: node scripts/items-e2e.mjs [baseUrl]   (default http://localhost:5173)
 //   SKIP=stone,lantern  skips parts to save devnet SOL (faucet: https://faucet.solana.com)
@@ -90,11 +90,7 @@ ws.send(JSON.stringify({ t: 'hello', color: 3, pid: PID, session: token }));
 await wait(800);
 ws.send(JSON.stringify({ t: 'lantern', wish: 0, name: 'Mom' }));
 await wait(800);
-const l1 = msgs.find((m) => m.t === 'lantern');
-t('free lantern lit (1 min)', l1 && l1.l.tier === 'free' && Math.abs(l1.l.until - l1.l.at - 60000) < 1000);
-ws.send(JSON.stringify({ t: 'lantern', wish: 1 }));
-await wait(800);
-t('second free lantern refused today', msgs.some((m) => m.t === 'lanternNo'));
+t('lanterns are premium: no free lantern', !msgs.some((m) => m.t === 'lantern') && msgs.some((m) => m.t === 'lanternNo'));
 if (!SKIP.has('lantern')) {
 const lo = await j('/api/tip/order', { kind: 'lantern24', currency: 'SOL', token });
 const lp = await pay(lo.body);

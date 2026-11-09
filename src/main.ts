@@ -10,7 +10,7 @@ import { audio, haptic } from './audio';
 import { Net, type Msg } from './net';
 import { Meditation } from './meditation';
 import { LIGHTS } from './palette';
-import { BLESS, LIGHT_COUNT, PETS, SPECIES, SPECIES_ORDER, TEASERS, type SpotKind } from './layout';
+import { BLESS, LIGHT_COUNT, PETS, SPECIES, SPECIES_ORDER, TEASERS, cleanPlayerName, defaultName, type SpotKind } from './layout';
 import { updateEffects } from './effects';
 import { Pet } from './pets';
 import { setupFrens } from './frens';
@@ -19,6 +19,8 @@ import { CHARS, poolPick } from './pool';
 import { setupAnimals } from './animals';
 import { inviteUrl, makeCard, shareCard, shareInvite } from './share';
 import { setupPwa } from './pwa';
+import { setupChat } from './chat';
+import { setupPump } from './pump';
 
 const $ = (id: string) => document.getElementById(id)!;
 const params = new URLSearchParams(location.search);
@@ -121,6 +123,12 @@ me.setPet(myPet);
 Avatar.near = (p) => Math.hypot(p.x - me.root.position.x, p.z - me.root.position.z) < 45;
 
 const others = new Map<string, Avatar>();
+/** other players' display names (chat, player menu) */
+const names = new Map<string, string>();
+/** invisible tap target per player (skinned / baked meshes are unreliable to raycast) */
+const hitGeo = new THREE.CylinderGeometry(0.55, 0.55, 2, 8).translate(0, 1, 0);
+const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+const myName = () => cleanPlayerName(store.get('name')) || defaultName(mySeed);
 const stats = { here: 1, sitting: 0, minutes: 0, world: 0, worldAt: 0 };
 let entered = false;
 
@@ -164,7 +172,7 @@ let myId = '';
 /** public invite id for "sit with me" links (from the server; cached for offline sharing) */
 let myInvite = store.get('inv') ?? '';
 
-type PubPlayer = { id: string; color: number; sd?: number; pt?: number; bl?: number; bu?: number; x: number; z: number; ry: number; s: SitState; g?: boolean; sp?: boolean };
+type PubPlayer = { id: string; nm?: string; color: number; sd?: number; pt?: number; bl?: number; bu?: number; x: number; z: number; ry: number; s: SitState; g?: boolean; sp?: boolean };
 function addOther(p: PubPlayer) {
   others.get(p.id)?.dispose();
   const a = new Avatar(p.color, false, p.sd ?? 0);
@@ -177,7 +185,11 @@ function addOther(p: PubPlayer) {
   scene.add(a.root);
   a.setPet(p.pt ?? 0);
   if (p.bl != null && p.bu) a.setBless(p.bl, p.bu - clockOffset);
+  const hit = new THREE.Mesh(hitGeo, hitMat);
+  hit.userData.player = p.id;
+  a.root.add(hit);
   others.set(p.id, a);
+  names.set(p.id, p.nm || 'Someone');
 }
 
 net.hello = () => ({
@@ -189,6 +201,7 @@ net.hello = () => ({
   ry: me.root.rotation.y,
   s: me.state,
   pid,
+  name: myName(),
   session: acct?.session()?.token,
   // only ask to be placed next to the inviter on the first connection
   ...(invitedBy && !friendGreeted ? { with: invitedBy } : {}),
@@ -196,11 +209,13 @@ net.hello = () => ({
 net.onStatus = () => renderStats();
 net.onMessage = (m: Msg) => {
   items.onMessage(m);
+  chat.onMessage(m);
   switch (m.t) {
     case 'welcome': {
       clockOffset = (m.now as number) - Date.now();
       for (const a of others.values()) a.dispose();
       others.clear();
+      names.clear();
       for (const p of m.players as PubPlayer[]) addOther(p);
       Object.assign(stats, m.stats);
       const mine = m.me as { g: boolean; sp: boolean; bl?: number; bu?: number } | undefined;
@@ -221,6 +236,10 @@ net.onMessage = (m: Msg) => {
     case 'join':
       addOther(m.p as PubPlayer);
       break;
+    case 'nm':
+      if (others.has(m.id as string)) names.set(m.id as string, String(m.nm));
+      else if (m.id === myId) toast(`You are now ${m.nm} ✦`, 2500);
+      break;
     case 'p': {
       const a = others.get(m.id as string);
       if (a) a.setBadges(!!m.g, !!m.sp);
@@ -233,6 +252,8 @@ net.onMessage = (m: Msg) => {
     case 'leave':
       others.get(m.id as string)?.dispose();
       others.delete(m.id as string);
+      names.delete(m.id as string);
+      if (plId === m.id) $('playersheet').classList.add('hidden');
       break;
     case 'm': {
       const a = others.get(m.id as string);
@@ -398,6 +419,13 @@ controls.onTap = (x, y) => {
       return;
     }
   }
+  // other players: small menu (chat / wave / bow / mute)
+  const oh = ray.intersectObjects([...others.values()].map((a) => a.root.children.find((c) => c.userData.player)!).filter(Boolean), false)[0];
+  if (oh) {
+    openPlayer(oh.object.userData.player as string);
+    haptic(10);
+    return;
+  }
   const lh = ray.intersectObjects(items.lanterns.objects, true)[0];
   if (lh) {
     let o: THREE.Object3D | null = lh.object;
@@ -421,6 +449,11 @@ controls.onTap = (x, y) => {
         const i = frens.tap(o);
         haptic(15);
         if (i >= 0) openFren(i);
+        return;
+      }
+      if (action === 'pump') {
+        pump.open();
+        haptic(10);
         return;
       }
       if (action === 'teaser') {
@@ -598,6 +631,24 @@ const acct = setupAccount({
 });
 
 const items = setupItems({ scene, world, send: (m) => net.send(m), toast, buy: acct.buy, store, online: () => net.online });
+const chat = setupChat({
+  camera,
+  myId: () => myId,
+  myName,
+  rootOf: (id) => (id === myId ? me.root : others.get(id)?.root),
+  send: (m) => net.send(m),
+  online: () => net.online,
+  store,
+  toast,
+});
+const pump = setupPump({
+  pid,
+  seed: mySeed,
+  name: myName,
+  toast,
+  setBoard: (d) => world.setPumpBoard(d),
+  near: () => entered && Math.hypot(me.root.position.x - world.pumpPos.x, me.root.position.z - world.pumpPos.z) < 60,
+});
 let sitInWorld = false;
 
 // ---------- welcome ----------
@@ -787,6 +838,48 @@ $('btn-adopt').addEventListener('click', async () => {
   renderPets();
   say(`${PETS[k].name} is yours ✦ say hi!`);
   setTimeout(() => me.pet?.pat(), 1200);
+});
+
+// ---------- other players: tap → small menu ----------
+let plId = '';
+function openPlayer(id: string) {
+  const a = others.get(id);
+  if (!a) return;
+  plId = id;
+  $('playersheet').classList.remove('hidden');
+  $('frensheet').classList.add('hidden');
+  $('pl-name').textContent = names.get(id) ?? 'Someone';
+  const pk = a.pet ? PETS[a.pet.kind]?.name : '';
+  $('pl-desc').textContent = [a.state === 'sit' ? 'sitting quietly 🧘' : '', pk ? `walks with ${pk}` : ''].filter(Boolean).join(' · ');
+  $('btn-pl-mute').textContent = chat.isMuted(id) ? '🔊 Unmute' : '🔇 Mute';
+}
+function faceOther() {
+  const a = others.get(plId);
+  if (!a) return;
+  const p = me.root.position;
+  me.root.rotation.y = Math.atan2(a.root.position.x - p.x, a.root.position.z - p.z);
+}
+$('btn-pl-chat').addEventListener('click', () => {
+  $('playersheet').classList.add('hidden');
+  chat.whisper(plId, names.get(plId) ?? 'Someone');
+});
+$('btn-pl-wave').addEventListener('click', () => {
+  faceOther();
+  me.greet();
+  haptic(10);
+  net.send({ t: 'emote', e: 'greet' });
+});
+$('btn-pl-bow').addEventListener('click', () => {
+  faceOther();
+  me.bow();
+  haptic(10);
+  net.send({ t: 'emote', e: 'bow' });
+});
+$('btn-pl-mute').addEventListener('click', () => {
+  const on = !chat.isMuted(plId);
+  chat.mute(plId, on);
+  $('btn-pl-mute').textContent = on ? '🔊 Unmute' : '🔇 Mute';
+  toast(on ? `Muted ${names.get(plId)} (until you leave)` : `Unmuted ${names.get(plId)}`, 2200);
 });
 
 // ---------- frens: pat (free) and blessings (1 h free a day, 24 h paid) ----------
@@ -1155,6 +1248,12 @@ function frame(now: number) {
   for (const a of others.values()) a.update(dt, t);
   for (const a of lineup) a.update(dt, t);
   for (const lp of lineupPets) lp.pet.update(dt, lp.sit, true);
+  chat.update();
+  // the player menu closes when they walk away
+  if (plId && !$('playersheet').classList.contains('hidden')) {
+    const a = others.get(plId);
+    if (!a || a.root.position.distanceTo(me.root.position) > 14) $('playersheet').classList.add('hidden');
+  }
   // the fren menu closes itself when you walk away from that fren
   if (!$('frensheet').classList.contains('hidden')) {
     const fp = frens.pos(frenIdx);
@@ -1248,4 +1347,4 @@ if (import.meta.env.DEV && params.has('lineup')) {
 }
 
 // tiny debug hook for automated checks
-(window as unknown as { __qh: unknown }).__qh = { lineup: () => lineup, scene, animals, controls, frens, items, openFren, others, stats, net, me: () => me, renderer };
+(window as unknown as { __qh: unknown }).__qh = { lineup: () => lineup, scene, animals, controls, frens, items, openFren, openPlayer, pump, chat, others, stats, net, me: () => me, renderer };
