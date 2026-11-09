@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { b64, decodeText, parseSiws, readSession, signSession, verifySignature } from './auth';
 import { Ledger, PRICES, type SpotOwner } from './ledger';
-import { BOUNDS, LAKE, LIGHT_COUNT, SPECIES, WISHES, cleanName } from '../src/layout';
+import { BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, LAKE, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
 
 export { Ledger };
 
@@ -39,6 +39,9 @@ interface Att {
   pid: string; // persistent visitor id (for invite links), not an account
   c: number; // light colour index
   sd: number; // degen character seed (traits are derived from it on every client)
+  pt: number; // pet (index into PETS, 0 = none)
+  bl: number; // blessing from fren (index into BLESS, -1 = none)
+  bu: number; // blessing ends (ms)
   x: number;
   z: number;
   ry: number;
@@ -63,6 +66,10 @@ const MAX_SIT_MIN = 180;
 const WORLD_WINDOW_MIN = 20; // sits that start within 20 min of World Sit count toward it
 const PID_RE = /^[a-z0-9]{8,16}$/;
 
+const petIdx = (v: unknown) => {
+  const k = Math.floor(typeof v === 'number' ? v : 0);
+  return k >= 0 && k < PETS.length ? k : 0;
+};
 const num = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const utcDay = () => new Date().toISOString().slice(0, 10);
@@ -81,7 +88,7 @@ function att(ws: WebSocket): Att | null {
   }
 }
 
-const pub = (a: Att) => ({ id: a.id, color: a.c, sd: a.sd, x: r2(a.x), z: r2(a.z), ry: r2(a.ry), s: a.s, g: a.g, sp: a.sp });
+const pub = (a: Att) => ({ id: a.id, color: a.c, sd: a.sd, pt: a.pt, ...(a.bu > Date.now() ? { bl: a.bl, bu: a.bu } : {}), x: r2(a.x), z: r2(a.z), ry: r2(a.ry), s: a.s, g: a.g, sp: a.sp });
 const ledger = (env: Env) => env.LEDGER.get(env.LEDGER.idFromName('main'));
 
 function cors(req: Request, res: Response) {
@@ -353,6 +360,34 @@ export class Hall extends DurableObject<Env> {
     this.broadcast({ t: 'lantern', l });
   }
 
+  /** A blessing from a fren: free (1 h, once per visitor per UTC day, 3 per network) or paid (24 h). One at a time; a new one replaces the old. */
+  private async bless(ws: WebSocket, a: Att, m: Record<string, unknown>) {
+    const f = Math.floor(num(m.f, -1));
+    if (!(f >= 0 && f < BLESS.length)) return;
+    let ms = BLESS_FREE_MS;
+    if (typeof m.order === 'string') {
+      if (!(await ledger(this.env).useBlessOrder(m.order))) return send(ws, { t: 'blessNo', reason: 'That blessing order is not paid or was already used.' });
+      ms = BLESS_PAID_MS;
+    } else {
+      const day = utcDay();
+      const kp = `fbless:${a.pid || a.id}:${day}`;
+      const ki = `fblessip:${a.ip}:${day}`;
+      const n = (await this.ctx.storage.get<number>(ki)) ?? 0;
+      if ((await this.ctx.storage.get(kp)) || n >= 3) {
+        return send(ws, { t: 'blessNo', reason: 'You got your free blessing today. Come back tomorrow, or get a 24 h one.', paid: true });
+      }
+      await this.ctx.storage.put(kp, 1);
+      await this.ctx.storage.put(ki, n + 1);
+    }
+    const now = Date.now();
+    // the newest fren's colour; a paid blessing's time is never cut short by a free one
+    a.bu = Math.max(now + ms, a.bu > now ? a.bu : 0);
+    a.bl = f;
+    if (a.pid) await this.ctx.storage.put(`bless:${a.pid}`, { f: a.bl, u: a.bu });
+    ws.serializeAttachment(a);
+    this.broadcast({ t: 'bl', id: a.id, f: a.bl, u: a.bu });
+  }
+
   private live(except?: WebSocket): Att[] {
     const out: Att[] = [];
     for (const w of this.ctx.getWebSockets()) {
@@ -414,6 +449,9 @@ export class Hall extends DurableObject<Env> {
       pid: '',
       c: 0,
       sd: 0,
+      pt: 0,
+      bl: -1,
+      bu: 0,
       x: 0,
       z: 17,
       ry: Math.PI,
@@ -457,6 +495,7 @@ export class Hall extends DurableObject<Env> {
       case 'hello': {
         a.c = Math.max(0, Math.min(COLORS - 1, Math.floor(num(m.color))));
         a.sd = Math.floor(num(m.seed)) >>> 0;
+        a.pt = petIdx(m.pet);
         [a.x, a.z] = clampPos(num(m.x, 0), num(m.z, 17));
         a.ry = num(m.ry, Math.PI);
         if (m.s === 'sit' && a.s !== 'sit') {
@@ -464,6 +503,8 @@ export class Hall extends DurableObject<Env> {
           a.since = now;
         }
         if (typeof m.pid === 'string' && PID_RE.test(m.pid)) a.pid = m.pid;
+        const b = a.pid ? await this.ctx.storage.get<{ f: number; u: number }>(`bless:${a.pid}`) : undefined;
+        [a.bl, a.bu] = b && b.u > now ? [b.f, b.u] : [-1, 0];
         // optional wallet session -> gold light for verified Seeker owners, supporter halo
         const addr = await readSession(this.env.SESSION_SECRET, m.session);
         if (addr) {
@@ -488,7 +529,7 @@ export class Hall extends DurableObject<Env> {
           now,
           room,
           invites,
-          me: { g: a.g, sp: a.sp },
+          me: { g: a.g, sp: a.sp, bl: a.bl, bu: a.bu },
           players: this.live(ws).map(pub),
           lanterns: await this.lanterns(),
           stats: this.stats(),
@@ -553,8 +594,23 @@ export class Hall extends DurableObject<Env> {
         this.broadcast({ t: 'spots' });
         return;
       }
+      case 'pet': {
+        // choose / change your pet (free)
+        if (!a.hello) return;
+        const k = petIdx(m.k);
+        if (k === a.pt) return;
+        a.pt = k;
+        ws.serializeAttachment(a);
+        this.broadcast({ t: 'pt', id: a.id, k }, ws);
+        return;
+      }
+      case 'bless': {
+        if (!a.hello) return;
+        await this.bless(ws, a, m);
+        return;
+      }
       case 'emote': {
-        if (!a.hello || (m.e !== 'bow' && m.e !== 'greet')) return;
+        if (!a.hello || (m.e !== 'bow' && m.e !== 'greet' && m.e !== 'pat')) return;
         ws.serializeAttachment(a);
         this.broadcast({ t: 'e', id: a.id, e: m.e }, ws);
         return;

@@ -5,7 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { GARDEN, LAKE } from './layout';
 
-interface Kind {
+export interface Kind {
   url: string;
   height: number; // metres, standing
   speed: number;
@@ -36,13 +36,61 @@ const SPAWNS: Spawn[] = [
 const clip = (clips: THREE.AnimationClip[], name: string) =>
   clips.find((c) => c.name === name) ?? clips.find((c) => c.name.endsWith(`|${name}`)) ?? clips.find((c) => c.name.endsWith(name));
 
+const loader = new GLTFLoader();
+const cache = new Map<string, Promise<{ scene: THREE.Object3D; animations: THREE.AnimationClip[] }>>();
+
+export interface AnimalInst {
+  /** wrapper group: position/rotate this one; feet at y = 0 */
+  obj: THREE.Group;
+  mixer: THREE.AnimationMixer;
+  acts: Record<string, THREE.AnimationAction>;
+  k: Kind;
+}
+
+/** Loads (once) and clones an animal, scaled to `scale` × its normal height, feet on the ground. */
+export async function loadAnimal(kind: string, scale = 1): Promise<AnimalInst> {
+  const k = KINDS[kind];
+  if (!cache.has(k.url)) cache.set(k.url, loader.loadAsync(k.url));
+  const g = await cache.get(k.url)!;
+  const obj = SkeletonUtils.clone(g.scene);
+  obj.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) {
+      o.castShadow = true;
+      (o as THREE.Mesh).frustumCulled = false;
+    }
+  });
+  // normalise size: models come in different units. Pose the skeleton first, or skinned meshes
+  // report their raw bind-pose size (hundreds of units) and end up a few millimetres tall.
+  obj.updateMatrixWorld(true);
+  obj.traverse((o) => {
+    const sm = o as THREE.SkinnedMesh;
+    if (sm.isSkinnedMesh) {
+      sm.skeleton.update();
+      sm.computeBoundingBox();
+    }
+  });
+  const box = new THREE.Box3().setFromObject(obj);
+  const h = box.max.y - box.min.y || 1;
+  const f = (k.height * scale) / h;
+  obj.scale.multiplyScalar(f);
+  obj.position.y = -box.min.y * f;
+  const wrap = new THREE.Group();
+  wrap.add(obj);
+  const mixer = new THREE.AnimationMixer(obj);
+  const acts: Record<string, THREE.AnimationAction> = {};
+  for (const n of [k.walk, ...k.idles]) {
+    const c = clip(g.animations, n);
+    if (c) acts[n] = mixer.clipAction(c);
+  }
+  return { obj: wrap, mixer, acts, k };
+}
+
 export function setupAnimals(
   scene: THREE.Scene,
   heightAt: (x: number, z: number) => number,
   walkable: (x: number, z: number) => boolean,
   lowPower: boolean,
 ) {
-  const loader = new GLTFLoader();
   const live: {
     obj: THREE.Object3D;
     mixer: THREE.AnimationMixer;
@@ -53,48 +101,15 @@ export function setupAnimals(
     target: THREE.Vector2 | null;
     wait: number;
   }[] = [];
-  const cache = new Map<string, Promise<{ scene: THREE.Object3D; animations: THREE.AnimationClip[] }>>();
   const spawns = lowPower ? SPAWNS.filter((_, i) => i % 2 === 0) : SPAWNS;
 
   for (const s of spawns) {
-    const k = KINDS[s.kind];
-    if (!cache.has(k.url)) cache.set(k.url, loader.loadAsync(k.url));
-    cache
-      .get(k.url)!
-      .then((g) => {
-        const obj = SkeletonUtils.clone(g.scene);
-        obj.traverse((o) => {
-          if ((o as THREE.Mesh).isMesh) {
-            o.castShadow = true;
-            (o as THREE.Mesh).frustumCulled = false;
-          }
-        });
-        // normalise size: models come in different units. Pose the skeleton first, or skinned meshes
-        // report their raw bind-pose size (hundreds of units) and end up a few millimetres tall.
-        obj.updateMatrixWorld(true);
-        obj.traverse((o) => {
-          const sm = o as THREE.SkinnedMesh;
-          if (sm.isSkinnedMesh) {
-            sm.skeleton.update();
-            sm.computeBoundingBox();
-          }
-        });
-        const box = new THREE.Box3().setFromObject(obj);
-        const h = box.max.y - box.min.y || 1;
-        obj.scale.multiplyScalar(k.height / h);
-        const wrap = new THREE.Group();
-        wrap.add(obj);
-        obj.position.y = -box.min.y * (k.height / h);
+    loadAnimal(s.kind)
+      .then(({ obj: wrap, mixer, acts, k }) => {
         const [x, z] = s.home;
         wrap.position.set(x, heightAt(x, z), z);
         wrap.rotation.y = Math.random() * Math.PI * 2;
         scene.add(wrap);
-        const mixer = new THREE.AnimationMixer(obj);
-        const acts: Record<string, THREE.AnimationAction> = {};
-        for (const n of [k.walk, ...k.idles]) {
-          const c = clip(g.animations, n);
-          if (c) acts[n] = mixer.clipAction(c);
-        }
         const a = { obj: wrap, mixer, k, s, acts, cur: null as THREE.AnimationAction | null, target: null as THREE.Vector2 | null, wait: Math.random() * 1.5 };
         play(a, k.idles[0]);
         live.push(a);

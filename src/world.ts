@@ -441,22 +441,22 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   let swing = 0;
 
   // ---------- signposts ----------
+  const signAt: { x: number; z: number }[] = [];
   const sign = (x: number, z: number, ry: number, lines: string[]) => {
     const g = new THREE.Group();
     g.position.set(x, terrain(x, z), z);
     g.rotation.y = ry;
     add(mesh(new THREE.CylinderGeometry(0.07, 0.08, 1.9, 8), wood, 0, 0.95, 0), g);
-    const board = mesh(new THREE.BoxGeometry(1.5, 0.5 * lines.length, 0.06), [
-      wood,
-      wood,
-      wood,
-      wood,
-      new THREE.MeshStandardMaterial({ map: textTexture(lines, 512, 170 * lines.length), roughness: 0.9 }),
-      new THREE.MeshStandardMaterial({ map: textTexture(lines, 512, 170 * lines.length), roughness: 0.9 }),
-    ] as unknown as THREE.Material, 0, 1.55, 0.06);
+    // board size follows the text: 0.5 m per line, wider boards for long lines
+    const bw = Math.max(1.5, Math.min(2.2, 0.62 + 0.13 * Math.max(...lines.map((l) => l.length))));
+    const bh = 0.5 * lines.length;
+    const tex = textTexture(lines, Math.round(340 * bw), Math.round(340 * bh));
+    const face = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 });
+    const board = mesh(new THREE.BoxGeometry(bw, bh, 0.06), [wood, wood, wood, wood, face, face] as unknown as THREE.Material, 0, 1.3 + bh / 2, 0.06);
     add(board, g);
     scene.add(g);
     obstacles.push({ x, z, r: 0.3 });
+    signAt.push({ x, z });
   };
   sign(-4.6, 6.4, -0.5, ['← Lake']);
   sign(4.8, 7.4, 0.5, ['Garden →']);
@@ -481,6 +481,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     lakeE(x, z) < 1.35 ||
     PLACES.some((p) => p.id !== 'court' && p.id !== 'hall' && Math.hypot(x - p.x, z - p.z) < p.r + 4 + pad) ||
     PLACES.some((p) => Math.hypot(x - p.view[0], z - p.view[1]) < 9) ||
+    signAt.some((p) => Math.hypot(x - p.x, z - p.z) < 2.6 + Math.max(0, pad)) ||
     (segDist(x, z, LOOKOUT.x, LOOKOUT.z, 0, -22) < 10 && z < -23); // keep the lookout's view of the hall open
 
   const treeN = lowPower ? 170 : 280;

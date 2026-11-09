@@ -64,6 +64,11 @@ for (const place of PLACES) {
     await ev(`((document.getElementById('btn-${b}') ?? document.getElementById('btn-${b}s'))?.click(), document.getElementById('${sheet}')?.classList.remove('hidden'))`);
     await wait(600);
   }
+  // optional: EVAL="js" runs in the page after load (e.g. move the player), then waits a little
+  if (process.env.EVAL) {
+    await ev(process.env.EVAL);
+    await wait(Number(process.env.EVAL_WAIT ?? 2500));
+  }
   // hide the HUD toasts so the world is visible
   await ev(`document.querySelectorAll('.toast,.hint').forEach(e=>e.style.display='none')`);
   const fps = await ev(`new Promise(r=>{let n=0;const t0=performance.now();function f(){n++; if(performance.now()-t0<2000) requestAnimationFrame(f); else r(Math.round(n/((performance.now()-t0)/1000)))} requestAnimationFrame(f)})`);

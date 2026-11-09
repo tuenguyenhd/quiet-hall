@@ -111,3 +111,24 @@ export function cleanName(s: unknown) {
   if (typeof s !== 'string') return '';
   return s.normalize('NFC').replace(/[^\p{L}\p{M} '\-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 16);
 }
+
+/** Pets that follow you (free; everyone sees them). Index 0 = no pet. Shared by app and server. */
+export const PETS = [
+  { key: 'none', name: 'No pet', emoji: '✕' },
+  { key: 'shiba', name: 'Shiba', emoji: '🐕' },
+  { key: 'husky', name: 'Husky', emoji: '🐺' },
+  { key: 'frog', name: 'Frog', emoji: '🐸' },
+] as const;
+
+/** Blessings from the resident frens (index = fren). Free 1 h once a day; paid 24 h. Cosmetic only. */
+export const BLESS = [
+  { fren: 'Shibu', color: '#ffb347', word: 'much bless' },
+  { fren: 'Froggo', color: '#14f195', word: 'pond bless' },
+  { fren: 'Capy', color: '#ff9a1f', word: 'chill bless' },
+  { fren: 'Kitty', color: '#ff9ad5', word: 'nap bless' },
+  { fren: 'Shibu jr', color: '#ffe36e', word: 'smol bless' },
+  { fren: 'Old Monk', color: '#c6a6ff', word: 'wise bless' },
+  { fren: 'Froggo II', color: '#7ad7ff', word: 'grove bless' },
+] as const;
+export const BLESS_FREE_MS = 3600000;
+export const BLESS_PAID_MS = 86400000;

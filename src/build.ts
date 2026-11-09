@@ -64,28 +64,42 @@ export function segDist(px: number, pz: number, ax: number, az: number, bx: numb
   return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
 }
 
-/** Canvas-text board for signposts. */
-export function textTexture(lines: string[], w = 512, h = 128, bg = '#7a5a3f', fg = '#f6efdc') {
+/** Canvas-text board for signposts. Text shrinks to fit the widest line; redrawn once the font has loaded. */
+export function textTexture(lines: string[], w = 512, h = 128, bg = '#7a5a3f', fg = '#f6efdc', family = '"Lilita One", system-ui, sans-serif') {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
   const g = c.getContext('2d')!;
-  g.fillStyle = bg;
-  g.fillRect(0, 0, w, h);
-  g.strokeStyle = 'rgba(0,0,0,0.15)';
-  for (let y = 10; y < h; y += 18) {
-    g.beginPath();
-    g.moveTo(0, y);
-    g.lineTo(w, y + 4);
-    g.stroke();
-  }
-  g.fillStyle = fg;
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.font = `600 ${Math.round(h * 0.42)}px "Zen Maru Gothic", sans-serif`;
-  lines.forEach((l, i) => g.fillText(l, w / 2, (h / (lines.length + 1)) * (i + 1)));
+  const rowH = h / lines.length;
+  const draw = () => {
+    g.fillStyle = bg;
+    g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(0,0,0,0.15)';
+    for (let y = 10; y < h; y += 18) {
+      g.beginPath();
+      g.moveTo(0, y);
+      g.lineTo(w, y + 4);
+      g.stroke();
+    }
+    g.fillStyle = fg;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    let fs = Math.round(rowH * 0.58);
+    const setFont = () => (g.font = `400 ${fs}px ${family}`);
+    setFont();
+    while (fs > 12 && Math.max(...lines.map((l) => g.measureText(l).width)) > w * 0.86) {
+      fs -= 2;
+      setFont();
+    }
+    lines.forEach((l, i) => g.fillText(l, w / 2, rowH * (i + 0.53)));
+  };
+  draw();
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
+  document.fonts?.load(`400 ${Math.round(rowH * 0.58)}px ${family}`).then(() => {
+    draw();
+    t.needsUpdate = true;
+  });
   return t;
 }

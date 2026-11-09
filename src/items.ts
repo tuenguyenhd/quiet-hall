@@ -193,6 +193,10 @@ export function setupItems(h: ItemsHooks) {
 
   return {
     lanterns,
+    /** paid items (lanterns, blessings, stones, trees) are switched on */
+    get onSale() {
+      return !!spots?.onSale;
+    },
     badgeEvent,
     openSpot,
     onMessage(m: Msg) {

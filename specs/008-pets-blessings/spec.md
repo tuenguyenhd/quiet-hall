@@ -1,6 +1,12 @@
-# Spec 008: Pets + blessings (BACKLOG, not started)
+# Spec 008: Pets + blessings
 
-Status: backlog (added 2026-11-09 by owner). Paid feature.
+Status: **built 2026-11-09** (branch feat/pets). Owner: "Add pet as main features".
+
+## What was built (decisions on the open questions below)
+- **Pets are free and a main feature.** New visitors start with a random pet (Shiba, Husky, Frog — CC0 Quaternius); pick or remove it on the welcome card or the 🐾 Pet button. It follows you (beside-and-behind), sits next to you when you sit, and everyone sees it (`pet` in hello, `pt` relay). Tap any pet for hearts; patting yours shows hearts to everyone (`emote: pat`).
+- **Blessings from the 7 resident frens.** Tap a fren → sheet: 🤲 Pat (free, hearts + line), ✨ free blessing 1 h (once per visitor per UTC day, max 3 per network), ✨ 24 h blessing paid (`bless24`: 0.003 SOL / 0.49 USDC, fixed). Effect = 12 sparkles + a ring in the fren's colour (1 draw call + 1 mesh), visible to all, survives reconnects (stored per visitor id in the Hall DO). One blessing at a time: the newest fren's colour; a paid blessing's time is never cut short by a free one.
+- Cosmetic only, no odds, no rewards. Paid row hidden until paid items are on sale.
+- Tests: `scripts/pets-test.mjs` (10 checks over the socket).
 
 ## Idea (owner's words)
 "Get a pet. Pet/bless the doge, … npc so they give you bless effect (this is pay)"

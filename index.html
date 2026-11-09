@@ -47,6 +47,7 @@
       <button class="act" id="btn-bow"><span class="ico">⌒</span><span>Bow</span></button>
       <button class="act main" id="btn-sit"><span>Sit</span></button>
       <button class="act" id="btn-lantern"><span class="ico">🏮</span><span>Lantern</span></button>
+      <button class="act" id="btn-pet"><span class="ico">🐾</span><span>Pet</span></button>
       <button class="act" id="btn-greet"><span class="ico">✧</span><span>Greet</span></button>
     </div>
 
@@ -68,6 +69,8 @@
         </div>
         <div class="label">and your light</div>
         <div id="colors" class="colors"></div>
+        <div class="label">and a pet to walk with you</div>
+        <div id="pets" class="chips pets"></div>
         <button class="primary" id="btn-enter">Enter the hall</button>
       </div>
     </section>
@@ -172,6 +175,33 @@
         </div>
         <p class="status" id="lantern-status"></p>
         <button class="ghost" data-close="lanternsheet">Close</button>
+      </div>
+    </section>
+
+    <section id="petsheet" class="overlay hidden">
+      <div class="card">
+        <h2>Your pet</h2>
+        <p class="small">Free. It follows you everywhere and sits beside you when you sit. Everyone in the hall sees it.</p>
+        <div class="chips pets" id="pet-pick"></div>
+        <button class="primary" id="btn-pat">Give it a pat ❤️</button>
+        <button class="ghost" data-close="petsheet">Close</button>
+      </div>
+    </section>
+
+    <section id="frensheet" class="overlay hidden">
+      <div class="card">
+        <div class="label">Resident fren</div>
+        <h2 id="fren-name">Shibu</h2>
+        <p class="small" id="fren-desc"></p>
+        <button class="secondary" id="btn-fren-pat">🤲 Pat (free)</button>
+        <button class="primary" id="btn-bless-free">✨ Get blessed · 1 h free</button>
+        <div class="label bless-paid">Long blessing · sparkles for 24 h</div>
+        <div class="paid-row bless-paid">
+          <button class="secondary" id="btn-bless-paid">✨ 24 hours · <b class="price" data-k="bless24"></b></button>
+        </div>
+        <p class="small">Just for looks: sparkles around you that everyone sees. No luck, no rewards.</p>
+        <p class="status" id="fren-status"></p>
+        <button class="ghost" data-close="frensheet">Close</button>
       </div>
     </section>
 

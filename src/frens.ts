@@ -1,6 +1,7 @@
 // Resident frens: meme-animal characters who sit around the world. Tap one (or walk close) for a line.
 import * as THREE from 'three';
 import { Avatar } from './avatar';
+import { popEmoji } from './effects';
 import { GARDEN, GROVE, LAKE, LIGHT_COUNT, LOOKOUT, TEA } from './layout';
 
 interface Fren {
@@ -88,8 +89,8 @@ export function setupFrens(scene: THREE.Scene, heightAt: (x: number, z: number) 
     return { f, a, y, bubble, until: 0, next: 0, i: Math.floor(Math.random() * f.lines.length) };
   });
 
-  function say(n: (typeof list)[number], now: number) {
-    const line = n.f.lines[n.i++ % n.f.lines.length];
+  function say(n: (typeof list)[number], now: number, text?: string) {
+    const line = text ?? n.f.lines[n.i++ % n.f.lines.length];
     n.bubble.material.map?.dispose();
     n.bubble.material.map = bubbleTex(line, n.f.name);
     n.bubble.material.needsUpdate = true;
@@ -108,9 +109,27 @@ export function setupFrens(scene: THREE.Scene, heightAt: (x: number, z: number) 
       say(n, performance.now());
       return { x: n.f.x + Math.sin(ry) * 3.2, z: n.f.z + Math.cos(ry) * 3.2, lx: n.f.x, lz: n.f.z };
     },
+    /** tap on a fren: it talks; returns its index (for the fren sheet) or -1 */
     tap(o: THREE.Object3D) {
-      const n = list.find((x) => x.a.root === o);
-      if (n) say(n, performance.now());
+      const i = list.findIndex((x) => x.a.root === o);
+      if (i >= 0) say(list[i], performance.now());
+      return i;
+    },
+    name: (i: number) => list[i]?.f.name ?? '',
+    /** you pat the fren: hearts + a happy line */
+    pat(i: number) {
+      const n = list[i];
+      if (!n) return;
+      popEmoji(n.a.root, ['❤️', '💖', '🥰'], 6, 1.4);
+      say(n, performance.now(), ['such pat. wow.', 'hehe. again pls', 'ur a good fren', 'pat received ✦'][Math.floor(Math.random() * 4)]);
+    },
+    /** the fren blesses you: sparkles + its blessing word */
+    blessed(i: number, word: string) {
+      const n = list[i];
+      if (!n) return;
+      popEmoji(n.a.root, ['✨', '🙏', '✨'], 6, 1.4);
+      n.a.bow();
+      say(n, performance.now(), `${word} ✦ go in peace, fren`);
     },
     update(t: number, dt: number, player: THREE.Vector3) {
       const now = performance.now();

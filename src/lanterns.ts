@@ -55,7 +55,7 @@ export class Lanterns {
     const cap = new THREE.Mesh(this.capG, new THREE.MeshStandardMaterial({ color: '#5a3d2a' }));
     cap.position.y = 0.24;
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow(), color, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending }));
-    halo.scale.setScalar(special ? 1.6 : 1.3);
+    halo.scale.setScalar(special ? 1.4 : 1.1);
     obj.add(body, cap, halo);
     if (special) obj.scale.setScalar(1.45);
     obj.position.set(d.x, -0.2, d.z);
@@ -92,9 +92,9 @@ export class Lanterns {
       const fadeOut = Math.min(1, (d.until - now) / 20000);
       obj.position.x = d.x + Math.sin(t * 0.07 + seed) * 0.9;
       obj.position.z = d.z + Math.cos(t * 0.06 + seed) * 0.7;
-      obj.position.y = -0.2 + rise * (1.1 + Math.sin(t * 0.9 + seed) * 0.12) + (1 - fadeOut) * 2;
+      obj.position.y = -0.2 + rise * (0.8 + Math.sin(t * 0.9 + seed) * 0.08) + (1 - fadeOut) * 2;
       obj.rotation.y = t * 0.2 + seed;
-      obj.scale.setScalar((d.tier !== 'free' ? 2.6 : 1.9) * (0.3 + 0.7 * rise) * fadeOut + 0.001);
+      obj.scale.setScalar((d.tier !== 'free' ? 1.35 : 0.95) * (0.3 + 0.7 * rise) * fadeOut + 0.001);
     }
   }
 

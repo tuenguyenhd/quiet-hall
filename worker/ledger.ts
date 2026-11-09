@@ -7,11 +7,12 @@ import { associatedTokenAccount, seekerMints, serverRpc, signatureForReference, 
 import { mintSpotAsset, treasurySigner } from './core';
 import { LINES, STONE_COUNT, TREE_COUNT, cleanName } from '../src/layout';
 
-export type OrderKind = 'tip' | 'lantern24' | 'lantern7d' | 'stone' | 'tree';
+export type OrderKind = 'tip' | 'lantern24' | 'lantern7d' | 'bless24' | 'stone' | 'tree';
 /** Fixed prices for items (tips are any amount). Devnet SOL prices are tiny on purpose. */
 export const PRICES: Record<Exclude<OrderKind, 'tip'>, { SOL: number; USDC: number }> = {
   lantern24: { SOL: 0.005, USDC: 0.99 },
   lantern7d: { SOL: 0.015, USDC: 2.99 },
+  bless24: { SOL: 0.003, USDC: 0.49 },
   stone: { SOL: 0.02, USDC: 19 },
   tree: { SOL: 0.03, USDC: 29 },
 };
@@ -149,7 +150,7 @@ export class Ledger extends DurableObject<Env> {
     if (await this.limited(`order:${ip}`, 10)) return { error: 'Too many requests. Try again in a minute.' };
     if (currency !== 'SOL' && currency !== 'USDC') return { error: 'Unsupported currency' };
     const kind = (meta.kind ?? 'tip') as OrderKind;
-    if (!['tip', 'lantern24', 'lantern7d', 'stone', 'tree'].includes(kind)) return { error: 'Unknown item' };
+    if (!['tip', 'lantern24', 'lantern7d', 'bless24', 'stone', 'tree'].includes(kind)) return { error: 'Unknown item' };
     const lim = LIMITS[currency];
     if (kind !== 'tip') amount = PRICES[kind as Exclude<OrderKind, 'tip'>][currency];
     else if (!(amount >= lim.min && amount <= lim.max)) return { error: `Amount must be between ${lim.min} and ${lim.max} ${currency}` };
@@ -272,6 +273,15 @@ export class Ledger extends DurableObject<Env> {
     o.used = true;
     await this.ctx.storage.put(`o:${o.id}`, o);
     return o.kind;
+  }
+
+  /** A paid blessing order can be used exactly once. */
+  async useBlessOrder(id: string): Promise<boolean> {
+    const o = await this.ctx.storage.get<Order>(`o:${id}`);
+    if (!o || o.status !== 'paid' || o.used || o.kind !== 'bless24') return false;
+    o.used = true;
+    await this.ctx.storage.put(`o:${o.id}`, o);
+    return true;
   }
 
   /** Counts distinct friends who arrived through `host`'s link. */

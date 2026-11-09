@@ -1076,3 +1076,26 @@ body {
   transform: translate(2px, 2px);
   box-shadow: none;
 }
+
+/* pets row: emoji + name chips */
+.chips.pets button {
+  font-family: var(--pop);
+}
+#frensheet .secondary {
+  margin-bottom: 10px;
+}
+/* five action buttons must fit a 360 px phone */
+@media (max-width: 440px) {
+  #actions {
+    gap: 6px;
+  }
+  .act {
+    width: 56px;
+    height: 56px;
+    font-size: 11px;
+  }
+  .act.main {
+    width: 76px;
+    height: 76px;
+  }
+}

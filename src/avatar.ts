@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { LIGHT_COUNT } from './layout';
+import { BLESS, LIGHT_COUNT } from './layout';
+import { BlessFx } from './effects';
+import { Pet } from './pets';
 import { LIGHTS, ROBES } from './palette';
 import { addSleeves, buildRobe } from './body';
 import { DegenRig } from './degen';
@@ -171,6 +173,34 @@ export class Avatar {
   }
 
   private halo: THREE.Mesh | null = null;
+  pet: Pet | null = null;
+  private blessFx: BlessFx | null = null;
+  /** fren index of the current blessing (-1 = none) and when it ends (local ms) */
+  blessF = -1;
+  blessUntil = 0;
+
+  /** Give this avatar a pet (index into PETS; 0 = none). The pet lives in the scene, not under root. */
+  setPet(kind: number) {
+    if (this.pet?.kind === kind) return;
+    this.pet?.dispose();
+    this.pet = null;
+    if (kind > 0 && this.root.parent) {
+      this.pet = new Pet(kind, this.root, Avatar.heightAt);
+      this.root.parent.add(this.pet.root);
+    }
+  }
+
+  /** Show a fren's blessing (sparkles + ring in the fren's colour) until `until` (local ms). */
+  setBless(f: number, until: number) {
+    this.blessFx?.dispose();
+    this.blessFx = null;
+    this.blessF = -1;
+    if (!(f >= 0 && f < BLESS.length && until > Date.now())) return;
+    this.blessF = f;
+    this.blessUntil = until;
+    this.blessFx = new BlessFx(BLESS[f].color);
+    this.root.add(this.blessFx.group);
+  }
 
   /** Verified Seeker owners glow gold; supporters get a thin outer halo. */
   setBadges(gold: boolean, supporter: boolean) {
@@ -269,9 +299,20 @@ export class Avatar {
       }
     }
     this.auraMat.opacity = Math.max(s * (0.4 + 0.22 * breath), flash);
+
+    if (this.blessFx) {
+      if (Date.now() > this.blessUntil) this.setBless(-1, 0);
+      else this.blessFx.update(t);
+    }
+    if (this.pet) this.pet.update(dt, this.state === 'sit', Avatar.near(p));
   }
 
+  /** whether something at p is close enough to the camera's player to animate (set by main) */
+  static near: (p: THREE.Vector3) => boolean = () => true;
+
   dispose() {
+    this.pet?.dispose();
+    this.blessFx?.dispose();
     this.root.removeFromParent();
     this.robeMat.dispose();
     this.ringMat.dispose();

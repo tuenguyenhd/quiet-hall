@@ -10,7 +10,9 @@ import { audio, haptic } from './audio';
 import { Net, type Msg } from './net';
 import { Meditation } from './meditation';
 import { LIGHTS } from './palette';
-import { LIGHT_COUNT, SPECIES, SPECIES_ORDER } from './layout';
+import { BLESS, LIGHT_COUNT, PETS, SPECIES, SPECIES_ORDER } from './layout';
+import { updateEffects } from './effects';
+import type { Pet } from './pets';
 import { setupFrens } from './frens';
 import { TIER, describeTraits } from './degen';
 import { CHARS, poolPick } from './pool';
@@ -93,11 +95,19 @@ if (!(Number.isInteger(colorIdx) && colorIdx >= 0 && colorIdx < LIGHT_COUNT * SP
   colorIdx = SPECIES_ORDER[0] * LIGHT_COUNT + Math.floor(Math.random() * LIGHT_COUNT); // new visitors start as a random Degen
 }
 let me = new Avatar(colorIdx, true, mySeed);
+// pets are a main feature: new visitors start with a random one (change or remove any time)
+let myPet = Number(store.get('pet') ?? NaN);
+if (!(Number.isInteger(myPet) && myPet >= 0 && myPet < PETS.length)) {
+  myPet = 1 + Math.floor(Math.random() * (PETS.length - 1));
+  store.set('pet', String(myPet));
+}
 const frens = setupFrens(scene, world.heightAt, world.clickables);
 const animals = setupAnimals(scene, world.heightAt, world.walkable, lowPower);
 me.root.position.copy(world.spawn);
 me.root.rotation.y = Math.PI;
 scene.add(me.root);
+me.setPet(myPet);
+Avatar.near = (p) => Math.hypot(p.x - me.root.position.x, p.z - me.root.position.z) < 45;
 
 const others = new Map<string, Avatar>();
 const stats = { here: 1, sitting: 0, minutes: 0, world: 0, worldAt: 0 };
@@ -139,8 +149,9 @@ function renderStats() {
 // ---------- network ----------
 const net = new Net();
 let clockOffset = 0;
+let myId = '';
 
-type PubPlayer = { id: string; color: number; sd?: number; x: number; z: number; ry: number; s: SitState; g?: boolean; sp?: boolean };
+type PubPlayer = { id: string; color: number; sd?: number; pt?: number; bl?: number; bu?: number; x: number; z: number; ry: number; s: SitState; g?: boolean; sp?: boolean };
 function addOther(p: PubPlayer) {
   others.get(p.id)?.dispose();
   const a = new Avatar(p.color, false, p.sd ?? 0);
@@ -151,12 +162,15 @@ function addOther(p: PubPlayer) {
   a.state = p.s;
   a.setBadges(!!p.g, !!p.sp);
   scene.add(a.root);
+  a.setPet(p.pt ?? 0);
+  if (p.bl != null && p.bu) a.setBless(p.bl, p.bu - clockOffset);
   others.set(p.id, a);
 }
 
 net.hello = () => ({
   color: colorIdx,
   seed: mySeed,
+  pet: myPet,
   x: me.root.position.x,
   z: me.root.position.z,
   ry: me.root.rotation.y,
@@ -176,9 +190,11 @@ net.onMessage = (m: Msg) => {
       others.clear();
       for (const p of m.players as PubPlayer[]) addOther(p);
       Object.assign(stats, m.stats);
-      const mine = m.me as { g: boolean; sp: boolean } | undefined;
+      const mine = m.me as { g: boolean; sp: boolean; bl?: number; bu?: number } | undefined;
       myBadges = { g: !!mine?.g, sp: !!mine?.sp };
       me.setBadges(myBadges.g, myBadges.sp);
+      myId = String(m.you);
+      me.setBless(mine?.bl ?? -1, (mine?.bu ?? 0) - clockOffset);
       setInvites(Number(m.invites) || 0, false);
       if (m.room === 'seeker') toast('Seeker hall ✦ only verified Seeker owners sit here.', 4000);
       renderStats();
@@ -215,9 +231,28 @@ net.onMessage = (m: Msg) => {
     }
     case 'e': {
       const a = others.get(m.id as string);
-      if (a) m.e === 'bow' ? a.bow() : a.greet();
+      if (a) m.e === 'pat' ? a.pet?.pat() : m.e === 'bow' ? a.bow() : a.greet();
       break;
     }
+    case 'pt':
+      others.get(m.id as string)?.setPet(Number(m.k) || 0);
+      break;
+    case 'bl': {
+      const f = Number(m.f);
+      const until = Number(m.u) - clockOffset;
+      if (m.id === myId) {
+        me.setBless(f, until);
+        frens.blessed(f, BLESS[f]?.word ?? 'bless');
+        $('frensheet').classList.add('hidden');
+        const h = Math.round((until - Date.now()) / 3600000);
+        toast(`${BLESS[f]?.fren ?? 'A fren'} blessed you ✨ sparkles for ${h >= 2 ? h + ' h' : '1 h'}`, 4500);
+        haptic(30);
+      } else others.get(m.id as string)?.setBless(f, until);
+      break;
+    }
+    case 'blessNo':
+      frenStatus(String(m.reason), true);
+      break;
     case 'ring': {
       const a = others.get(m.id as string);
       const from = a ? a.root.position : world.bellPos;
@@ -323,6 +358,20 @@ controls.onTap = (x, y) => {
   if (!entered || med.active) return;
   ndc.set((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
   ray.setFromCamera(ndc, camera);
+  // pets first: tap any pet for a pat (yours: everyone sees the hearts)
+  const pets = [me.pet, ...[...others.values()].map((a) => a.pet)].filter((p): p is Pet => !!p);
+  const ph = ray.intersectObjects(pets.map((p) => p.root), true)[0];
+  if (ph) {
+    let o: THREE.Object3D | null = ph.object;
+    while (o && !o.userData.pet) o = o.parent;
+    const pet = o?.userData.pet as Pet | undefined;
+    if (pet) {
+      pet.pat();
+      haptic(15);
+      if (pet === me.pet) net.send({ t: 'emote', e: 'pat' });
+      return;
+    }
+  }
   const lh = ray.intersectObjects(items.lanterns.objects, true)[0];
   if (lh) {
     let o: THREE.Object3D | null = lh.object;
@@ -343,8 +392,9 @@ controls.onTap = (x, y) => {
         return;
       }
       if (action === 'npc') {
-        frens.tap(o);
+        const i = frens.tap(o);
         haptic(15);
+        if (i >= 0) openFren(i);
         return;
       }
       if (action === 'spot') {
@@ -499,11 +549,14 @@ function rebuildMe() {
   const pos = me.root.position.clone();
   const ry = me.root.rotation.y;
   me.dispose();
+  const [bf, bu] = [me.blessF, me.blessUntil];
   me = new Avatar(colorIdx, true, mySeed);
   me.setBadges(myBadges.g, myBadges.sp);
   me.root.position.copy(pos);
   me.root.rotation.y = ry;
   scene.add(me.root);
+  me.setPet(myPet);
+  me.setBless(bf, bu);
 }
 SPECIES_ORDER.forEach((i) => {
   const sp = SPECIES[i];
@@ -551,6 +604,70 @@ LIGHTS.forEach((c, i) => {
 });
 
 renderDegen();
+
+// ---------- pets ----------
+function renderPets() {
+  for (const el of [$('pets'), $('pet-pick')]) {
+    el.replaceChildren();
+    PETS.forEach((p, i) => {
+      const b = document.createElement('button');
+      b.textContent = `${p.emoji} ${p.name}`;
+      b.classList.toggle('on', i === myPet);
+      b.addEventListener('click', () => {
+        myPet = i;
+        store.set('pet', String(i));
+        me.setPet(i);
+        net.send({ t: 'pet', k: i });
+        renderPets();
+        haptic(10);
+      });
+      el.appendChild(b);
+    });
+  }
+}
+renderPets();
+$('btn-pet').addEventListener('click', () => {
+  renderPets();
+  $('petsheet').classList.remove('hidden');
+});
+$('btn-pat').addEventListener('click', () => {
+  $('petsheet').classList.add('hidden');
+  if (!me.pet) return toast('Pick a pet first 🐾');
+  me.pet.pat();
+  haptic(15);
+  net.send({ t: 'emote', e: 'pat' });
+});
+
+// ---------- frens: pat (free) and blessings (1 h free a day, 24 h paid) ----------
+let frenIdx = 0;
+function frenStatus(t: string, err = false) {
+  $('fren-status').textContent = t;
+  $('fren-status').classList.toggle('err', err);
+}
+function openFren(i: number) {
+  frenIdx = i;
+  const b = BLESS[i];
+  $('fren-name').textContent = frens.name(i);
+  $('fren-desc').textContent = `${b.word}: ${b.fren} can bless you. You glow with ${b.fren}'s sparkles and everyone in the hall sees them.`;
+  for (const el of document.querySelectorAll('#frensheet .bless-paid')) el.classList.toggle('hidden', !items.onSale);
+  frenStatus(me.blessF >= 0 ? `Blessed by ${BLESS[me.blessF].fren} · ${Math.max(1, Math.round((me.blessUntil - Date.now()) / 60000))} min left` : '');
+  $('frensheet').classList.remove('hidden');
+}
+$('btn-fren-pat').addEventListener('click', () => {
+  frens.pat(frenIdx);
+  haptic(15);
+  $('frensheet').classList.add('hidden');
+});
+$('btn-bless-free').addEventListener('click', () => {
+  if (!net.online) return frenStatus('Offline. Blessings need the hall connection.', true);
+  frenStatus('Asking…');
+  net.send({ t: 'bless', f: frenIdx });
+});
+$('btn-bless-paid').addEventListener('click', async () => {
+  const r = await acct.buy({ kind: 'bless24' }, frenStatus);
+  const order = r?.order as { id: string } | undefined;
+  if (order) net.send({ t: 'bless', f: frenIdx, order: order.id });
+});
 
 $('btn-enter').addEventListener('click', () => {
   audio.unlock();
@@ -872,6 +989,7 @@ function frame(now: number) {
   animals.update(dt, me.root.position);
   placeTick();
   items.update(t);
+  updateEffects(dt);
   if (markerT < 1) {
     markerT = Math.min(1, markerT + dt * 1.4);
     (marker.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - markerT);
@@ -940,4 +1058,4 @@ if (import.meta.env.DEV && params.has('lineup')) {
 }
 
 // tiny debug hook for automated checks
-(window as unknown as { __qh: unknown }).__qh = { lineup: () => lineup, scene, animals, others, stats, net, me: () => me, renderer };
+(window as unknown as { __qh: unknown }).__qh = { lineup: () => lineup, scene, animals, controls, frens, items, others, stats, net, me: () => me, renderer };
