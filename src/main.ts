@@ -49,7 +49,8 @@ const invitedBy = /^[a-z0-9]{8,16}$/.test(withPid) && withPid !== pid ? withPid 
 let friendGreeted = false;
 
 // ---------- renderer ----------
-const lowPower = params.has('low') || (navigator.hardwareConcurrency ?? 8) <= 4;
+// light mode: ?low, small CPUs, or a phone that measured slow last time (auto, see perfGuard below)
+const lowPower = params.has('low') || (navigator.hardwareConcurrency ?? 8) <= 4 || (store.get('lowgfx') === '1' && !params.has('high'));
 const canvas = $('scene') as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, lowPower ? 1 : 1.5));
@@ -806,9 +807,27 @@ function updateCamera(dt: number) {
 
 // ---------- loop ----------
 let last = performance.now();
+// perf guard: if the first ~8 s after entering run below ~35 fps, drop the pixel ratio now and
+// start in light mode next time (fewer trees, flowers, grass; no extra shadows)
+let pgFrames = 0;
+let pgTime = 0;
+let pgDone = lowPower;
+function perfGuard(ms: number) {
+  if (pgDone || !entered || document.hidden || ms > 250) return;
+  pgFrames++;
+  pgTime += ms;
+  if (pgTime < 8000) return;
+  pgDone = true;
+  const fps = (pgFrames * 1000) / pgTime;
+  if (fps < 35) {
+    renderer.setPixelRatio(1);
+    store.set('lowgfx', '1');
+  }
+}
 function frame(now: number) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000);
+  perfGuard(now - last);
   last = now;
   const t = now / 1000;
   stepMe(dt);
@@ -858,4 +877,4 @@ if (import.meta.env.DEV && params.has('lineup')) {
 }
 
 // tiny debug hook for automated checks
-(window as unknown as { __qh: unknown }).__qh = { animals, others, stats, net, me: () => me, renderer };
+(window as unknown as { __qh: unknown }).__qh = { scene, animals, others, stats, net, me: () => me, renderer };

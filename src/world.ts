@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { C } from './palette';
 import { add, fbm, mat, mesh, rng, segDist, smoothstep, textTexture } from './build';
 import { addBrandBanners } from './brand';
+import { dressWorld } from './world-assets';
 import { BELL, BOUNDS, GARDEN, GROVE, HALL, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
 import { buildPlaces } from './places';
 
@@ -194,7 +195,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
 
   // ---------- ground (vertex-coloured terrain) ----------
   const G = 220;
-  const seg = lowPower ? 150 : 210;
+  const seg = lowPower ? 120 : 170;
   const gGeo = new THREE.PlaneGeometry(G, G, seg, seg);
   gGeo.rotateX(-Math.PI / 2);
   const pos = gGeo.attributes.position as THREE.BufferAttribute;
@@ -532,6 +533,23 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     if (r.s > 0.7) obstacles.push({ x: r.x, z: r.z, r: r.s * 0.6 });
   });
   add(rockM, scene);
+
+  // ---------- real CC0 models over the procedural stand-ins ----------
+  dressWorld({
+    scene,
+    R,
+    lowPower,
+    terrain,
+    blocked,
+    pathDist,
+    trees,
+    rocks,
+    coneTrees: [trunk, ...layers.map((l) => l.m)],
+    coneRocks: [rockM],
+    tea: TEA,
+    grove: GROVE,
+    lookout: LOOKOUT,
+  });
 
   // ---------- grass tufts (instanced, wind sway in the shader) ----------
   const grassN = lowPower ? 2200 : 6500;
