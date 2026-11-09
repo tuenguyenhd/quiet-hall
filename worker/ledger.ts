@@ -51,6 +51,8 @@ export interface Profile {
   mints: string[];
   tips: number;
   checkedAt: number;
+  /** simulated Seeker (devnet test wallet), never stored */
+  testSeeker?: boolean;
 }
 
 export interface Order {
@@ -168,7 +170,17 @@ export class Ledger extends DurableObject<Env> {
         /* RPC hiccup: keep the last known status */
       }
     }
+    // devnet testing without a Seeker: wallets in SEEKER_TEST_WALLETS count as Seeker owners (ignored on mainnet)
+    if (!p.seeker && this.isTestSeeker(addr)) return { ...p, seeker: true, testSeeker: true };
     return p;
+  }
+
+  private isTestSeeker(addr: string) {
+    if (this.env.SOLANA_CLUSTER === 'mainnet') return false;
+    return (this.env.SEEKER_TEST_WALLETS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .includes(addr);
   }
 
   async createOrder(

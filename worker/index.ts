@@ -21,6 +21,8 @@ export interface Env {
   USDC_MINT: string;
   /** SKR (Seeker token) mint; unset = SKR payments off (devnet has no SKR). Mainnet: SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3 */
   SKR_MINT?: string;
+  /** devnet only: comma-separated wallets treated as Seeker owners for testing on a normal phone */
+  SEEKER_TEST_WALLETS?: string;
   /** how many SKR one USDC of price costs (default 50) */
   SKR_PER_USDC?: string;
   /** Lets scripts/online-test.mjs open many sockets from one machine (?k=...). Secret; unset = off. */
@@ -200,13 +202,13 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (!(await verifySignature(addr, msg, sig))) return json({ error: 'Signature check failed' }, 401);
     if (!(await L.useNonce(f.nonce))) return json({ error: 'Sign-in expired, try again' }, 400);
     const p = await L.profile(addr, true);
-    return json({ token: await signSession(env.SESSION_SECRET, addr), address: addr, seeker: p.seeker, supporter: p.supporter });
+    return json({ token: await signSession(env.SESSION_SECRET, addr), address: addr, seeker: p.seeker, testSeeker: !!p.testSeeker, supporter: p.supporter });
   }
   if (path === '/api/me') {
     const addr = await readSession(env.SESSION_SECRET, body.token);
     if (!addr) return json({ error: 'Signed out' }, 401);
     const p = await L.profile(addr, body.recheck === true);
-    return json({ address: addr, seeker: p.seeker, supporter: p.supporter });
+    return json({ address: addr, seeker: p.seeker, testSeeker: !!p.testSeeker, supporter: p.supporter });
   }
   if (path === '/api/tip/order') {
     const payer = await readSession(env.SESSION_SECRET, body.token);

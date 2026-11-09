@@ -38,6 +38,9 @@ MAINNET_RPC = "https://api.mainnet-beta.solana.com"
 TIP_RECIPIENT = "5g1qkWYJrrRFhEWtiFQ6sCKoCi9hNARcPymwNxjcFudb"
 USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
 PUBLIC_URL = "https://quiet-hall.ted-233.workers.dev"
+# devnet only: these wallets act as Seeker owners (gold light, Seeker hall, longer free items) for testing on a
+# normal Android phone. Public addresses, comma-separated. Ignored when SOLANA_CLUSTER = "mainnet".
+SEEKER_TEST_WALLETS = "Cz1s2LVfjXe3VkBCcQdwRzS46PTAw5meoAfHirTjwKyQ"
 # devnet NFT collections (public addresses; owned by the DEV_NET_SOL treasury)
 STONE_COLLECTION = "H8wEprMeHSZMe3SQPneH3cq3J4WqE7j1hdKLfd8qBwaf"
 TREE_COLLECTION = "48ogdL8p9nwnxxbQx8FF6VXjpTgUjZ1iPvEANwPn9VCU"

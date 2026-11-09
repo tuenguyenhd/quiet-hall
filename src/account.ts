@@ -9,6 +9,8 @@ export interface Session {
   token: string;
   address: string;
   seeker: boolean;
+  /** devnet test wallet acting as a Seeker */
+  testSeeker?: boolean;
   supporter: boolean;
 }
 
@@ -169,7 +171,11 @@ export function setupAccount(h: AccountHooks) {
   function renderProfile() {
     if (!session) return;
     $('pf-addr').textContent = short(session.address);
-    $('pf-seeker').textContent = session.seeker ? '✦ Verified Seeker owner: gold light on' : 'No Seeker Genesis Token on this wallet';
+    $('pf-seeker').textContent = session.testSeeker
+      ? '✦ Seeker test wallet (devnet): gold light + Seeker perks on'
+      : session.seeker
+        ? '✦ Verified Seeker owner: gold light on'
+        : 'No Seeker Genesis Token on this wallet';
     $('pf-supporter').textContent = session.supporter ? '✧ Supporter. Thank you!' : '';
     const sh = $('btn-seeker-hall');
     sh.classList.toggle('hidden', !session.seeker);
@@ -283,7 +289,7 @@ export function setupAccount(h: AccountHooks) {
   renderPill();
   if (session) {
     apiPost<Session>('/api/me', { token: session.token })
-      .then((me) => setSession({ ...session!, seeker: me.seeker, supporter: me.supporter }))
+      .then((me) => setSession({ ...session!, seeker: me.seeker, testSeeker: me.testSeeker, supporter: me.supporter }))
       .catch((e) => {
         if (/signed out/i.test(String(e))) setSession(null);
       });
