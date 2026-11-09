@@ -120,7 +120,7 @@ export function cleanName(s: unknown) {
 }
 
 /** Pets that follow you (bought once, yours forever; everyone sees them). Index 0 = no pet. Shared by app and server. */
-/** `legend` = limited supply (numbered #n / supply), priced as a legendary pet */
+/** All pets cost the same. `legend` (optional) = limited supply, numbered #n / supply. None are limited now. */
 export const PETS: readonly { key: string; name: string; emoji: string; legend?: number }[] = [
   { key: 'none', name: 'No pet', emoji: '✕' },
   { key: 'shiba', name: 'Shiba', emoji: '🐕' },
@@ -133,12 +133,12 @@ export const PETS: readonly { key: string; name: string; emoji: string; legend?:
   { key: 'sharpei', name: 'Shar Pei', emoji: '🐶' },
   { key: 'bulldog', name: 'Bulldog', emoji: '🐕' },
   { key: 'stripe', name: 'Stripe', emoji: '🐱' },
-  { key: 'dragon', name: 'Baby Dragon', emoji: '🐉', legend: 100 },
+  { key: 'dragon', name: 'Baby Dragon', emoji: '🐉' },
   { key: 'chick', name: 'Chick', emoji: '🐣' },
-  { key: 'tiger', name: 'Tiger', emoji: '🐯', legend: 100 },
+  { key: 'tiger', name: 'Tiger', emoji: '🐯' },
   { key: 'duck', name: 'Chip Duck', emoji: '🦆' },
   { key: 'penguin', name: 'Penguin', emoji: '🐧' },
-  { key: 'axolotl', name: 'Axolotl', emoji: '🦎', legend: 100 },
+  { key: 'axolotl', name: 'Axolotl', emoji: '🦎' },
 ];
 
 /** Blessings from the resident frens (index = fren). Free 1 h once a day; paid 24 h. Cosmetic only. */
@@ -164,7 +164,6 @@ export const PRICE_USD = {
   lantern24: 4.99,
   lantern7d: 14.99,
   pet: 9.99,
-  petLegend: 99,
   stone: 149,
   tree: 249,
   cushion: 499,

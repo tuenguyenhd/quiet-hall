@@ -20,7 +20,7 @@ const scaleOf = (env: PriceEnv) => {
   return s > 0 && s <= 1 ? s : 1;
 };
 const sig3 = (n: number) => Number(n.toPrecision(3));
-/** Price of one item in `currency`. `kind` is a PRICE_USD key (pet orders use 'pet' or 'petLegend'). */
+/** Price of one item in `currency`. `kind` is a PRICE_USD key. */
 export function priceIn(kind: PricedKind, currency: Currency, solUsd: number, env: PriceEnv) {
   const usd = PRICE_USD[kind] * scaleOf(env);
   if (currency === 'USDC') return Math.max(0.01, Math.round(usd * 100) / 100);
@@ -242,7 +242,7 @@ export class Ledger extends DurableObject<Env> {
       line = LINES.includes(String(meta.line)) ? String(meta.line) : LINES[0];
       if (!name) return { error: 'Add a name for your ' + SPOTS[sk].label.toLowerCase() };
     }
-    if (kind !== 'tip') amount = priceIn(kind === 'pet' ? (legend ? 'petLegend' : 'pet') : (kind as PricedKind), currency, await this.solUsd(), this.env);
+    if (kind !== 'tip') amount = priceIn(kind as PricedKind, currency, await this.solUsd(), this.env);
     else if (!(amount >= lim.min && amount <= lim.max)) return { error: `Amount must be between ${lim.min} and ${lim.max} ${currency}` };
     const raw = BigInt(Math.round(amount * 10 ** lim.decimals)).toString();
     const now = Date.now();

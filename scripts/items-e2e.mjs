@@ -144,21 +144,6 @@ await wait(1500);
 const w2 = m2.find((m) => m.t === 'welcome');
 t('pet comes back on another device (same wallet)', w2?.me.pets.includes(2) && w2.me.pt === 2);
 
-// ---------- legendary pet (numbered, limited) ----------
-if (!SKIP.has('legend')) {
-  const L = Object.keys(spots.legends)[0];
-  const lo2 = await j('/api/tip/order', { kind: 'pet', pet: Number(L), pid: PID, currency: 'SOL', token });
-  t('legendary pet priced as legendary', lo2.status === 200 && lo2.body.amount === spots.prices.petLegend.SOL, `${lo2.body.amount} SOL`);
-  const lp2 = await pay(lo2.body);
-  t('legendary pet paid', !!lp2);
-  const after2 = (await j('/api/spots')).body.legends[L];
-  t('legendary count went up', after2.sold === spots.legends[L].sold + 1, `${after2.sold}/${after2.supply}`);
-  ws2.send(JSON.stringify({ t: 'pet', k: Number(L) }));
-  await wait(1500);
-  const pm2 = m2.filter((m) => m.t === 'pets').at(-1);
-  t('you get a number', pm2?.petNos?.[L] >= 1, `#${pm2?.petNos?.[L]}`);
-}
-
 // ---------- patron banner (rented 30 days) ----------
 if (!SKIP.has('banner')) {
   const free = [...Array(6).keys()].find((i) => !spots.banner[i]);

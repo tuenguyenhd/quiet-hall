@@ -719,7 +719,7 @@ function renderPets() {
   $('pet-note').classList.toggle('hidden', own);
   document.querySelector('#petsheet .paywith')?.classList.toggle('hidden', own);
   const pk = PETS[petPick];
-  const kind = pk.legend ? 'petLegend' : 'pet';
+  const kind = 'pet'; // every pet costs the same
   const price = items.price(kind);
   const lg = pk.legend ? items.legend(petPick) : null;
   const left = lg ? lg.supply - lg.sold : 0;
