@@ -300,6 +300,27 @@ export function buildPumpHall(c: Ctx) {
     }
   }
 
+  // meme wall: the Solana / Seeker stickers, our mascots, gm / wagmi / LFG (moved here from the Quiet Hall)
+  {
+    const wr = R + 1.6;
+    const ww = 7.2;
+    const wh = 4.6;
+    const angles = [0.42, 0.6, 0.78, 1.22, 1.4, 1.58].map((k) => k * Math.PI); // around the back, open to the gate; the board covers the middle
+    angles.forEach((a, i) => {
+      const x = Math.sin(a) * wr;
+      const z = -Math.cos(a) * wr;
+      const w = new THREE.Group();
+      w.position.set(x, 0, z); // just outside the dais, on the grass
+      w.rotation.y = Math.atan2(-Math.sin(a), Math.cos(a)); // face the middle of the dais
+      add(mesh(new THREE.BoxGeometry(ww + 0.3, wh + 0.3, 0.25), frame, 0, 1.2 + wh / 2, -0.1), w);
+      for (const px of [-ww / 2 + 0.3, ww / 2 - 0.3]) add(mesh(new THREE.BoxGeometry(0.25, 1.3, 0.25), frame, px, 0.6, -0.1), w);
+      w.add(mesh(new THREE.PlaneGeometry(ww, wh), new THREE.MeshBasicMaterial({ map: stickerWallTexture(ww / wh, 11 + i * 12, 1024), toneMapped: false }), 0, 1.2 + wh / 2, 0.04));
+      w.add(mesh(new THREE.BoxGeometry(ww + 0.3, 0.1, 0.1), i % 2 ? neonG : neonP, 0, 1.2 + wh + 0.25, 0.05));
+      g.add(w);
+      for (let k = -1; k <= 1; k++) c.obstacles.push({ x: PUMP.x + x + Math.cos(a) * k * (ww / 3), z: PUMP.z + z + Math.sin(a) * k * (ww / 3), r: 0.9 });
+    });
+  }
+
   // ---------- draw the board ----------
   function draw(d: BoardData | null) {
     const W = canvas.width;

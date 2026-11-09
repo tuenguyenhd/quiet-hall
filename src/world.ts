@@ -5,7 +5,6 @@ import { addBrandBanners } from './brand';
 import { dressWorld } from './world-assets';
 import { buildTeasers } from './teasers';
 import { buildPumpHall, type BoardData } from './pumphall';
-import { stickerWallTexture } from './stickers';
 import { PUMP, SPOTS, TEASERS, BELL, BOUNDS, COURT, GARDEN, GROVE, HALL, HALL_CUSHIONS, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
 import { buildPlaces, labelSprite } from './places';
 
@@ -148,7 +147,7 @@ function terrain(x: number, z: number) {
   return h;
 }
 
-/** Sticker mural for the back wall of the hall (seen from the Lookout). */
+/** Sunset mural for the back wall of the hall (seen from the Lookout). */
 function muralTexture(aspect: number) {
   const W = 1536;
   const Hh = Math.round(W / aspect);
@@ -163,10 +162,10 @@ function muralTexture(aspect: number) {
     sky.addColorStop(1, '#ffd36b');
     g.fillStyle = sky;
     g.fillRect(0, 0, W, Hh);
-    // sun with the Solana gradient
-    const sun = g.createLinearGradient(W / 2 - 120, 0, W / 2 + 120, 0);
-    sun.addColorStop(0, '#9945ff');
-    sun.addColorStop(1, '#14f195');
+    // a soft setting sun (the Solana colours live in PumpHall now; the hall stays calm)
+    const sun = g.createLinearGradient(0, Hh * 0.26, 0, Hh * 0.62);
+    sun.addColorStop(0, '#fff2c4');
+    sun.addColorStop(1, '#ffb36b');
     g.fillStyle = sun;
     g.beginPath();
     g.arc(W / 2, Hh * 0.62, Hh * 0.36, Math.PI, 0);
@@ -190,7 +189,7 @@ function muralTexture(aspect: number) {
     g.fillText('✦ sit together ✦', W / 2, Hh * 0.3);
     g.font = `400 ${Math.round(Hh * 0.12)}px "Lilita One", system-ui, sans-serif`;
     g.fillStyle = '#ffe14d';
-    g.fillText('gm from the lookout', W / 2, Hh * 0.86);
+    g.fillText('breathe with us', W / 2, Hh * 0.86);
     // sticker border
     g.lineWidth = Hh * 0.04;
     g.strokeRect(Hh * 0.02, Hh * 0.02, W - Hh * 0.04, Hh - Hh * 0.04);
@@ -373,34 +372,8 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     mural.rotation.y = Math.PI;
     hall.add(mural);
   }
-  // ---------- sticker-bombed walls: Solana + Seeker marks, our mascots, gm / wagmi / LFG ----------
-  {
-    const px = lowPower ? 768 : 1024;
-    const sticker = (w: number, h: number, seed: number) =>
-      new THREE.MeshBasicMaterial({ map: stickerWallTexture(w / h, seed, px), toneMapped: false });
-    // inner back wall, left and right of the moon window
-    const bw = HW - 1.2 - 5;
-    const bh = COL_H - 1.2;
-    for (const sx of [-1, 1]) {
-      const p = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), sticker(bw, bh, sx < 0 ? 11 : 23));
-      p.position.set(sx * (5 + bw / 2), H + bh / 2 + 0.3, HZ - HD + 0.31);
-      hall.add(p);
-    }
-    // side walls along the back half, stickered inside and out
-    const sw = HD;
-    const sh = COL_H;
-    for (const sx of [-1, 1]) {
-      const z = HZ - HD / 2;
-      const wall = mesh(new THREE.BoxGeometry(0.24, sh, sw), plaster, sx * (HW - 0.2), H + sh / 2, z);
-      add(wall, hall);
-      for (const side of [-1, 1]) {
-        const p = new THREE.Mesh(new THREE.PlaneGeometry(sw - 0.4, sh - 0.6), sticker(sw - 0.4, sh - 0.6, 40 + sx * 7 + side));
-        p.position.set(sx * (HW - 0.2) + side * 0.13, H + sh / 2, z);
-        p.rotation.y = side * Math.PI / 2;
-        hall.add(p);
-      }
-    }
-  }
+  // plain side walls along the back half (the Solana sticker walls moved to PumpHall on 2026-11-10)
+  for (const sx of [-1, 1]) add(mesh(new THREE.BoxGeometry(0.24, COL_H, HD), plaster, sx * (HW - 0.2), H + COL_H / 2, HZ - HD / 2), hall);
   for (const sx of [-1, 1]) {
     add(mesh(new THREE.BoxGeometry(0.25, 1.0, HD * 2 - 1), wood, sx * (HW - 0.15), H + 0.5, HZ - 0.5), hall);
     for (let z = HZ - HD + 0.5; z <= HZ + HD - 1.2; z += 0.9) obstacles.push({ x: sx * (HW - 0.15), z, r: 0.5 });
@@ -417,16 +390,16 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   add(mesh(new THREE.BoxGeometry(HW * 2 + 0.8, 0.5, 0.55), wood, 0, beamY, HZ + HD - 0.4), hall);
   add(mesh(new THREE.BoxGeometry(HW * 2 + 0.8, 0.5, 0.55), wood, 0, beamY, HZ - HD + 0.45), hall);
   for (const sx of [-1, 1]) add(mesh(new THREE.BoxGeometry(0.55, 0.5, HD * 2), wood, sx * colX[5], beamY, HZ), hall);
-  // neon strip under the front beam (Solana gradient) + a glowing "gm" plaque
+  // warm lantern strip under the front beam + a name plaque (calm: no Solana neon here)
   const neonTex = (() => {
     const c = document.createElement('canvas');
     c.width = 256;
     c.height = 4;
     const g = c.getContext('2d')!;
     const gr = g.createLinearGradient(0, 0, 256, 0);
-    gr.addColorStop(0, '#9945ff');
-    gr.addColorStop(0.5, '#43b4ca');
-    gr.addColorStop(1, '#14f195');
+    gr.addColorStop(0, '#ffc46b');
+    gr.addColorStop(0.5, '#ffe9b8');
+    gr.addColorStop(1, '#ffc46b');
     g.fillStyle = gr;
     g.fillRect(0, 0, 256, 4);
     const t = new THREE.CanvasTexture(c);
@@ -436,7 +409,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   const neonMat = new THREE.MeshBasicMaterial({ map: neonTex, toneMapped: false });
   add(mesh(new THREE.BoxGeometry(HW * 2 + 0.6, 0.09, 0.09), neonMat, 0, beamY - 0.3, HZ + HD - 0.1), hall, false, false);
   add(mesh(new THREE.BoxGeometry(HW * 2 + 0.6, 0.09, 0.09), neonMat, 0, beamY + 0.32, HZ + HD - 0.1), hall, false, false);
-  const plaqueTex = textTexture(['gm ✦ quiet hall'], 1024, 200, '#120b24', '#14f195');
+  const plaqueTex = textTexture(['✦ quiet hall ✦'], 1024, 200, '#5a3a28', '#fff2d6');
   const plaque = mesh(new THREE.BoxGeometry(8.5, 1.6, 0.14), [wood, wood, wood, wood, new THREE.MeshBasicMaterial({ map: plaqueTex }), wood] as unknown as THREE.Material, 0, beamY + 1.3, HZ + HD - 0.3);
   add(plaque, hall, false, false);
   add(mesh(new THREE.BoxGeometry(8.9, 2.0, 0.06), neonMat, 0, beamY + 1.3, HZ + HD - 0.38), hall, false, false);
