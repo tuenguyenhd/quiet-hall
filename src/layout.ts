@@ -109,7 +109,14 @@ export const LINES = ['in loving memory', 'happy birthday', 'thank you', 'for my
 /** A name on a lantern / stone / tree: letters, spaces, apostrophes, hyphens; max 16 characters. */
 export function cleanName(s: unknown) {
   if (typeof s !== 'string') return '';
-  return s.normalize('NFC').replace(/[^\p{L}\p{M} '\-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 16);
+  const t = s
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{M} '\-]/gu, '')
+    .replace(/(\p{M}{2})\p{M}+/gu, '$1') // no "zalgo" stacks: at most 2 marks per letter
+    .replace(/^\p{M}+/u, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return Array.from(t).slice(0, 16).join('').trim(); // cut by characters, never inside a surrogate pair
 }
 
 /** Pets that follow you (bought once, yours forever; everyone sees them). Index 0 = no pet. Shared by app and server. */

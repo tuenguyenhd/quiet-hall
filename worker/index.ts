@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { b64, decodeText, parseSiws, readSession, signSession, verifySignature } from './auth';
 import { Ledger, priceTable, type SpotOwner } from './ledger';
 import { serverRpc } from './solana';
-import { BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
+import { STONE_COUNT, TREE_COUNT, BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
 
 export { Ledger };
 
@@ -43,7 +43,8 @@ type SitState = 'idle' | 'sit';
 interface Att {
   id: string;
   ip: string;
-  pid: string; // persistent visitor id (for invite links), not an account
+  pid: string; // persistent visitor id: private (it unlocks your free items / pets), never shared
+  inv: string; // public invite id = hash of pid, used in "sit with me" links
   c: number; // light colour index
   sd: number; // degen character seed (traits are derived from it on every client)
   pt: number; // pet (index into PETS, 0 = none)
@@ -78,6 +79,8 @@ const petIdx = (v: unknown) => {
   const k = Math.floor(typeof v === 'number' ? v : 0);
   return k >= 0 && k < PETS.length ? k : 0;
 };
+/** any finite angle → (-π, π] (huge values would overflow to Infinity → null in JSON) */
+const angle = (v: number) => (Number.isFinite(v) && Math.abs(v) < 1e6 ? Math.atan2(Math.sin(v), Math.cos(v)) : 0);
 const num = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const utcDay = () => new Date().toISOString().slice(0, 10);
@@ -96,6 +99,12 @@ function att(ws: WebSocket): Att | null {
   }
 }
 
+/** Public invite id: first 12 hex chars of SHA-256(pid). Reveals nothing usable about the pid. */
+async function inviteId(pid: string) {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('qh-invite:' + pid)));
+  return [...h.slice(0, 6)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 const pub = (a: Att) => ({ id: a.id, color: a.c, sd: a.sd, pt: a.pt, ...(a.bu > Date.now() ? { bl: a.bl, bu: a.bu } : {}), x: r2(a.x), z: r2(a.z), ry: r2(a.ry), s: a.s, g: a.g, sp: a.sp });
 const ledger = (env: Env) => env.LEDGER.get(env.LEDGER.idFromName('main'));
 
@@ -111,6 +120,7 @@ const json = (data: unknown, status = 200) => Response.json(data, { status });
 
 async function readJson(req: Request): Promise<Record<string, unknown>> {
   try {
+    if (Number(req.headers.get('content-length') ?? 0) > 8000) return {};
     const t = await req.text();
     if (t.length > 8000) return {};
     const j = JSON.parse(t);
@@ -143,6 +153,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (meta[2] === 'collection')
       return json({ name: `Quiet Hall ${label}s`, description: `${kind === 'stone' ? 108 : 64} ${kind}s in the Quiet Hall, each in a fixed spot.`, image, external_url: 'https://quiet-hall.vercel.app' });
     const n = Number(meta[2]);
+    if (!(n < (kind === 'stone' ? STONE_COUNT : TREE_COUNT))) return json({ error: 'Not found' }, 404);
     const rec = await L.spot(kind, n);
     return json({
       name: `Quiet Hall ${label} #${n + 1}`,
@@ -177,7 +188,12 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     }
     const f = parseSiws(decodeText(msg));
     const origin = req.headers.get('Origin');
-    const host = origin ? new URL(origin).host : '';
+    let host = '';
+    try {
+      host = origin ? new URL(origin).host : '';
+    } catch {
+      return json({ error: 'Bad origin' }, 400);
+    }
     if (!f || f.address !== addr) return json({ error: 'Bad sign-in message' }, 400);
     if (!host || f.domain !== host) return json({ error: 'Sign-in message is for another site' }, 400);
     if (Math.abs(Date.now() - f.issuedAt) > 10 * 60000) return json({ error: 'Sign-in expired, try again' }, 400);
@@ -215,7 +231,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     const r = await fetch(serverRpc(env, 'cluster'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: body.id ?? 1, method, params }),
+      body: JSON.stringify({ jsonrpc: '2.0', id: typeof body.id === 'number' || (typeof body.id === 'string' && body.id.length < 24) ? body.id : 1, method, params }),
     });
     return new Response(r.body, { status: r.status, headers: { 'content-type': 'application/json' } });
   }
@@ -321,10 +337,13 @@ export class Hall extends DurableObject<Env> {
     await this.ctx.storage.put(`day:${this.today}`, { m: this.minutes, s: this.sits });
   }
 
-  private async maybeWorld(now: number) {
+  private async maybeWorld(now: number, who: string) {
     await this.rollDay();
     const at = this.worldAt(now);
     if (now >= at && now < at + WORLD_WINDOW_MIN * 60000) {
+      const k = `worldp:${this.today}:${who}`;
+      if (await this.ctx.storage.get(k)) return; // each visitor counts once per World Sit
+      await this.ctx.storage.put(k, 1);
       this.world += 1;
       await this.ctx.storage.put(`world:${this.today}`, this.world);
     }
@@ -349,15 +368,9 @@ export class Hall extends DurableObject<Env> {
       if (!t) return send(ws, { t: 'lanternNo', reason: 'That lantern order is not paid or was already used.' });
       tier = t;
     } else {
-      const day = utcDay();
-      const kp = `free:${a.pid || a.id}:${day}`;
-      const ki = `freeip:${a.ip}:${day}`;
-      const n = (await this.ctx.storage.get<number>(ki)) ?? 0;
-      if ((await this.ctx.storage.get(kp)) || n >= 3) {
+      if (!(await ledger(this.env).useFree('lantern', a.pid || a.id, a.ip))) {
         return send(ws, { t: 'lanternNo', reason: 'You lit your free lantern today. Come back tomorrow, or light a special one.', paid: true });
       }
-      await this.ctx.storage.put(kp, 1);
-      await this.ctx.storage.put(ki, n + 1);
     }
     const now = Date.now();
     // float somewhere over the lake (everyone sees the same spot)
@@ -396,15 +409,9 @@ export class Hall extends DurableObject<Env> {
       ms = BLESS_PAID_MS;
     } else {
       if (a.g) ms = FREE_SEEKER_MS; // Seeker perk: longer free taste
-      const day = utcDay();
-      const kp = `fbless:${a.pid || a.id}:${day}`;
-      const ki = `fblessip:${a.ip}:${day}`;
-      const n = (await this.ctx.storage.get<number>(ki)) ?? 0;
-      if ((await this.ctx.storage.get(kp)) || n >= 3) {
+      if (!(await ledger(this.env).useFree('bless', a.pid || a.id, a.ip))) {
         return send(ws, { t: 'blessNo', reason: 'You got your free blessing today. Come back tomorrow, or get a 24 h one.', paid: true });
       }
-      await this.ctx.storage.put(kp, 1);
-      await this.ctx.storage.put(ki, n + 1);
     }
     const now = Date.now();
     // the newest fren's colour; a paid blessing's time is never cut short by a free one
@@ -474,6 +481,7 @@ export class Hall extends DurableObject<Env> {
       id: crypto.randomUUID().slice(0, 8),
       ip,
       pid: '',
+      inv: '',
       c: 0,
       sd: 0,
       pt: 0,
@@ -507,10 +515,9 @@ export class Hall extends DurableObject<Env> {
       a.n = 0;
     }
     a.n++;
-    if (a.n > MAX_PER_SEC) {
-      ws.serializeAttachment(a);
-      return;
-    }
+    // save the counter for EVERY message (rejected / unknown ones too), or they would never be limited
+    ws.serializeAttachment(a);
+    if (a.n > MAX_PER_SEC) return;
     let m: Record<string, unknown>;
     try {
       m = JSON.parse(raw);
@@ -521,15 +528,17 @@ export class Hall extends DurableObject<Env> {
 
     switch (m.t) {
       case 'hello': {
+        if (a.hello) return; // once per connection (re-hello = fake joins / invite farming)
         a.c = Math.max(0, Math.min(COLORS - 1, Math.floor(num(m.color))));
         a.sd = Math.floor(num(m.seed)) >>> 0;
         [a.x, a.z] = clampPos(num(m.x, 0), num(m.z, 17));
-        a.ry = num(m.ry, Math.PI);
+        a.ry = angle(num(m.ry, Math.PI));
         if (m.s === 'sit' && a.s !== 'sit') {
           a.s = 'sit';
           a.since = now;
         }
         if (typeof m.pid === 'string' && PID_RE.test(m.pid)) a.pid = m.pid;
+        a.inv = a.pid ? await inviteId(a.pid) : '';
         const b = a.pid ? await this.ctx.storage.get<{ f: number; u: number }>(`bless:${a.pid}`) : undefined;
         [a.bl, a.bu] = b && b.u > now ? [b.f, b.u] : [-1, 0];
         // optional wallet session -> gold light for verified Seeker owners, supporter halo
@@ -560,19 +569,20 @@ export class Hall extends DurableObject<Env> {
           now,
           room,
           invites,
-          me: { g: a.g, sp: a.sp, bl: a.bl, bu: a.bu, pt: a.pt, pets: a.po },
+          me: { g: a.g, sp: a.sp, bl: a.bl, bu: a.bu, pt: a.pt, pets: a.po, inv: a.inv },
           players: this.live(ws).map(pub),
           lanterns: await this.lanterns(),
           stats: this.stats(),
         });
         this.broadcast({ t: 'join', p: pub(a) }, ws);
         // arrived through a friend's "sit with me" link?
-        if (typeof m.with === 'string' && PID_RE.test(m.with) && m.with !== a.pid) {
-          const host = this.ctx.getWebSockets().find((w) => w !== ws && att(w)?.hello && att(w)?.pid === m.with);
+        // `with` is the inviter's public invite id (a hash of their visitor id), never the visitor id itself
+        if (typeof m.with === 'string' && PID_RE.test(m.with) && m.with !== a.inv) {
+          const host = this.ctx.getWebSockets().find((w) => w !== ws && att(w)?.hello && att(w)?.inv === m.with);
           const h = host && att(host);
           if (host && h) {
             send(ws, { t: 'friendHere', id: h.id, x: r2(h.x), z: r2(h.z) });
-            const count = a.pid ? await ledger(this.env).recordInvite(h.pid, a.pid) : 0;
+            const count = a.pid ? await ledger(this.env).recordInvite(h.pid, a.pid, a.ip) : 0;
             send(host, { t: 'friend', id: a.id, invites: count });
           } else send(ws, { t: 'friendAway' });
         }
@@ -582,7 +592,7 @@ export class Hall extends DurableObject<Env> {
       case 'move': {
         if (!a.hello) return;
         [a.x, a.z] = clampPos(num(m.x, a.x), num(m.z, a.z));
-        a.ry = num(m.ry, a.ry);
+        a.ry = angle(num(m.ry, a.ry));
         ws.serializeAttachment(a);
         this.broadcast({ t: 'm', id: a.id, x: r2(a.x), z: r2(a.z), ry: r2(a.ry) }, ws);
         return;
@@ -594,7 +604,7 @@ export class Hall extends DurableObject<Env> {
         if (a.s === 'sit') await this.addSit(now - a.since);
         a.s = s;
         a.since = s === 'sit' ? now : 0;
-        if (s === 'sit') await this.maybeWorld(now);
+        if (s === 'sit') await this.maybeWorld(now, a.pid || a.id);
         ws.serializeAttachment(a);
         this.broadcast({ t: 's', id: a.id, s }, ws);
         this.broadcast({ t: 'stats', ...this.stats() });

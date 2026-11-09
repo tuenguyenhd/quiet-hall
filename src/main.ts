@@ -153,6 +153,8 @@ function renderStats() {
 const net = new Net();
 let clockOffset = 0;
 let myId = '';
+/** public invite id for "sit with me" links (from the server; cached for offline sharing) */
+let myInvite = store.get('inv') ?? '';
 
 type PubPlayer = { id: string; color: number; sd?: number; pt?: number; bl?: number; bu?: number; x: number; z: number; ry: number; s: SitState; g?: boolean; sp?: boolean };
 function addOther(p: PubPlayer) {
@@ -197,6 +199,10 @@ net.onMessage = (m: Msg) => {
       myBadges = { g: !!mine?.g, sp: !!mine?.sp };
       me.setBadges(myBadges.g, myBadges.sp);
       myId = String(m.you);
+      if (typeof (m.me as { inv?: string })?.inv === 'string' && (m.me as { inv: string }).inv) {
+        myInvite = (m.me as { inv: string }).inv;
+        store.set('inv', myInvite);
+      }
       me.setBless(mine?.bl ?? -1, (mine?.bu ?? 0) - clockOffset);
       gotPets((m.me as { pets?: number[] })?.pets ?? [], (m.me as { pt?: number })?.pt ?? 0);
       setInvites(Number(m.invites) || 0, false);
@@ -445,7 +451,7 @@ $('btn-greet').addEventListener('click', () => {
 $('btn-sit').addEventListener('click', () => med.openSheet());
 
 async function invite() {
-  const msg = await shareInvite(inviteUrl(pid));
+  const msg = await shareInvite(inviteUrl(myInvite));
   if (msg) toast(msg);
 }
 $('btn-invite').addEventListener('click', invite);
@@ -465,7 +471,7 @@ function snapshot(): HTMLCanvasElement | null {
   }
 }
 $('btn-share').addEventListener('click', async () => {
-  const link = inviteUrl(pid);
+  const link = inviteUrl(myInvite);
   const blob = await makeCard({ ...lastSit, scene: snapshot(), link });
   const mins = Math.max(1, Math.round(lastSit.seconds / 60));
   const msg = await shareCard(blob, link, `I sat ${mins} min in the Quiet Hall. Sit with me:`);

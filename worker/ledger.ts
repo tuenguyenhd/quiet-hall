@@ -109,7 +109,9 @@ export class Ledger extends DurableObject<Env> {
         await this.ctx.storage.delete(k);
         continue;
       }
-      if (Date.now() - at < 45000) continue;
+      // back off: check at about 1, 2, 4, 8, 16 and 29 minutes (not every minute), so unpaid orders cost few RPC calls
+      const min = Math.floor((Date.now() - at) / 60000);
+      if (![1, 2, 4, 8, 16, 29].includes(min)) continue;
       const r = await this.confirmOrder(id).catch(() => null);
       if (r?.status === 'paid' && (!r.spot || r.spot.asset)) await this.ctx.storage.delete(k);
     }
@@ -120,6 +122,9 @@ export class Ledger extends DurableObject<Env> {
     const rl = await this.ctx.storage.list<number>({ prefix: 'rl:' });
     const del: string[] = [];
     for (const k of rl.keys()) if (Number(k.split(':').pop()) < minute - 2) del.push(k);
+    // unpaid orders older than a day are dropped (paid ones are kept as receipts)
+    const orders = await this.ctx.storage.list<Order>({ prefix: 'o:' });
+    for (const [k, o] of orders) if (o.status !== 'paid' && now - o.createdAt > 86400000) del.push(k);
     const nonces = await this.ctx.storage.list<number>({ prefix: 'nonce:' });
     for (const [k, t] of nonces) if (now - t > NONCE_TTL) del.push(k);
     for (let i = 0; i < del.length; i += 128) await this.ctx.storage.delete(del.slice(i, i + 128));
@@ -368,10 +373,25 @@ export class Ledger extends DurableObject<Env> {
     return true;
   }
 
-  /** Counts distinct friends who arrived through `host`'s link. */
-  async recordInvite(host: string, friend: string): Promise<number> {
+  /** Free daily item (lantern / bless): once per visitor and at most 3 per network per UTC day, across all rooms. */
+  async useFree(kind: 'lantern' | 'bless', who: string, ip: string): Promise<boolean> {
+    const day = new Date().toISOString().slice(0, 10);
+    const kp = `free:${kind}:${who}:${day}`;
+    const ki = `freeip:${kind}:${ip}:${day}`;
+    const n = (await this.ctx.storage.get<number>(ki)) ?? 0;
+    if ((await this.ctx.storage.get(kp)) || n >= 3) return false;
+    await this.ctx.storage.put(kp, 1);
+    await this.ctx.storage.put(ki, n + 1);
+    return true;
+  }
+
+  /** Counts distinct friends who arrived through `host`'s link (one per network, so one phone can't farm it). */
+  async recordInvite(host: string, friend: string, ip: string): Promise<number> {
     const k = `inv:${host}`;
     const list = (await this.ctx.storage.get<string[]>(k)) ?? [];
+    const ipKey = `invip:${host}:${ip}`;
+    if (await this.ctx.storage.get(ipKey)) return list.length;
+    await this.ctx.storage.put(ipKey, 1);
     if (!list.includes(friend) && list.length < 100) {
       // a friend only counts once, for the first person who invited them
       if (!(await this.ctx.storage.get(`invby:${friend}`))) {

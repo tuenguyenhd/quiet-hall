@@ -1,7 +1,8 @@
 // Share card (1080x1350 image) + invite links. Uses the Android share sheet when available.
 
-export function inviteUrl(pid: string) {
-  return `${location.origin}/?with=${pid}`;
+/** `inv` is the public invite id from the server (a hash), never the private visitor id. */
+export function inviteUrl(inv: string) {
+  return inv ? `${location.origin}/?with=${inv}` : location.origin;
 }
 
 const fmtMin = (s: number) => {

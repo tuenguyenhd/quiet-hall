@@ -93,7 +93,7 @@ const wa = await a.open({ pid: 'hostpid0001' });
 check('A gets welcome', wa?.t === 'welcome', `here=${wa?.stats?.here}`);
 const b = new Bot('B');
 const markA = a.msgs.length;
-const wb = await b.open({ pid: 'friendpid01', with: 'hostpid0001', color: 4, x: -3, z: 12 });
+const wb = await b.open({ pid: 'friendpid01', with: wa?.me?.inv, color: 4, x: -3, z: 12 }); // links carry the public invite id, not the pid
 check('B welcome lists A', wb?.players?.length === 1);
 const join = await ok(a.next((m) => m.t === 'join', 3000, markA));
 check('A sees B join', !!join && join.p.color === 4);
@@ -110,7 +110,7 @@ b.close();
 await wait(400);
 const b2 = new Bot('B again');
 const markA2 = a.msgs.length;
-await b2.open({ pid: 'friendpid01', with: 'hostpid0001' });
+await b2.open({ pid: 'friendpid01', with: wa?.me?.inv });
 const fr2 = await ok(a.next((m) => m.t === 'friend', 3000, markA2));
 check('same friend not double counted', fr2?.invites === firstCount, `${firstCount} -> ${fr2?.invites}`);
 
