@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#140c2b" />
+    <meta name="description" content="Quiet Hall — sit together in silence. A shared meditation space, no sign-up." />
+    <title>Quiet Hall</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preload" href="/fonts/zen-maru-500.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/LilitaOne.woff2" as="font" type="font/woff2" crossorigin />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="hud" class="hidden">
+      <div class="hud-row">
+        <div class="hud-left">
+          <div class="pill" id="presence"><span class="dot"></span><span id="presence-text">Connecting…</span></div>
+        </div>
+        <div class="hud-right">
+          <div class="pill" id="groupbell" title="Everyone hears the group bell together">
+            🔔 <b id="bell-count">--:--</b>
+          </div>
+          <button class="pill icon" id="btn-invite" aria-label="Invite a friend" title="Invite a friend to sit with you">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.3 2.7-5.2 5.5-5.2s4.9 1.9 5.5 5.2M18 8v6M15 11h6"/></svg>
+          </button>
+          <button class="pill icon" id="btn-sound" aria-label="Sound on/off">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path class="wave" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="sub-row">
+        <div class="pill place hidden" id="place"></div>
+        <button class="pill world" id="world" aria-label="World Sit"></button>
+        <button class="pill" id="btn-wallet" aria-label="Wallet"><span class="wdot"></span><span id="wallet-text">👛</span></button>
+        <span class="grow"></span>
+        <button class="pill hidden" id="btn-install" aria-label="Install app">📲</button>
+        <button class="pill" id="btn-badges" aria-label="Badges">🏅 <b id="badge-count">0</b></button>
+      </div>
+      <div class="sub hidden" id="today"></div>
+    </div>
+
+    <div id="actions" class="hidden">
+      <button class="act" id="btn-bow"><span class="ico">⌒</span><span>Bow</span></button>
+      <button class="act main" id="btn-sit"><span>Sit</span></button>
+      <button class="act" id="btn-lantern"><span class="ico">🏮</span><span>Lantern</span></button>
+      <button class="act" id="btn-greet"><span class="ico">✧</span><span>Greet</span></button>
+    </div>
+
+    <div id="hint" class="hint hidden">Tap to walk · drag to look · tap a cushion to sit</div>
+    <div id="toast" class="toast"></div>
+
+    <section id="welcome" class="overlay">
+      <div class="card">
+        <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18.4 6.6A8 8 0 1 0 20 11.2"/><circle cx="12" cy="8.4" r="1.7"/><path d="M8.3 16.4c.4-3.1 1.8-4.8 3.7-4.8s3.3 1.7 3.7 4.8M7 16.4h10"/></svg>
+        <h1>Quiet Hall</h1>
+        <p class="lead"><span class="gm">gm.</span> Sit together in silence.</p>
+        <p class="small">No sign-up. No chat. Just touch (digital) grass with people around the world.</p>
+        <div class="label">Pick your fren</div>
+        <div id="species" class="species"></div>
+        <div class="label">and your light</div>
+        <div id="colors" class="colors"></div>
+        <button class="primary" id="btn-enter">Enter the hall</button>
+      </div>
+    </section>
+
+    <section id="sheet" class="overlay hidden">
+      <div class="card">
+        <h2>Sit</h2>
+        <div class="label">How long?</div>
+        <div class="chips" id="durations">
+          <button data-min="3">3 min</button>
+          <button data-min="5" class="on">5 min</button>
+          <button data-min="10">10 min</button>
+          <button data-min="20">20 min</button>
+          <button data-min="0">Open</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="opt-guide" checked /> Breathing guide</label>
+        <button class="primary" id="btn-start">Begin</button>
+        <button class="ghost" id="btn-cancel">Not now</button>
+      </div>
+    </section>
+
+    <section id="med" class="hidden">
+      <div class="med-top" id="med-with"></div>
+      <div class="breath-wrap">
+        <div class="breath" id="breath-circle"></div>
+        <div class="breath-label" id="breath-label"></div>
+      </div>
+      <div class="med-time" id="med-time">5:00</div>
+      <div class="med-bottom">
+        <button class="ghost light" id="btn-strike">Strike bowl</button>
+        <button class="ghost light" id="btn-end">End</button>
+      </div>
+    </section>
+
+    <section id="summary" class="overlay hidden">
+      <div class="card">
+        <div class="label">You sat</div>
+        <div class="big" id="sum-time">5:00</div>
+        <p class="small" id="sum-with"></p>
+        <p class="streak hidden" id="sum-streak"></p>
+        <button class="primary" id="btn-share">Share</button>
+        <button class="secondary" id="btn-invite2">Invite a friend to sit with you</button>
+        <button class="ghost" id="btn-back">Back to the hall</button>
+      </div>
+    </section>
+
+    <section id="wallets" class="overlay hidden">
+      <div class="card">
+        <h2>Connect</h2>
+        <p class="small" id="wallets-why">Optional. Seeker owners get a gold light, and you can support the hall. Signing in is free and moves no funds.</p>
+        <div id="wallet-list" class="wallet-list"></div>
+        <p class="small hidden" id="wallet-empty">No Solana wallet found here. On a Seeker or Android phone, open this page in Chrome. On a computer, install a wallet such as Phantom or Solflare.</p>
+        <p class="status" id="wallet-status"></p>
+        <button class="ghost" data-close="wallets">Not now</button>
+      </div>
+    </section>
+
+    <section id="profile" class="overlay hidden">
+      <div class="card">
+        <div class="label">Your light</div>
+        <h2 id="pf-addr">…</h2>
+        <p class="badge" id="pf-seeker"></p>
+        <p class="badge" id="pf-supporter"></p>
+        <button class="secondary hidden" id="btn-seeker-hall">Enter the Seeker hall</button>
+        <button class="secondary hidden" id="btn-theme">Night hall</button>
+        <p class="small" id="pf-invites"></p>
+        <button class="primary" id="btn-tip">Support the hall</button>
+        <button class="ghost" id="btn-signout">Sign out</button>
+        <button class="ghost" data-close="profile">Close</button>
+      </div>
+    </section>
+
+    <section id="tipsheet" class="overlay hidden">
+      <div class="card">
+        <h2>Support the hall</h2>
+        <p class="small">Tips keep the hall free for everyone. You get a soft supporter halo as thanks. It gives no other advantage.</p>
+        <p class="devnet" id="tip-cluster"></p>
+        <div class="chips" id="tip-currency">
+          <button data-c="SOL" class="on">SOL</button>
+          <button data-c="USDC">USDC</button>
+        </div>
+        <div class="chips" id="tip-amounts"></div>
+        <button class="primary" id="btn-send-tip">Send tip</button>
+        <p class="status" id="tip-status"></p>
+        <p class="small faucets" id="tip-faucets">Test funds: <a href="https://faucet.solana.com" target="_blank" rel="noopener">devnet SOL</a> · <a href="https://faucet.circle.com" target="_blank" rel="noopener">devnet USDC</a></p>
+        <button class="ghost" data-close="tipsheet">Close</button>
+      </div>
+    </section>
+
+    <section id="lanternsheet" class="overlay hidden">
+      <div class="card">
+        <h2>Light a lantern</h2>
+        <p class="small">It floats over the lake for everyone to see. Your free lantern lasts 1 hour, one per day.</p>
+        <div class="label">Your wish</div>
+        <div class="chips" id="wishes"></div>
+        <input class="field" id="lantern-name" maxlength="16" placeholder="A name (optional)" autocomplete="off" />
+        <button class="primary" id="btn-light">Light it (free)</button>
+        <div class="label">Special lanterns · golden, bigger</div>
+        <div class="paid-row">
+          <button class="secondary" data-tier="lantern24">24 hours · <b class="price" data-k="lantern24"></b></button>
+          <button class="secondary" data-tier="lantern7d">7 days · <b class="price" data-k="lantern7d"></b></button>
+        </div>
+        <p class="status" id="lantern-status"></p>
+        <button class="ghost" data-close="lanternsheet">Close</button>
+      </div>
+    </section>
+
+    <section id="spotsheet" class="overlay hidden">
+      <div class="card">
+        <div class="label" id="spot-kind">Stone</div>
+        <h2 id="spot-title">Stone #1</h2>
+        <p class="small" id="spot-desc"></p>
+        <div id="spot-buy">
+          <input class="field" id="spot-name" maxlength="16" placeholder="Name on it (e.g. Mom, Satoshi)" autocomplete="off" />
+          <div class="chips" id="spot-lines"></div>
+          <button class="primary" id="btn-buy-spot">Own it · <span id="spot-price"></span></button>
+          <p class="small" id="spot-note"></p>
+        </div>
+        <p class="status" id="spot-status"></p>
+        <button class="ghost" data-close="spotsheet">Close</button>
+      </div>
+    </section>
+
+    <section id="badgesheet" class="overlay hidden">
+      <div class="card">
+        <h2>Badges</h2>
+        <p class="small">Earned by sitting, never bought. Each shows for 30 days beside your light, then fades until you earn it again.</p>
+        <div class="badge-grid" id="badge-grid"></div>
+        <button class="ghost" data-close="badgesheet">Close</button>
+      </div>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

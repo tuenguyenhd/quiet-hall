@@ -1,0 +1,33 @@
+{
+  "name": "quiet-hall",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "mkdir -p dist && concurrently -k -n web,hall -c green,blue \"vite\" \"wrangler dev --port 8787 --ip 127.0.0.1\"",
+    "build": "vite build",
+    "check": "tsc --noEmit -p . && tsc --noEmit -p worker",
+    "prod-local": "vite build && wrangler dev --port 8787 --ip 0.0.0.0",
+    "deploy": "vite build && wrangler deploy"
+  },
+  "dependencies": {
+    "@solana-mobile/seeker-connect-wallet-standard": "^0.2.0",
+    "@solana-mobile/skr-genesis-token": "^1.0.1",
+    "@solana-mobile/wallet-standard-mobile": "^0.7.0",
+    "@solana-program/system": "^0.16.0",
+    "@solana-program/token": "^0.18.0",
+    "@solana/kit": "^8.6.0",
+    "@solana/wallet-standard-features": "^1.5.0",
+    "@wallet-standard/app": "^1.1.1",
+    "@wallet-standard/features": "^1.1.1",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261108.1",
+    "@types/three": "^0.187.0",
+    "concurrently": "^10.0.7",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6",
+    "wrangler": "^4.158.0"
+  }
+}

@@ -1,0 +1,43 @@
+name = "quiet-hall"
+main = "worker/index.ts"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+preview_urls = false
+
+# The built web app (vite build -> dist) is served by the same Worker.
+# run_worker_first so /ws and /api reach the Worker; it forwards everything else to ASSETS.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+# One Durable Object per hall room: live presence, stats, rings.
+[[durable_objects.bindings]]
+name = "HALL"
+class_name = "Hall"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Hall"]
+
+[[durable_objects.bindings]]
+name = "LEDGER"
+class_name = "Ledger"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Ledger"]
+
+# Devnet first. Switch these (and use a paid RPC) for mainnet.
+[vars]
+SOLANA_CLUSTER = "devnet"
+SOLANA_RPC = "https://api.devnet.solana.com"
+MAINNET_RPC = "https://api.mainnet-beta.solana.com"
+TIP_RECIPIENT = "5g1qkWYJrrRFhEWtiFQ6sCKoCi9hNARcPymwNxjcFudb"
+USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+PUBLIC_URL = "https://quiet-hall.ted-233.workers.dev"
+# devnet NFT collections (public addresses; owned by the DEV_NET_SOL treasury)
+STONE_COLLECTION = "H8wEprMeHSZMe3SQPneH3cq3J4WqE7j1hdKLfd8qBwaf"
+TREE_COLLECTION = "48ogdL8p9nwnxxbQx8FF6VXjpTgUjZ1iPvEANwPn9VCU"

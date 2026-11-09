@@ -1,0 +1,295 @@
+// One Durable Object holding small durable records: sign-in nonces, wallet profiles
+// (Seeker / supporter), tip orders, and invite counts. Single instance ("main").
+import { DurableObject } from 'cloudflare:workers';
+import { getBase58Decoder } from '@solana/kit';
+import type { Env } from './index';
+import { associatedTokenAccount, seekerMints, serverRpc, signatureForReference, verifyTip } from './solana';
+import { mintSpotAsset, treasurySigner } from './core';
+import { LINES, STONE_COUNT, TREE_COUNT, cleanName } from '../src/layout';
+
+export type OrderKind = 'tip' | 'lantern24' | 'lantern7d' | 'stone' | 'tree';
+/** Fixed prices for items (tips are any amount). Devnet SOL prices are tiny on purpose. */
+export const PRICES: Record<Exclude<OrderKind, 'tip'>, { SOL: number; USDC: number }> = {
+  lantern24: { SOL: 0.005, USDC: 0.99 },
+  lantern7d: { SOL: 0.015, USDC: 2.99 },
+  stone: { SOL: 0.02, USDC: 19 },
+  tree: { SOL: 0.03, USDC: 29 },
+};
+export interface SpotOwner {
+  owner: string;
+  name: string;
+  line: string;
+  asset?: string;
+  sig?: string;
+  mintedAt?: number;
+  mintError?: string;
+}
+
+export interface Profile {
+  seeker: boolean;
+  supporter: boolean;
+  mints: string[];
+  tips: number;
+  checkedAt: number;
+}
+
+export interface Order {
+  id: string;
+  reference: string;
+  recipient: string;
+  currency: 'SOL' | 'USDC';
+  amount: number;
+  raw: string;
+  decimals: number;
+  mint?: string;
+  recipientAta?: string;
+  cluster: string;
+  createdAt: number;
+  expiresAt: number;
+  status: 'pending' | 'paid';
+  signature?: string;
+  payer?: string;
+  kind: OrderKind;
+  spot?: number;
+  name?: string;
+  line?: string;
+  used?: boolean; // paid lantern already lit
+}
+
+const NONCE_TTL = 10 * 60000;
+const ORDER_TTL = 10 * 60000;
+const SEEKER_RECHECK = 60 * 60000;
+const LIMITS = { SOL: { min: 0.001, max: 10, decimals: 9 }, USDC: { min: 0.5, max: 500, decimals: 6 } } as const;
+
+const rand = (n: number) => crypto.getRandomValues(new Uint8Array(n));
+const hex = (b: Uint8Array) => [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+
+export class Ledger extends DurableObject<Env> {
+  /** At most `max` actions per key per minute (simple abuse limit). */
+  private async limited(key: string, max: number) {
+    const k = `rl:${key}:${Math.floor(Date.now() / 60000)}`;
+    const n = ((await this.ctx.storage.get<number>(k)) ?? 0) + 1;
+    await this.ctx.storage.put(k, n);
+    if (n === 1) await this.ensureAlarm();
+    return n > max;
+  }
+
+  private async ensureAlarm() {
+    if (!(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(Date.now() + 60000);
+  }
+
+  async alarm() {
+    // 1) recover paid-but-unconfirmed orders (payment found by its reference key), give up after 30 min
+    const pend = await this.ctx.storage.list<number>({ prefix: 'pending:' });
+    for (const [k, at] of pend) {
+      const id = k.slice('pending:'.length);
+      if (Date.now() - at > 30 * 60000) {
+        await this.ctx.storage.delete(k);
+        continue;
+      }
+      if (Date.now() - at < 45000) continue;
+      const r = await this.confirmOrder(id).catch(() => null);
+      if (r?.status === 'paid' && (!r.spot || r.spot.asset)) await this.ctx.storage.delete(k);
+    }
+    if ((await this.ctx.storage.list({ prefix: 'pending:', limit: 1 })).size) await this.ctx.storage.setAlarm(Date.now() + 60000);
+    // sweep old rate-limit counters and expired nonces
+    const now = Date.now();
+    const minute = Math.floor(now / 60000);
+    const rl = await this.ctx.storage.list<number>({ prefix: 'rl:' });
+    const del: string[] = [];
+    for (const k of rl.keys()) if (Number(k.split(':').pop()) < minute - 2) del.push(k);
+    const nonces = await this.ctx.storage.list<number>({ prefix: 'nonce:' });
+    for (const [k, t] of nonces) if (now - t > NONCE_TTL) del.push(k);
+    for (let i = 0; i < del.length; i += 128) await this.ctx.storage.delete(del.slice(i, i + 128));
+  }
+
+  async newNonce(ip: string): Promise<string | null> {
+    if (await this.limited(`nonce:${ip}`, 20)) return null;
+    const n = hex(rand(12));
+    await this.ctx.storage.put(`nonce:${n}`, Date.now());
+    return n;
+  }
+
+  async useNonce(n: string): Promise<boolean> {
+    const t = await this.ctx.storage.get<number>(`nonce:${n}`);
+    if (!t) return false;
+    await this.ctx.storage.delete(`nonce:${n}`);
+    return Date.now() - t < NONCE_TTL;
+  }
+
+  private async getProfile(addr: string): Promise<Profile> {
+    return (await this.ctx.storage.get<Profile>(`p:${addr}`)) ?? { seeker: false, supporter: false, mints: [], tips: 0, checkedAt: 0 };
+  }
+
+  async profile(addr: string, recheck = false): Promise<Profile> {
+    const p = await this.getProfile(addr);
+    if (recheck || Date.now() - p.checkedAt > SEEKER_RECHECK) {
+      try {
+        const mints = await seekerMints(serverRpc(this.env, 'mainnet'), addr);
+        p.mints = mints;
+        p.seeker = mints.length > 0;
+        p.checkedAt = Date.now();
+        await this.ctx.storage.put(`p:${addr}`, p);
+        // remember which wallet each SGT was last seen on (one device = one Seeker perk later)
+        for (const m of mints) await this.ctx.storage.put(`sgt:${m}`, addr);
+      } catch {
+        /* RPC hiccup: keep the last known status */
+      }
+    }
+    return p;
+  }
+
+  async createOrder(
+    ip: string,
+    currency: string,
+    amount: number,
+    payer: string | null,
+    meta: { kind?: string; spot?: number; name?: string; line?: string } = {},
+  ): Promise<Order | { error: string }> {
+    if (await this.limited(`order:${ip}`, 10)) return { error: 'Too many requests. Try again in a minute.' };
+    if (currency !== 'SOL' && currency !== 'USDC') return { error: 'Unsupported currency' };
+    const kind = (meta.kind ?? 'tip') as OrderKind;
+    if (!['tip', 'lantern24', 'lantern7d', 'stone', 'tree'].includes(kind)) return { error: 'Unknown item' };
+    const lim = LIMITS[currency];
+    if (kind !== 'tip') amount = PRICES[kind as Exclude<OrderKind, 'tip'>][currency];
+    else if (!(amount >= lim.min && amount <= lim.max)) return { error: `Amount must be between ${lim.min} and ${lim.max} ${currency}` };
+    let spot: number | undefined;
+    let name: string | undefined;
+    let line: string | undefined;
+    if (kind === 'stone' || kind === 'tree') {
+      if (!this.env.DEV_NET_SOL || !this.env.STONE_COLLECTION || !this.env.TREE_COLLECTION) return { error: 'Stones and trees are not on sale yet.' };
+      spot = Math.floor(Number(meta.spot));
+      const max = kind === 'stone' ? STONE_COUNT : TREE_COUNT;
+      if (!(spot >= 0 && spot < max)) return { error: 'No such spot' };
+      if (await this.ctx.storage.get(`spot:${kind}:${spot}`)) return { error: 'Someone already owns this one.' };
+      const res = await this.ctx.storage.get<{ order: string; until: number }>(`res:${kind}:${spot}`);
+      if (res && res.until > Date.now()) return { error: 'Someone is buying this one right now. Try another.' };
+      name = cleanName(meta.name);
+      line = LINES.includes(String(meta.line)) ? String(meta.line) : LINES[0];
+      if (!name) return { error: 'Add a name for your ' + kind };
+    }
+    const raw = BigInt(Math.round(amount * 10 ** lim.decimals)).toString();
+    const now = Date.now();
+    const mint = currency === 'USDC' ? this.env.USDC_MINT : undefined;
+    const o: Order = {
+      id: hex(rand(8)),
+      reference: getBase58Decoder().decode(rand(32)), // random public key, Solana Pay "reference"
+      recipient: this.env.TIP_RECIPIENT,
+      currency,
+      amount,
+      raw,
+      decimals: lim.decimals,
+      mint,
+      recipientAta: mint ? await associatedTokenAccount(this.env.TIP_RECIPIENT, mint) : undefined,
+      cluster: this.env.SOLANA_CLUSTER,
+      createdAt: now,
+      expiresAt: now + ORDER_TTL,
+      status: 'pending',
+      payer: payer ?? undefined,
+      kind,
+      spot,
+      name,
+      line,
+    };
+    await this.ctx.storage.put(`o:${o.id}`, o);
+    if (spot !== undefined) await this.ctx.storage.put(`res:${kind}:${spot}`, { order: o.id, until: o.expiresAt });
+    // remember it so the alarm can confirm it even if the buyer closes the app mid-payment
+    await this.ctx.storage.put(`pending:${o.id}`, now);
+    await this.ensureAlarm();
+    return o;
+  }
+
+  async confirmOrder(id: string, signature?: string): Promise<{ status: string; order?: Order; reason?: string; profile?: Profile; spot?: SpotOwner }> {
+    const o = await this.ctx.storage.get<Order>(`o:${id}`);
+    if (!o) return { status: 'unknown' };
+    if (o.status === 'paid') return { status: 'paid', order: o, spot: await this.deliverSpot(o) };
+    let sig = typeof signature === 'string' && /^[1-9A-HJ-NP-Za-km-z]{64,90}$/.test(signature) ? signature : null;
+    if (!sig) sig = await signatureForReference(serverRpc(this.env, 'cluster'), o.reference).catch(() => null);
+    if (!sig) return { status: Date.now() > o.expiresAt + ORDER_TTL ? 'expired' : 'pending' };
+    if (await this.ctx.storage.get(`sig:${sig}`)) return { status: 'pending', reason: 'signature_used' };
+    const r = await verifyTip(serverRpc(this.env, 'cluster'), sig, o).catch((e) => ({ ok: false as const, reason: String(e) }));
+    if (!r.ok) return { status: 'pending', reason: r.reason };
+    o.status = 'paid';
+    o.signature = sig;
+    o.payer = r.payer;
+    await this.ctx.storage.put(`o:${o.id}`, o);
+    await this.ctx.storage.put(`sig:${sig}`, o.id);
+    await this.ctx.storage.delete(`pending:${o.id}`);
+    const p = await this.getProfile(r.payer);
+    p.supporter = true;
+    p.tips += 1;
+    await this.ctx.storage.put(`p:${r.payer}`, p);
+    return { status: 'paid', order: o, profile: p, spot: await this.deliverSpot(o) };
+  }
+
+  /** After a stone/tree order is paid: record the owner and mint the NFT to them (retried on later calls if it failed). */
+  private async deliverSpot(o: Order): Promise<SpotOwner | undefined> {
+    if ((o.kind !== 'stone' && o.kind !== 'tree') || o.spot === undefined || !o.payer) return undefined;
+    const key = `spot:${o.kind}:${o.spot}`;
+    let rec = await this.ctx.storage.get<SpotOwner>(key);
+    if (rec && rec.owner !== o.payer) return rec; // (cannot happen while reserved; kept safe)
+    rec = rec ?? { owner: o.payer, name: o.name ?? '', line: o.line ?? '' };
+    if (!rec.asset) {
+      try {
+        const treasury = await treasurySigner(this.env.DEV_NET_SOL!);
+        const collection = o.kind === 'stone' ? this.env.STONE_COLLECTION! : this.env.TREE_COLLECTION!;
+        const label = o.kind === 'stone' ? 'Stone' : 'Tree';
+        const m = await mintSpotAsset({
+          rpcUrl: serverRpc(this.env, 'cluster'),
+          treasury,
+          collection,
+          owner: o.payer,
+          name: `Quiet Hall ${label} #${o.spot + 1}`,
+          uri: `${this.env.PUBLIC_URL}/api/meta/${o.kind}/${o.spot}.json`,
+        });
+        rec.asset = m.asset;
+        rec.sig = m.sig;
+        rec.mintedAt = Date.now();
+        delete rec.mintError;
+      } catch (e) {
+        rec.mintError = String(e).slice(0, 200);
+      }
+    }
+    await this.ctx.storage.put(key, rec);
+    await this.ctx.storage.delete(`res:${o.kind}:${o.spot}`);
+    return rec;
+  }
+
+  async spots(kind: 'stone' | 'tree'): Promise<Record<number, SpotOwner>> {
+    const out: Record<number, SpotOwner> = {};
+    for (const [k, v] of await this.ctx.storage.list<SpotOwner>({ prefix: `spot:${kind}:` })) out[Number(k.split(':')[2])] = v;
+    return out;
+  }
+
+  async spot(kind: 'stone' | 'tree', n: number) {
+    return (await this.ctx.storage.get<SpotOwner>(`spot:${kind}:${n}`)) ?? null;
+  }
+
+  /** A paid lantern order can light exactly one lantern. Returns its tier or null. */
+  async useLanternOrder(id: string): Promise<'lantern24' | 'lantern7d' | null> {
+    const o = await this.ctx.storage.get<Order>(`o:${id}`);
+    if (!o || o.status !== 'paid' || o.used || (o.kind !== 'lantern24' && o.kind !== 'lantern7d')) return null;
+    o.used = true;
+    await this.ctx.storage.put(`o:${o.id}`, o);
+    return o.kind;
+  }
+
+  /** Counts distinct friends who arrived through `host`'s link. */
+  async recordInvite(host: string, friend: string): Promise<number> {
+    const k = `inv:${host}`;
+    const list = (await this.ctx.storage.get<string[]>(k)) ?? [];
+    if (!list.includes(friend) && list.length < 100) {
+      // a friend only counts once, for the first person who invited them
+      if (!(await this.ctx.storage.get(`invby:${friend}`))) {
+        list.push(friend);
+        await this.ctx.storage.put(k, list);
+        await this.ctx.storage.put(`invby:${friend}`, host);
+      }
+    }
+    return list.length;
+  }
+
+  async invites(pid: string): Promise<number> {
+    return ((await this.ctx.storage.get<string[]>(`inv:${pid}`)) ?? []).length;
+  }
+}
