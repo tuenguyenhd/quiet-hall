@@ -69,7 +69,7 @@
         </div>
         <div class="label">and your light</div>
         <div id="colors" class="colors"></div>
-        <div class="label">and a pet to walk with you</div>
+        <div class="label">and a pet to walk with you 🐾</div>
         <div id="pets" class="chips pets"></div>
         <button class="primary" id="btn-enter">Enter the hall</button>
       </div>
@@ -163,7 +163,7 @@
     <section id="lanternsheet" class="overlay hidden">
       <div class="card">
         <h2>Light a lantern</h2>
-        <p class="small">It floats over the lake for everyone to see. Your free lantern lasts 1 hour, one per day.</p>
+        <p class="small">It floats over the lake for everyone to see. Your free lantern glows for 1 minute, one per day.</p>
         <div class="label">Your wish</div>
         <div class="chips" id="wishes"></div>
         <input class="field" id="lantern-name" maxlength="16" placeholder="A name (optional)" autocomplete="off" />
@@ -181,9 +181,12 @@
     <section id="petsheet" class="overlay hidden">
       <div class="card">
         <h2>Your pet</h2>
-        <p class="small">Free. It follows you everywhere and sits beside you when you sit. Everyone in the hall sees it.</p>
+        <p class="small">Adopt once, yours forever. It follows you everywhere and sits beside you when you sit. Everyone in the hall sees it.</p>
         <div class="chips pets" id="pet-pick"></div>
         <button class="primary" id="btn-pat">Give it a pat ❤️</button>
+        <button class="primary hidden" id="btn-adopt">Adopt</button>
+        <p class="small hidden" id="pet-note">Paid once with your wallet. Sign in with the same wallet on another phone and your pets come along.</p>
+        <p class="status" id="pet-status"></p>
         <button class="ghost" data-close="petsheet">Close</button>
       </div>
     </section>
@@ -194,7 +197,7 @@
         <h2 id="fren-name">Shibu</h2>
         <p class="small" id="fren-desc"></p>
         <button class="secondary" id="btn-fren-pat">🤲 Pat (free)</button>
-        <button class="primary" id="btn-bless-free">✨ Get blessed · 1 h free</button>
+        <button class="primary" id="btn-bless-free">✨ Get blessed · 1 min free</button>
         <div class="label bless-paid">Long blessing · sparkles for 24 h</div>
         <div class="paid-row bless-paid">
           <button class="secondary" id="btn-bless-paid">✨ 24 hours · <b class="price" data-k="bless24"></b></button>

@@ -30,7 +30,7 @@ export interface ItemsHooks {
   send(m: Record<string, unknown>): void;
   toast(text: string, ms?: number): void;
   buy(
-    item: { kind: string; spot?: number; name?: string; line?: string },
+    item: { kind: string; spot?: number; name?: string; line?: string; pet?: number; pid?: string },
     say: (t: string, err?: boolean) => void,
   ): Promise<Record<string, unknown> | null>;
   store: { get(k: string): string | null; set(k: string, v: string): void };
@@ -196,6 +196,11 @@ export function setupItems(h: ItemsHooks) {
     /** paid items (lanterns, blessings, stones, trees) are switched on */
     get onSale() {
       return !!spots?.onSale;
+    },
+    /** display price of a paid item, e.g. "0.015 SOL" ('' until loaded) */
+    price(kind: string) {
+      const p = spots?.prices[kind];
+      return p ? `${p.SOL} SOL` : '';
     },
     badgeEvent,
     openSpot,

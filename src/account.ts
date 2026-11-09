@@ -296,7 +296,7 @@ export function setupAccount(h: AccountHooks) {
    * `say` shows progress. Returns the server's confirmation or null.
    */
   async function buy(
-    item: { kind: string; currency?: 'SOL' | 'USDC'; spot?: number; name?: string; line?: string },
+    item: { kind: string; currency?: 'SOL' | 'USDC'; spot?: number; name?: string; line?: string; pet?: number; pid?: string },
     say: (text: string, err?: boolean) => void,
   ) {
     const needSignIn = item.kind === 'stone' || item.kind === 'tree';

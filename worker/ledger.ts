@@ -5,16 +5,17 @@ import { getBase58Decoder } from '@solana/kit';
 import type { Env } from './index';
 import { associatedTokenAccount, seekerMints, serverRpc, signatureForReference, verifyTip } from './solana';
 import { mintSpotAsset, treasurySigner } from './core';
-import { LINES, STONE_COUNT, TREE_COUNT, cleanName } from '../src/layout';
+import { LINES, PETS, STONE_COUNT, TREE_COUNT, cleanName } from '../src/layout';
 
-export type OrderKind = 'tip' | 'lantern24' | 'lantern7d' | 'bless24' | 'stone' | 'tree';
+export type OrderKind = 'tip' | 'lantern24' | 'lantern7d' | 'bless24' | 'pet' | 'stone' | 'tree';
 /** Fixed prices for items (tips are any amount). Devnet SOL prices are tiny on purpose. */
 export const PRICES: Record<Exclude<OrderKind, 'tip'>, { SOL: number; USDC: number }> = {
-  lantern24: { SOL: 0.005, USDC: 0.99 },
-  lantern7d: { SOL: 0.015, USDC: 2.99 },
-  bless24: { SOL: 0.003, USDC: 0.49 },
-  stone: { SOL: 0.02, USDC: 19 },
-  tree: { SOL: 0.03, USDC: 29 },
+  lantern24: { SOL: 0.008, USDC: 1.49 },
+  lantern7d: { SOL: 0.025, USDC: 3.99 },
+  bless24: { SOL: 0.006, USDC: 0.99 },
+  pet: { SOL: 0.015, USDC: 2.49 }, // one pet, yours forever
+  stone: { SOL: 0.025, USDC: 24 },
+  tree: { SOL: 0.04, USDC: 34 },
 };
 export interface SpotOwner {
   owner: string;
@@ -55,6 +56,8 @@ export interface Order {
   name?: string;
   line?: string;
   used?: boolean; // paid lantern already lit
+  pet?: number; // which pet (kind 'pet')
+  pid?: string; // visitor id that gets the pet (also kept by wallet)
 }
 
 const NONCE_TTL = 10 * 60000;
@@ -145,12 +148,12 @@ export class Ledger extends DurableObject<Env> {
     currency: string,
     amount: number,
     payer: string | null,
-    meta: { kind?: string; spot?: number; name?: string; line?: string } = {},
+    meta: { kind?: string; spot?: number; name?: string; line?: string; pet?: number; pid?: string } = {},
   ): Promise<Order | { error: string }> {
     if (await this.limited(`order:${ip}`, 10)) return { error: 'Too many requests. Try again in a minute.' };
     if (currency !== 'SOL' && currency !== 'USDC') return { error: 'Unsupported currency' };
     const kind = (meta.kind ?? 'tip') as OrderKind;
-    if (!['tip', 'lantern24', 'lantern7d', 'bless24', 'stone', 'tree'].includes(kind)) return { error: 'Unknown item' };
+    if (!['tip', 'lantern24', 'lantern7d', 'bless24', 'pet', 'stone', 'tree'].includes(kind)) return { error: 'Unknown item' };
     const lim = LIMITS[currency];
     if (kind !== 'tip') amount = PRICES[kind as Exclude<OrderKind, 'tip'>][currency];
     else if (!(amount >= lim.min && amount <= lim.max)) return { error: `Amount must be between ${lim.min} and ${lim.max} ${currency}` };
@@ -168,6 +171,14 @@ export class Ledger extends DurableObject<Env> {
       name = cleanName(meta.name);
       line = LINES.includes(String(meta.line)) ? String(meta.line) : LINES[0];
       if (!name) return { error: 'Add a name for your ' + kind };
+    }
+    let pet: number | undefined;
+    let pid: string | undefined;
+    if (kind === 'pet') {
+      pet = Math.floor(Number(meta.pet));
+      if (!(pet >= 1 && pet < PETS.length)) return { error: 'No such pet' };
+      pid = typeof meta.pid === 'string' && /^[a-z0-9]{8,16}$/.test(meta.pid) ? meta.pid : undefined;
+      if (!pid && !payer) return { error: 'Missing visitor id' };
     }
     const raw = BigInt(Math.round(amount * 10 ** lim.decimals)).toString();
     const now = Date.now();
@@ -191,6 +202,8 @@ export class Ledger extends DurableObject<Env> {
       spot,
       name,
       line,
+      pet,
+      pid,
     };
     await this.ctx.storage.put(`o:${o.id}`, o);
     if (spot !== undefined) await this.ctx.storage.put(`res:${kind}:${spot}`, { order: o.id, until: o.expiresAt });
@@ -216,6 +229,7 @@ export class Ledger extends DurableObject<Env> {
     await this.ctx.storage.put(`o:${o.id}`, o);
     await this.ctx.storage.put(`sig:${sig}`, o.id);
     await this.ctx.storage.delete(`pending:${o.id}`);
+    if (o.kind === 'pet' && o.pet) await this.givePet(o.pet, o.pid, r.payer);
     const p = await this.getProfile(r.payer);
     p.supporter = true;
     p.tips += 1;
@@ -273,6 +287,22 @@ export class Ledger extends DurableObject<Env> {
     o.used = true;
     await this.ctx.storage.put(`o:${o.id}`, o);
     return o.kind;
+  }
+
+  /** Record a bought pet for the visitor id and the paying wallet (so it comes back after signing in elsewhere). */
+  private async givePet(k: number, pid: string | undefined, wallet: string) {
+    for (const key of [pid ? `pets:pid:${pid}` : '', `pets:w:${wallet}`]) {
+      if (!key) continue;
+      const list = (await this.ctx.storage.get<number[]>(key)) ?? [];
+      if (!list.includes(k)) await this.ctx.storage.put(key, [...list, k].sort());
+    }
+  }
+
+  /** Pets owned by this visitor id and/or signed-in wallet. */
+  async ownedPets(pid: string, wallet: string): Promise<number[]> {
+    const a = pid ? ((await this.ctx.storage.get<number[]>(`pets:pid:${pid}`)) ?? []) : [];
+    const b = wallet ? ((await this.ctx.storage.get<number[]>(`pets:w:${wallet}`)) ?? []) : [];
+    return [...new Set([...a, ...b])].sort();
   }
 
   /** A paid blessing order can be used exactly once. */

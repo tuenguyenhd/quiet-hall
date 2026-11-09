@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { b64, decodeText, parseSiws, readSession, signSession, verifySignature } from './auth';
 import { Ledger, PRICES, type SpotOwner } from './ledger';
-import { BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, LAKE, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
+import { BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
 
 export { Ledger };
 
@@ -40,6 +40,7 @@ interface Att {
   c: number; // light colour index
   sd: number; // degen character seed (traits are derived from it on every client)
   pt: number; // pet (index into PETS, 0 = none)
+  po: number[]; // pets this visitor owns
   bl: number; // blessing from fren (index into BLESS, -1 = none)
   bu: number; // blessing ends (ms)
   x: number;
@@ -190,6 +191,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       spot: Number(body.spot),
       name: typeof body.name === 'string' ? body.name : '',
       line: typeof body.line === 'string' ? body.line : '',
+      pet: Number(body.pet),
+      pid: typeof body.pid === 'string' ? body.pid : undefined,
     });
     return 'error' in o ? json(o, 400) : json(o);
   }
@@ -246,7 +249,7 @@ interface Lantern {
   until: number;
   tier: 'free' | 'lantern24' | 'lantern7d';
 }
-const LANTERN_MS = { free: 3600000, lantern24: 86400000, lantern7d: 7 * 86400000 };
+const LANTERN_MS = { free: LANTERN_FREE_MS, lantern24: 86400000, lantern7d: 7 * 86400000 };
 const MAX_LANTERNS = 80;
 
 export class Hall extends DurableObject<Env> {
@@ -345,7 +348,7 @@ export class Hall extends DurableObject<Env> {
       x: r2(LAKE.x + Math.cos(ang) * LAKE.rx * rr),
       z: r2(LAKE.z + Math.sin(ang) * LAKE.rz * rr),
       at: now,
-      until: now + LANTERN_MS[tier],
+      until: now + (tier === 'free' && a.g ? FREE_SEEKER_MS : LANTERN_MS[tier]),
       tier,
     };
     let list = await this.lanterns();
@@ -369,6 +372,7 @@ export class Hall extends DurableObject<Env> {
       if (!(await ledger(this.env).useBlessOrder(m.order))) return send(ws, { t: 'blessNo', reason: 'That blessing order is not paid or was already used.' });
       ms = BLESS_PAID_MS;
     } else {
+      if (a.g) ms = FREE_SEEKER_MS; // Seeker perk: longer free taste
       const day = utcDay();
       const kp = `fbless:${a.pid || a.id}:${day}`;
       const ki = `fblessip:${a.ip}:${day}`;
@@ -450,6 +454,7 @@ export class Hall extends DurableObject<Env> {
       c: 0,
       sd: 0,
       pt: 0,
+      po: [],
       bl: -1,
       bu: 0,
       x: 0,
@@ -495,7 +500,6 @@ export class Hall extends DurableObject<Env> {
       case 'hello': {
         a.c = Math.max(0, Math.min(COLORS - 1, Math.floor(num(m.color))));
         a.sd = Math.floor(num(m.seed)) >>> 0;
-        a.pt = petIdx(m.pet);
         [a.x, a.z] = clampPos(num(m.x, 0), num(m.z, 17));
         a.ry = num(m.ry, Math.PI);
         if (m.s === 'sit' && a.s !== 'sit') {
@@ -513,6 +517,10 @@ export class Hall extends DurableObject<Env> {
           a.g = p.seeker;
           a.sp = p.supporter;
         }
+        // pets are bought: only show one this visitor owns
+        a.po = await ledger(this.env).ownedPets(a.pid, a.addr);
+        const want = petIdx(m.pet);
+        a.pt = a.po.includes(want) ? want : 0;
         const room = (await this.ctx.storage.get<string>('room')) ?? this.room;
         if (room === 'seeker' && !a.g) {
           send(ws, { t: 'denied', reason: 'The Seeker hall is for verified Seeker owners.' });
@@ -529,7 +537,7 @@ export class Hall extends DurableObject<Env> {
           now,
           room,
           invites,
-          me: { g: a.g, sp: a.sp, bl: a.bl, bu: a.bu },
+          me: { g: a.g, sp: a.sp, bl: a.bl, bu: a.bu, pt: a.pt, pets: a.po },
           players: this.live(ws).map(pub),
           lanterns: await this.lanterns(),
           stats: this.stats(),
@@ -577,8 +585,10 @@ export class Hall extends DurableObject<Env> {
         a.addr = addr;
         a.g = p.seeker;
         a.sp = p.supporter;
+        a.po = await ledger(this.env).ownedPets(a.pid, a.addr); // pets bought with this wallet on another device
         ws.serializeAttachment(a);
         this.broadcast({ t: 'p', id: a.id, g: a.g, sp: a.sp });
+        send(ws, { t: 'pets', pets: a.po, pt: a.pt });
         return;
       }
       case 'lantern': {
@@ -599,7 +609,12 @@ export class Hall extends DurableObject<Env> {
         if (!a.hello) return;
         const k = petIdx(m.k);
         if (k === a.pt) return;
+        if (k && !a.po.includes(k)) {
+          a.po = await ledger(this.env).ownedPets(a.pid, a.addr); // maybe just bought it
+          if (!a.po.includes(k)) return send(ws, { t: 'petNo', k, reason: 'Adopt this pet first.' });
+        }
         a.pt = k;
+        send(ws, { t: 'pets', pets: a.po, pt: a.pt });
         ws.serializeAttachment(a);
         this.broadcast({ t: 'pt', id: a.id, k }, ws);
         return;

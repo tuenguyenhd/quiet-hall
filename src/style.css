@@ -1099,3 +1099,7 @@ body {
     height: 76px;
   }
 }
+.chips.pets button.locked {
+  opacity: 0.75;
+  border-style: dashed;
+}

@@ -112,7 +112,7 @@ export function cleanName(s: unknown) {
   return s.normalize('NFC').replace(/[^\p{L}\p{M} '\-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 16);
 }
 
-/** Pets that follow you (free; everyone sees them). Index 0 = no pet. Shared by app and server. */
+/** Pets that follow you (bought once, yours forever; everyone sees them). Index 0 = no pet. Shared by app and server. */
 export const PETS = [
   { key: 'none', name: 'No pet', emoji: '✕' },
   { key: 'shiba', name: 'Shiba', emoji: '🐕' },
@@ -130,5 +130,9 @@ export const BLESS = [
   { fren: 'Old Monk', color: '#c6a6ff', word: 'wise bless' },
   { fren: 'Froggo II', color: '#7ad7ff', word: 'grove bless' },
 ] as const;
-export const BLESS_FREE_MS = 3600000;
+/** Free taste: 1 minute (verified Seeker owners: 10 minutes). Paid: 24 h. */
+export const BLESS_FREE_MS = 60000;
+export const FREE_SEEKER_MS = 600000;
+/** Free lantern: 1 minute (Seeker owners 10 min). */
+export const LANTERN_FREE_MS = 60000;
 export const BLESS_PAID_MS = 86400000;

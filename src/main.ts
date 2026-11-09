@@ -95,12 +95,15 @@ if (!(Number.isInteger(colorIdx) && colorIdx >= 0 && colorIdx < LIGHT_COUNT * SP
   colorIdx = SPECIES_ORDER[0] * LIGHT_COUNT + Math.floor(Math.random() * LIGHT_COUNT); // new visitors start as a random Degen
 }
 let me = new Avatar(colorIdx, true, mySeed);
-// pets are a main feature: new visitors start with a random one (change or remove any time)
-let myPet = Number(store.get('pet') ?? NaN);
-if (!(Number.isInteger(myPet) && myPet >= 0 && myPet < PETS.length)) {
-  myPet = 1 + Math.floor(Math.random() * (PETS.length - 1));
-  store.set('pet', String(myPet));
+// pets are bought once (kept per visitor id + wallet on the server); the list is cached for the welcome screen
+let myPets: number[] = [];
+try {
+  myPets = (JSON.parse(store.get('pets') ?? '[]') as number[]).filter((k) => k > 0 && k < PETS.length);
+} catch {
+  myPets = [];
 }
+let myPet = Number(store.get('pet') ?? 0);
+if (!myPets.includes(myPet)) myPet = 0;
 const frens = setupFrens(scene, world.heightAt, world.clickables);
 const animals = setupAnimals(scene, world.heightAt, world.walkable, lowPower);
 me.root.position.copy(world.spawn);
@@ -195,6 +198,7 @@ net.onMessage = (m: Msg) => {
       me.setBadges(myBadges.g, myBadges.sp);
       myId = String(m.you);
       me.setBless(mine?.bl ?? -1, (mine?.bu ?? 0) - clockOffset);
+      gotPets((m.me as { pets?: number[] })?.pets ?? [], (m.me as { pt?: number })?.pt ?? 0);
       setInvites(Number(m.invites) || 0, false);
       if (m.room === 'seeker') toast('Seeker hall ✦ only verified Seeker owners sit here.', 4000);
       renderStats();
@@ -244,12 +248,19 @@ net.onMessage = (m: Msg) => {
         me.setBless(f, until);
         frens.blessed(f, BLESS[f]?.word ?? 'bless');
         $('frensheet').classList.add('hidden');
-        const h = Math.round((until - Date.now()) / 3600000);
-        toast(`${BLESS[f]?.fren ?? 'A fren'} blessed you ✨ sparkles for ${h >= 2 ? h + ' h' : '1 h'}`, 4500);
+        const min = Math.round((until - Date.now()) / 60000);
+        const left = min >= 120 ? `${Math.round(min / 60)} h` : `${Math.max(1, min)} min`;
+        toast(`${BLESS[f]?.fren ?? 'A fren'} blessed you ✨ sparkles for ${left}`, 4500);
         haptic(30);
       } else others.get(m.id as string)?.setBless(f, until);
       break;
     }
+    case 'pets':
+      gotPets(m.pets as number[], Number(m.pt) || 0);
+      break;
+    case 'petNo':
+      toast(String(m.reason ?? 'Adopt this pet first.'));
+      break;
     case 'blessNo':
       frenStatus(String(m.reason), true);
       break;
@@ -605,30 +616,61 @@ LIGHTS.forEach((c, i) => {
 
 renderDegen();
 
-// ---------- pets ----------
+// ---------- pets (paid once, yours forever) ----------
+let petPick = myPet; // the pet shown in the sheet (may be one you don't own yet)
+function gotPets(list: number[], pt: number) {
+  myPets = list.filter((k) => k > 0 && k < PETS.length);
+  store.set('pets', JSON.stringify(myPets));
+  if (pt !== myPet) {
+    myPet = pt;
+    store.set('pet', String(pt));
+    me.setPet(pt);
+  }
+  renderPets();
+}
+function choosePet(i: number) {
+  myPet = i;
+  store.set('pet', String(i));
+  me.setPet(i);
+  net.send({ t: 'pet', k: i });
+}
 function renderPets() {
   for (const el of [$('pets'), $('pet-pick')]) {
+    const inSheet = el.id === 'pet-pick';
     el.replaceChildren();
     PETS.forEach((p, i) => {
+      const owned = i === 0 || myPets.includes(i);
       const b = document.createElement('button');
-      b.textContent = `${p.emoji} ${p.name}`;
-      b.classList.toggle('on', i === myPet);
+      b.textContent = `${owned ? p.emoji : '🔒'} ${p.name}`;
+      b.classList.toggle('on', i === (inSheet ? petPick : myPet));
+      b.classList.toggle('locked', !owned);
       b.addEventListener('click', () => {
-        myPet = i;
-        store.set('pet', String(i));
-        me.setPet(i);
-        net.send({ t: 'pet', k: i });
-        renderPets();
         haptic(10);
+        petPick = i;
+        if (owned) choosePet(i);
+        if (!owned && !inSheet) return openPets();
+        renderPets();
       });
       el.appendChild(b);
     });
   }
+  const own = petPick === 0 || myPets.includes(petPick);
+  $('btn-pat').classList.toggle('hidden', !own || !me.pet);
+  $('btn-adopt').classList.toggle('hidden', own);
+  $('pet-note').classList.toggle('hidden', own);
+  const price = items.price('pet');
+  $('btn-adopt').textContent = `Adopt ${PETS[petPick].name}${price ? ' · ' + price : ''}`;
+  ($('btn-adopt') as HTMLButtonElement).disabled = !items.onSale;
+}
+function openPets() {
+  $('pet-status').textContent = '';
+  renderPets();
+  $('petsheet').classList.remove('hidden');
 }
 renderPets();
 $('btn-pet').addEventListener('click', () => {
-  renderPets();
-  $('petsheet').classList.remove('hidden');
+  petPick = myPet || 1;
+  openPets();
 });
 $('btn-pat').addEventListener('click', () => {
   $('petsheet').classList.add('hidden');
@@ -636,6 +678,21 @@ $('btn-pat').addEventListener('click', () => {
   me.pet.pat();
   haptic(15);
   net.send({ t: 'emote', e: 'pat' });
+});
+$('btn-adopt').addEventListener('click', async () => {
+  const k = petPick;
+  const say = (t: string, err = false) => {
+    $('pet-status').textContent = t;
+    $('pet-status').classList.toggle('err', err);
+  };
+  const r = await acct.buy({ kind: 'pet', pet: k, pid }, say);
+  if (!r) return;
+  myPets = [...new Set([...myPets, k])];
+  store.set('pets', JSON.stringify(myPets));
+  choosePet(k);
+  renderPets();
+  say(`${PETS[k].name} is yours ✦ say hi!`);
+  setTimeout(() => me.pet?.pat(), 1200);
 });
 
 // ---------- frens: pat (free) and blessings (1 h free a day, 24 h paid) ----------
