@@ -3,6 +3,7 @@
 // Animation is choppy (8 fps): limbs are swung where the model has a rig or named parts, otherwise the whole
 // body bobs/hops/squashes. Models load only when someone actually wears them.
 import * as THREE from 'three';
+import { cullable } from './bake';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import POOL from './chars.json';
@@ -135,7 +136,6 @@ export class PoolRig {
           const m = o as THREE.Mesh;
           if (!m.isMesh) return;
           m.castShadow = true;
-          m.frustumCulled = false;
           for (const mt of Array.isArray(m.material) ? m.material : [m.material]) {
             const map = (mt as THREE.MeshStandardMaterial).map;
             // keep pixel-art skins crisp
@@ -155,6 +155,7 @@ export class PoolRig {
         const c = box.getCenter(new THREE.Vector3());
         obj.position.set(-c.x, -box.min.y, -c.z);
         this.body.add(wrap);
+        cullable(obj);
         this.root.updateMatrixWorld(true);
         this.limbs = findLimbs(obj);
       })

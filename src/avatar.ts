@@ -3,6 +3,7 @@ import { BLESS, LIGHT_COUNT } from './layout';
 import { BlessFx } from './effects';
 import { Pet } from './pets';
 import { disposeOwned, own } from './dispose';
+import { bake } from './bake';
 import { LIGHTS, ROBES } from './palette';
 import { addSleeves, buildRobe } from './body';
 import { DegenRig } from './degen';
@@ -104,46 +105,61 @@ export class Avatar {
       side: THREE.DoubleSide,
     }));
 
-    const built = buildRobe(this.robeMat, ROBES[(color + 3) % ROBES.length], light);
-    this.robe = built.robe;
-    this.body.add(this.robe);
-
-    for (const sx of [-1, 1]) {
-      const f = new THREE.Mesh(G.foot, hoodMat);
-      f.position.set(sx * 0.13, 0.06, 0.12);
-      f.scale.set(1, 0.6, 1.3);
-      this.feet.push(f);
-      this.body.add(f);
-    }
-    this.lap = new THREE.Mesh(G.lap, this.robeMat);
-    this.lap.position.set(0, 0.2, 0.08);
-    this.lap.scale.setScalar(0.0001);
-    this.lap.castShadow = true;
-    this.body.add(this.lap);
-
-    // upper body pivots at the chest so a bow dips the head forward
-    this.upper.position.y = 0.85;
     const sp = Math.floor(color / LIGHT_COUNT);
-    buildCharacter(sp, this.upper, this.body, robeColor);
-    addSleeves(this.upper, this.robeMat, built.sash);
-    const hands = new THREE.Mesh(G.hands, sp ? own(new THREE.MeshStandardMaterial({ color: skinOf(sp), roughness: 0.85 })) : M.skin);
-    hands.position.set(0, 0.0, 0.34);
-    hands.scale.set(0.9, 1.2, 0.8);
-    this.upper.add(hands);
-    this.body.add(this.upper);
-    this.root.add(this.body);
-    // simple humans: a real animated model instead of the robed toy body
     const hv = HUMAN_SPECIES.indexOf(sp);
-    if (hv >= 0) {
-      this.body.visible = false;
-      this.human = new HumanRig(hv === 1 && color % 2 ? 2 : hv, light);
+    if (hv >= 0 || sp === DEGEN_SPECIES) {
+      // model characters: no robed toy body at all (it used to be built and hidden)
+      this.robe = new THREE.Object3D();
+      this.lap = new THREE.Mesh();
+      if (hv >= 0) this.human = new HumanRig(hv === 1 && color % 2 ? 2 : hv, light);
+      else {
+        const s = seed || color * 7919 + 1;
+        const pc = poolPick(s);
+        this.human = pc ? new PoolRig(pc) : new DegenRig(s);
+      }
       this.root.add(this.human.root);
-    } else if (sp === DEGEN_SPECIES) {
-      this.body.visible = false;
-      const s = seed || color * 7919 + 1;
-      const pc = poolPick(s);
-      this.human = pc ? new PoolRig(pc) : new DegenRig(s);
-      this.root.add(this.human.root);
+    } else {
+      const built = buildRobe(this.robeMat, ROBES[(color + 3) % ROBES.length], light);
+      this.robe = built.robe;
+      this.body.add(this.robe);
+      const feet = new THREE.Group(); // both feet in one baked mesh (shown while standing)
+      for (const sx of [-1, 1]) {
+        const f = new THREE.Mesh(G.foot, hoodMat);
+        f.position.set(sx * 0.13, 0.06, 0.12);
+        f.scale.set(1, 0.6, 1.3);
+        feet.add(f);
+      }
+      this.feet.push(feet as unknown as THREE.Mesh);
+      this.body.add(feet);
+      this.lap = new THREE.Mesh(G.lap, this.robeMat);
+      this.lap.position.set(0, 0.2, 0.08);
+      this.lap.scale.setScalar(0.0001);
+      this.lap.castShadow = true;
+      this.body.add(this.lap);
+
+      // upper body pivots at the chest so a bow dips the head forward
+      this.upper.position.y = 0.85;
+      buildCharacter(sp, this.upper, this.body, robeColor);
+      addSleeves(this.upper, this.robeMat, built.sash);
+      const hands = new THREE.Mesh(G.hands, sp ? own(new THREE.MeshStandardMaterial({ color: skinOf(sp), roughness: 0.85 })) : M.skin);
+      hands.position.set(0, 0.0, 0.34);
+      hands.scale.set(0.9, 1.2, 0.8);
+      this.upper.add(hands);
+      this.body.add(this.upper);
+      this.root.add(this.body);
+      // bake: robe (+bands, beads, emblem), upper body (head, sleeves, hands), feet, and tails → a few meshes
+      const dropped = new Set<THREE.Material>();
+      bake(this.robe, () => false, true, dropped);
+      bake(this.upper, () => false, true, dropped);
+      bake(feet, () => false, false, dropped);
+      bake(this.body, (o) => o === this.robe || o === this.upper || o === feet || o === this.lap, false, dropped);
+      const used = new Set<THREE.Material>();
+      this.root.traverse((o) => {
+        const m = (o as THREE.Mesh).material;
+        if (m) for (const x of Array.isArray(m) ? m : [m]) used.add(x);
+      });
+      used.add(this.robeMat);
+      for (const m of dropped) if (!used.has(m)) m.dispose();
     }
 
     // your light: a soft ring under you, and an aura while sitting

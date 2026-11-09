@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { GARDEN, LAKE } from './layout';
+import { cullable } from './bake';
 
 export interface Kind {
   url: string;
@@ -56,7 +57,6 @@ export async function loadAnimal(kind: string, scale = 1): Promise<AnimalInst> {
   obj.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) {
       o.castShadow = true;
-      (o as THREE.Mesh).frustumCulled = false;
     }
   });
   // normalise size: models come in different units. Pose the skeleton first, or skinned meshes
@@ -74,6 +74,7 @@ export async function loadAnimal(kind: string, scale = 1): Promise<AnimalInst> {
   const f = (k.height * scale) / h;
   obj.scale.multiplyScalar(f);
   obj.position.y = -box.min.y * f;
+  cullable(obj);
   const wrap = new THREE.Group();
   wrap.add(obj);
   const mixer = new THREE.AnimationMixer(obj);

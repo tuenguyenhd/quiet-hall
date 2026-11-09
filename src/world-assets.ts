@@ -13,6 +13,8 @@ export interface Placement {
 }
 
 const loader = new GLTFLoader();
+/** culling cell size (m) for instanced scenery */
+const CELL = 32;
 const cache = new Map<string, Promise<THREE.Object3D>>();
 const load = (url: string) => {
   if (!cache.has(url)) cache.set(url, loader.loadAsync(url).then((g) => g.scene));
@@ -34,24 +36,37 @@ export async function instanceModel(scene: THREE.Scene, url: string, height: num
   const m4 = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
+  // split placements into ~CELL m cells: each cell gets its own instanced meshes with a tight bounding
+  // sphere, so trees behind the camera are culled instead of the whole forest being drawn from everywhere
+  const cells = new Map<string, Placement[]>();
+  for (const p of at) {
+    const key = `${Math.floor(p.x / CELL)}:${Math.floor(p.z / CELL)}`;
+    if (!cells.has(key)) cells.set(key, []);
+    cells.get(key)!.push(p);
+  }
+  const parts: { geo: THREE.BufferGeometry; mat: THREE.Material; local: THREE.Matrix4 }[] = [];
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
-    const local = norm.clone().multiply(mesh.matrixWorld);
     const mat = mesh.material as THREE.MeshStandardMaterial;
     if (opts.tint && mat.color) mat.color.multiply(opts.tint);
-    const inst = new THREE.InstancedMesh(mesh.geometry, mat, at.length);
-    at.forEach((p, i) => {
-      q.setFromAxisAngle(up, p.ry);
-      m4.compose(new THREE.Vector3(p.x, p.y, p.z), q, new THREE.Vector3(p.s, p.s, p.s)).multiply(local);
-      inst.setMatrixAt(i, m4);
-    });
-    inst.castShadow = !!opts.shadows;
-    inst.receiveShadow = true;
-    inst.computeBoundingSphere();
-    scene.add(inst);
-    out.push(inst);
+    parts.push({ geo: mesh.geometry, mat, local: norm.clone().multiply(mesh.matrixWorld) });
   });
+  for (const list of cells.values()) {
+    for (const part of parts) {
+      const inst = new THREE.InstancedMesh(part.geo, part.mat, list.length);
+      list.forEach((p, i) => {
+        q.setFromAxisAngle(up, p.ry);
+        m4.compose(new THREE.Vector3(p.x, p.y, p.z), q, new THREE.Vector3(p.s, p.s, p.s)).multiply(part.local);
+        inst.setMatrixAt(i, m4);
+      });
+      inst.castShadow = !!opts.shadows;
+      inst.receiveShadow = true;
+      inst.computeBoundingSphere();
+      scene.add(inst);
+      out.push(inst);
+    }
+  }
   return out;
 }
 

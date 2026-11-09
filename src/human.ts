@@ -2,6 +2,7 @@
 // sit and clap animations. The shirt takes your light colour. Bow is done on the torso bone.
 import * as THREE from 'three';
 import { own } from './dispose';
+import { cullable } from './bake';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
@@ -47,7 +48,6 @@ export class HumanRig {
           const m = o as THREE.SkinnedMesh;
           if (m.isMesh) {
             m.castShadow = true;
-            m.frustumCulled = false;
             const mats = (Array.isArray(m.material) ? m.material : [m.material]).map((mt) => {
               if (/shirt|dress|top/i.test(mt.name)) {
                 const c = own((mt as THREE.MeshStandardMaterial).clone());
@@ -67,6 +67,7 @@ export class HumanRig {
         obj.scale.setScalar(k);
         obj.position.y = -box.min.y * k;
         this.root.add(obj);
+        cullable(obj);
         this.mixer = new THREE.AnimationMixer(obj);
         for (const c of g.animations) {
           const key = c.name.replace(/^.*\|/, '').replace(/^(Man|Female)_/, '');
