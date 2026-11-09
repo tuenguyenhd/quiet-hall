@@ -34,10 +34,10 @@
       </div>
       <div class="sub-row">
         <div class="pill place hidden" id="place"></div>
-        <button class="pill world" id="world" aria-label="World Sit"></button>
-        <button class="pill" id="btn-wallet" aria-label="Wallet"><span class="wdot"></span><span id="wallet-text">👛</span></button>
+        <button class="pill world" id="world" aria-label="World Sit" title="World Sit: everyone sits together once a day"></button>
+        <button class="pill" id="btn-wallet" aria-label="Wallet" title="Wallet: sign in, Seeker gold light"><span class="wdot"></span><span id="wallet-text">👛</span></button>
         <span class="grow"></span>
-        <button class="pill hidden" id="btn-install" aria-label="Install app">📲</button>
+        <button class="pill hidden" id="btn-install" aria-label="Install app" title="Install Quiet Hall">📲</button>
         <button class="pill" id="btn-badges" aria-label="Badges">🏅 <b id="badge-count">0</b></button>
       </div>
       <div class="sub hidden" id="today"></div>
@@ -51,7 +51,7 @@
       <button class="act" id="btn-greet"><span class="ico">✧</span><span>Greet</span></button>
     </div>
 
-    <div id="hint" class="hint hidden">Tap to walk · drag to look · tap a cushion to sit</div>
+    <div id="hint" class="hint hidden">Tap to walk · drag to look · tap a cushion (or Sit) to sit</div>
     <div id="toast" class="toast"></div>
 
     <section id="welcome" class="overlay">
@@ -174,7 +174,7 @@
         <div class="label">Special lanterns · golden, bigger</div>
         <div class="chips paywith"></div>
         <div class="paid-row">
-          <button class="secondary" data-tier="lantern24">24 hours · <b class="price" data-k="lantern24"></b></button>
+          <button class="secondary" data-tier="lantern24">24 h · <b class="price" data-k="lantern24"></b></button>
           <button class="secondary" data-tier="lantern7d">7 days · <b class="price" data-k="lantern7d"></b></button>
         </div>
         <p class="status" id="lantern-status"></p>

@@ -107,6 +107,13 @@ if (!myPets.includes(myPet)) myPet = 0;
 const frens = setupFrens(scene, world.heightAt, world.clickables);
 const animals = setupAnimals(scene, world.heightAt, world.walkable, lowPower);
 me.root.position.copy(world.spawn);
+// spread newcomers out a little so people joining together don't stand inside each other
+{
+  const a = Math.random() * Math.PI * 2;
+  const r = 0.8 + Math.random() * 2.2;
+  me.root.position.x += Math.cos(a) * r;
+  me.root.position.z += Math.sin(a) * r * 0.6;
+}
 me.root.rotation.y = Math.PI;
 scene.add(me.root);
 me.setPet(myPet);
@@ -450,9 +457,14 @@ $('btn-greet').addEventListener('click', () => {
 });
 $('btn-sit').addEventListener('click', () => med.openSheet());
 
+/** share result: a status line, or the bare link when nothing could share/copy it → let the person copy it by hand */
+function shareResult(msg: string) {
+  if (!msg) return;
+  if (/^https?:\/\//.test(msg)) window.prompt('Copy your invite link:', msg);
+  else toast(msg);
+}
 async function invite() {
-  const msg = await shareInvite(inviteUrl(myInvite));
-  if (msg) toast(msg);
+  shareResult(await shareInvite(inviteUrl(myInvite)));
 }
 $('btn-invite').addEventListener('click', invite);
 $('btn-invite2').addEventListener('click', invite);
@@ -474,8 +486,7 @@ $('btn-share').addEventListener('click', async () => {
   const link = inviteUrl(myInvite);
   const blob = await makeCard({ ...lastSit, scene: snapshot(), link });
   const mins = Math.max(1, Math.round(lastSit.seconds / 60));
-  const msg = await shareCard(blob, link, `I sat ${mins} min in the Quiet Hall. Sit with me:`);
-  if (msg) toast(msg);
+  shareResult(await shareCard(blob, link, `I sat ${mins} min in the Quiet Hall. Sit with me:`));
 });
 
 setupPwa($('btn-install'), () => toast('Installed. Quiet Hall now opens from your home screen, even offline.'));
@@ -511,6 +522,7 @@ const med = new Meditation({
     $('hud').classList.remove('hidden');
   },
   others: () => Math.max(0, (net.online ? stats.here : 1) - 1),
+  toast: (t: string) => toast(t, 4000),
 });
 
 // ---------- theme, invites, wallet ----------
@@ -543,6 +555,7 @@ function setInvites(n: number, live: boolean) {
 
 const acct = setupAccount({
   toast,
+  onSupport: () => items.badgeEvent({ type: 'donate' }),
   onSession(s) {
     myBadges = { g: !!s?.seeker, sp: !!s?.supporter };
     me.setBadges(myBadges.g, myBadges.sp);
@@ -556,7 +569,7 @@ const acct = setupAccount({
   setRoom: (r) => net.setRoom(r),
 });
 
-const items = setupItems({ scene, world, send: (m) => net.send(m), toast, buy: acct.buy, store });
+const items = setupItems({ scene, world, send: (m) => net.send(m), toast, buy: acct.buy, store, online: () => net.online });
 let sitInWorld = false;
 
 // ---------- welcome ----------
@@ -713,7 +726,7 @@ function openFren(i: number) {
   frenIdx = i;
   const b = BLESS[i];
   $('fren-name').textContent = frens.name(i);
-  $('fren-desc').textContent = `${b.word}: ${b.fren} can bless you. You glow with ${b.fren}'s sparkles and everyone in the hall sees them.`;
+  $('fren-desc').textContent = `${b.word[0].toUpperCase() + b.word.slice(1)}: ${b.fren} can bless you. You glow with ${b.fren}'s sparkles and everyone in the hall sees them.`;
   for (const el of document.querySelectorAll('#frensheet .bless-paid')) el.classList.toggle('hidden', !items.onSale);
   frenStatus(me.blessF >= 0 ? `Blessed by ${BLESS[me.blessF].fren} · ${Math.max(1, Math.round((me.blessUntil - Date.now()) / 60000))} min left` : '');
   $('frensheet').classList.remove('hidden');
@@ -1000,8 +1013,15 @@ function updateCamera(dt: number) {
     const ox = o.x - p.x;
     const oz = o.z - p.z;
     const along = ox * sx + oz * sz;
-    if (o.r < 0.5 || along < 0.5 || along > hd) continue; // thin trunks don't hide you; walls and pillars do
-    if (Math.abs(ox * sz - oz * sx) < o.r + 0.3) hd = Math.max(3, along - o.r - 0.4);
+    if (along < 0.5 || along > hd) continue;
+    const side = Math.abs(ox * sz - oz * sx);
+    if (o.r >= 0.5) {
+      // walls and pillars
+      if (side < o.r + 0.3) hd = Math.max(3, along - o.r - 0.4);
+    } else if (along > hd - 4 && side < 1.3) {
+      // a tree right behind the camera: its canopy would cover you (trunks near you are fine)
+      hd = Math.max(3, along - 1.4);
+    }
   }
   zoom = Math.min(zoom, hd / Math.cos(pitch));
   camWant.set(

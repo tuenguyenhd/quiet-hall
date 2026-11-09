@@ -19,9 +19,9 @@ export const BADGES: BadgeDef[] = [
   { id: 'hall-bell', name: 'Hall Bell', icon: '🔔', hint: 'Ring the bell within 2 minutes of a group bell' },
   { id: 'world-sit', name: 'WAGMI Sit', icon: '🌍', hint: 'Sit during the daily World Sit' },
   { id: 'seven-days', name: 'Diamond Calm', icon: '💎', hint: 'Sit 7 days in a row' },
-  { id: 'gathering', name: 'Frens', icon: '👥', hint: '3 friends join from your link' },
+  { id: 'gathering', name: 'Frens', icon: '👥', hint: '3 friends join from your invite link' },
   { id: 'seeker-lotus', name: 'Seeker Lotus', icon: '🪷', hint: 'Sit as a verified Seeker owner' },
-  { id: 'giver', name: 'Giver', icon: '💛', hint: 'Donate to a cause' },
+  { id: 'giver', name: 'Giver', icon: '💛', hint: 'Support the hall (a tip or any paid item)' },
 ];
 
 const PLACE_BADGE: Record<string, string> = {

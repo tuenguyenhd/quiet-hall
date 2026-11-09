@@ -1112,3 +1112,56 @@ body {
 .legal a {
   color: inherit;
 }
+
+/* ---------- QA fixes: sheets scroll on short phones, newest sheet on top, toasts readable ---------- */
+.overlay {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-items: flex-start; /* + margin:auto on the card = centred when it fits, scrollable when it doesn't */
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  z-index: 20;
+}
+.overlay > .card {
+  margin: auto 0;
+  flex-shrink: 0;
+}
+#wallets,
+#tipsheet {
+  z-index: 30; /* the wallet picker opens from inside other sheets (buying) */
+}
+.toast {
+  z-index: 40;
+  top: calc(max(12px, env(safe-area-inset-top)) + 118px); /* below both HUD rows */
+}
+/* HUD second row: the place pill shrinks (ellipsis) so the badges pill never leaves the screen */
+.sub-row {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.sub-row .pill {
+  flex-shrink: 0;
+}
+.sub-row .pill.place {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+@media (max-width: 380px) {
+  .paid-row button {
+    font-size: 13px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+@media (max-width: 400px) {
+  /* narrow phones: the install pill makes room for the place name (installing is also in the browser menu) */
+  #btn-install {
+    display: none !important;
+  }
+  .sub-row .pill.place {
+    max-width: 42vw;
+  }
+}

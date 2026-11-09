@@ -46,11 +46,11 @@ const view = (x: number, z: number, dx: number, dz: number) => [x + dx, z + dz] 
 export const PLACES: PlaceInfo[] = [
   { id: 'hall', name: 'Main Hall', x: 0, z: HALL.z, r: 13, hint: 'Tap a cushion to sit with others.', view: [0, -3], look: [0, HALL.z] },
   { id: 'court', name: 'Courtyard', x: 0, z: 6, r: 11, hint: 'Paths lead to the lake, the garden, the grove and the tea house.', view: [0, 22], look: [0, -2] },
-  { id: 'lake', name: 'Lake', x: LAKE.x, z: LAKE.z, r: 17, hint: 'Sit at the end of the dock and listen to the water.', view: view(LAKE.x, LAKE.z, 16, -7), look: [LAKE.x, LAKE.z] },
+  { id: 'lake', name: 'Lake', x: LAKE.x, z: LAKE.z, r: 17, hint: 'Sit at the end of the dock and listen to the water.', view: view(LAKE.x, LAKE.z, 14.5, -6), look: [LAKE.x, LAKE.z] },
   { id: 'garden', name: 'Stone Garden', x: GARDEN.x, z: GARDEN.z, r: 12, hint: 'Sit on a bench and follow the raked lines.', view: view(GARDEN.x, GARDEN.z, 0, 10.5), look: [GARDEN.x, GARDEN.z] },
-  { id: 'grove', name: 'Maple Grove', x: GROVE.x, z: GROVE.z, r: 12, hint: 'Rest on the bench or the swing under the maples.', view: view(GROVE.x, GROVE.z, 8.2, 3.6), look: [GROVE.x, GROVE.z] },
-  { id: 'tea', name: 'Tea House', x: TEA.x, z: TEA.z, r: 7, hint: 'Sit by the low table. The kettle is warm.', view: view(TEA.x, TEA.z, -7.2, 0.8), look: [TEA.x, TEA.z] },
-  { id: 'lookout', name: 'Lookout', x: LOOKOUT.x, z: LOOKOUT.z, r: 11, hint: 'One rock above the whole valley. Sit and watch the hall from here.', view: [0, LOOKOUT.z - 5], look: [0, -16] },
+  { id: 'grove', name: 'Maple Grove', x: GROVE.x, z: GROVE.z, r: 12, hint: 'Rest on the bench or the swing under the maples.', view: view(GROVE.x, GROVE.z, -2.6, 0.6), look: [GROVE.x - 12, GROVE.z + 2] },
+  { id: 'tea', name: 'Tea House', x: TEA.x, z: TEA.z, r: 7, hint: 'Sit by the low table. The kettle is warm.', view: view(TEA.x, TEA.z, -6.2, 0.8), look: [TEA.x, TEA.z] },
+  { id: 'lookout', name: 'Lookout', x: LOOKOUT.x, z: LOOKOUT.z, r: 11, hint: 'One rock above the whole valley. Sit and watch the trees and the sky.', view: [0, LOOKOUT.z - 5], look: [0, -16] },
 ];
 
 export function placeAt(x: number, z: number): PlaceInfo | null {

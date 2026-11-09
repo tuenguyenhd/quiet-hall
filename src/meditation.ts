@@ -4,6 +4,7 @@ export interface MedHooks {
   onSit(): void;
   onStand(seconds: number): void;
   others(): number; // other people in the hall right now
+  toast?(text: string): void;
 }
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -124,11 +125,13 @@ export class Meditation {
       setTimeout(() => audio.bowl(0.5), 3400);
       haptic(30);
     }
-    if (seconds >= 20) {
+    if (seconds < 20) {
+      this.hooks.toast?.('Sits under 20 s aren\'t counted. Try a few breaths longer 🙏');
+    } else {
       const n = this.hooks.others();
       $('sum-time').textContent = fmt(seconds);
       $('sum-with').textContent =
-        n > 0 ? `touched grass with ${n} ${n === 1 ? 'fren' : 'frens'} in the hall. wagmi.` : 'touched grass. wagmi.';
+        n > 0 ? `touched grass with ${n} ${n === 1 ? 'friend' : 'friends'} in the hall. wagmi.` : 'touched grass. wagmi.';
       $('summary').classList.remove('hidden');
     }
   }

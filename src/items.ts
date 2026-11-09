@@ -34,6 +34,7 @@ export interface ItemsHooks {
     say: (t: string, err?: boolean) => void,
   ): Promise<Record<string, unknown> | null>;
   store: { get(k: string): string | null; set(k: string, v: string): void };
+  online(): boolean;
 }
 
 type Pay = 'SOL' | 'USDC' | 'SKR';
@@ -137,6 +138,7 @@ export function setupItems(h: ItemsHooks) {
     $('lanternsheet').classList.remove('hidden');
   });
   $('btn-light').addEventListener('click', () => {
+    if (!h.online()) return lStatus('Offline. Lanterns need the hall connection.', true);
     h.send({ t: 'lantern', wish, name: cleanName(($('lantern-name') as HTMLInputElement).value) });
     lStatus('Lighting…');
   });

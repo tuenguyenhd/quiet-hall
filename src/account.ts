@@ -19,6 +19,8 @@ export interface AccountHooks {
   nightUnlocked(): boolean;
   theme(): Theme;
   setTheme(t: Theme): void;
+  /** a tip or paid item went through (Giver badge) */
+  onSupport?(): void;
   room(): string;
   setRoom(r: string): void;
 }
@@ -73,7 +75,10 @@ export function setupAccount(h: AccountHooks) {
       w(!!(wallet && account));
     }
   };
-  const open = (id: string) => $(id).classList.remove('hidden');
+  const open = (id: string) => {
+    $(id).classList.remove('hidden');
+    $(id).scrollTop = 0;
+  };
   for (const b of document.querySelectorAll<HTMLElement>('[data-close]')) {
     b.addEventListener('click', () => close(b.dataset.close!));
   }
@@ -111,11 +116,15 @@ export function setupAccount(h: AccountHooks) {
     }
   }
 
+  let buying = false;
   function openWallets(mode: 'signin' | 'connect', then?: () => void) {
     afterConnect = then ?? null;
     ($('wallet-status') as HTMLElement).textContent = '';
     $('wallet-status').classList.remove('err');
     $('wallets').dataset.mode = mode;
+    $('wallets-why').textContent = buying
+      ? 'Connect a wallet to pay. Your wallet shows the exact amount before anything is sent.'
+      : 'Optional. Seeker owners get a gold light, and you can support the hall. Signing in is free and moves no funds.';
     renderWallets();
     open('wallets');
   }
@@ -257,6 +266,7 @@ export function setupAccount(h: AccountHooks) {
         }
         close('tipsheet');
         h.toast(`Thank you ✧ ${amount} ${currency} received.`, 5000);
+        h.onSupport?.();
       } else {
         status.classList.add('err');
         status.textContent = 'Sent, but not confirmed yet. It will count once the network confirms it.';
@@ -300,7 +310,10 @@ export function setupAccount(h: AccountHooks) {
     say: (text: string, err?: boolean) => void,
   ) {
     const needSignIn = item.kind === 'stone' || item.kind === 'tree';
-    if (!(await ensureWallet(needSignIn))) {
+    buying = true;
+    const ok = await ensureWallet(needSignIn);
+    buying = false;
+    if (!ok) {
       say('Connect a wallet to continue.', true);
       return null;
     }
@@ -312,6 +325,7 @@ export function setupAccount(h: AccountHooks) {
       say(needSignIn ? 'Confirming and minting your NFT…' : 'Confirming on Solana…');
       const r = await confirmTip(order.id, sig);
       if (!r) say('Sent, but not confirmed yet. It will appear once the network confirms it.', true);
+      else h.onSupport?.();
       return r ? { ...r, order } : null;
     } catch (e) {
       say(errText(e), true);
