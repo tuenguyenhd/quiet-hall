@@ -1,4 +1,5 @@
 // Pets + blessings over the socket. Usage: node scripts/pets-test.mjs [baseUrl]
+// Note: free blessings are capped at 3 per network per UTC day, so against a live Worker this passes ~3 runs a day.
 const room = 'p' + Date.now().toString(36);
 const BASE = process.argv[2] ?? 'http://127.0.0.1:8787';
 const url = `${BASE.replace(/^http/, 'ws')}/ws?room=${room}`;
