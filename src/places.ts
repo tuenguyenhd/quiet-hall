@@ -7,7 +7,7 @@ import type { WorldCtx } from './world';
 
 type Owned = Map<number, { name: string; line: string }>;
 
-function labelSprite(title: string, line: string) {
+export function labelSprite(title: string, line: string) {
   const c = document.createElement('canvas');
   c.width = 512;
   c.height = 160;

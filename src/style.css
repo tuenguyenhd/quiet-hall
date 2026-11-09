@@ -1340,3 +1340,34 @@ body {
   transform: translateY(-2px);
   box-shadow: 3px 4px 0 var(--ink);
 }
+
+/* legendary pets: gold tile */
+.pet-tile.legend {
+  background: linear-gradient(160deg, #fff6c9, #ffd75e);
+}
+.pet-tile.legend.on {
+  background: linear-gradient(160deg, #ffe680, #ffb800);
+}
+.pet-tile.legend small::before {
+  content: '✦ ';
+}
+
+/* Founder Cushion offer in the sit sheet */
+button.founder {
+  display: block;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: linear-gradient(160deg, #fff6c9, #ffd75e);
+  box-shadow: 2px 2px 0 var(--ink);
+  font-family: var(--pop);
+  font-size: 14px;
+  color: var(--ink);
+}
+button.founder.taken {
+  background: var(--paper);
+  box-shadow: none;
+  font-size: 13px;
+}

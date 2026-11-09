@@ -32,6 +32,9 @@ const CLIPS: Record<string, { walk: string; idle: string; sit: string; turn?: nu
   axolotl: { walk: '', idle: '', sit: '' },
 };
 
+const AURA_G = new THREE.RingGeometry(0.34, 0.42, 32);
+const AURA_M = new THREE.MeshBasicMaterial({ color: '#ffcf3f', transparent: true, opacity: 0.75, depthWrite: false, toneMapped: false });
+
 export class Pet {
   root = new THREE.Group();
   private inst: AnimalInst | null = null;
@@ -39,6 +42,7 @@ export class Pet {
   private hopT = -1;
   private dead = false;
   readonly key: string;
+  private aura: THREE.Mesh | null = null;
 
   constructor(
     readonly kind: number,
@@ -50,6 +54,13 @@ export class Pet {
     // start beside the owner
     this.root.position.copy(owner.position);
     this.root.position.x += 0.9;
+    // legendary pets: a slowly pulsing gold ring under them
+    if (PETS[kind]?.legend) {
+      this.aura = new THREE.Mesh(AURA_G, AURA_M);
+      this.aura.rotation.x = -Math.PI / 2;
+      this.aura.position.y = 0.05;
+      this.root.add(this.aura);
+    }
     loadAnimal(this.key, SCALE[this.key] ?? 0.6)
       .then((inst) => {
         if (this.dead) return;
@@ -110,6 +121,7 @@ export class Pet {
       if (this.hopT > 0.45) this.hopT = -1;
     }
     p.y = y;
+    if (this.aura) this.aura.scale.setScalar(1 + 0.08 * Math.sin(performance.now() / 400));
     if (!this.inst || !near) return;
     const c = CLIPS[this.key] ?? { walk: '', idle: '', sit: '' };
     const moving = d > 0.3;

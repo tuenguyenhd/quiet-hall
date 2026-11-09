@@ -5,31 +5,40 @@ import { getBase58Decoder } from '@solana/kit';
 import type { Env } from './index';
 import { type Currency, associatedTokenAccount, seekerMints, serverRpc, signatureForReference, verifyTip } from './solana';
 import { assetOwners, mintSpotAsset, treasurySigner } from './core';
-import { LINES, PETS, STONE_COUNT, TREE_COUNT, cleanName } from '../src/layout';
+import { BANNER_DAYS, LINES, PETS, PRICE_USD, SPOTS, cleanName, type PricedKind, type SpotKind } from '../src/layout';
 
-export type OrderKind = 'tip' | 'lantern24' | 'lantern7d' | 'bless24' | 'pet' | 'stone' | 'tree';
-/** Fixed prices for items (tips are any amount). Devnet SOL prices are tiny on purpose. */
-export const PRICES: Record<Exclude<OrderKind, 'tip'>, { SOL: number; USDC: number }> = {
-  lantern24: { SOL: 0.008, USDC: 1.49 },
-  lantern7d: { SOL: 0.025, USDC: 3.99 },
-  bless24: { SOL: 0.006, USDC: 0.99 },
-  pet: { SOL: 0.015, USDC: 2.49 }, // one pet, yours forever
-  stone: { SOL: 0.025, USDC: 24 },
-  tree: { SOL: 0.04, USDC: 34 },
-};
-/** SKR price = USDC price × SKR_PER_USDC (set for mainnet from the market; default 50), rounded to whole SKR. */
+export type OrderKind = 'tip' | 'lantern24' | 'lantern7d' | 'bless24' | 'pet' | 'stone' | 'tree' | 'cushion' | 'banner';
+type PriceEnv = { SKR_MINT?: string; SKR_PER_USDC?: string; PRICE_SCALE?: string };
+/** SKR per US dollar (set for mainnet from the market; default 50). */
 export function skrRate(env: { SKR_PER_USDC?: string }) {
   const r = Number(env.SKR_PER_USDC);
   return r > 0 ? r : 50;
 }
-export function itemPrice(kind: Exclude<OrderKind, 'tip'>, currency: Currency, env: { SKR_PER_USDC?: string }) {
-  const p = PRICES[kind];
-  return currency === 'SKR' ? Math.ceil(p.USDC * skrRate(env)) : p[currency];
+/** Devnet runs at a fraction of the real price (PRICE_SCALE, e.g. 0.01) so testing costs pennies of test SOL. */
+const scaleOf = (env: PriceEnv) => {
+  const s = Number(env.PRICE_SCALE);
+  return s > 0 && s <= 1 ? s : 1;
+};
+const sig3 = (n: number) => Number(n.toPrecision(3));
+/** Price of one item in `currency`. `kind` is a PRICE_USD key (pet orders use 'pet' or 'petLegend'). */
+export function priceIn(kind: PricedKind, currency: Currency, solUsd: number, env: PriceEnv) {
+  const usd = PRICE_USD[kind] * scaleOf(env);
+  if (currency === 'USDC') return Math.max(0.01, Math.round(usd * 100) / 100);
+  if (currency === 'SKR') return Math.max(1, Math.ceil(usd * skrRate(env)));
+  return sig3(usd / solUsd);
 }
-/** Price table for the app, including SKR when it is switched on. */
-export function priceTable(env: { SKR_MINT?: string; SKR_PER_USDC?: string }) {
+/** Price table for the app: USD and the matching SOL / USDC (/ SKR when on). */
+export function priceTable(env: PriceEnv, solUsd: number) {
   return Object.fromEntries(
-    Object.entries(PRICES).map(([k, p]) => [k, { ...p, ...(env.SKR_MINT ? { SKR: itemPrice(k as Exclude<OrderKind, 'tip'>, 'SKR', env) } : {}) }]),
+    (Object.keys(PRICE_USD) as PricedKind[]).map((k) => [
+      k,
+      {
+        USD: PRICE_USD[k],
+        SOL: priceIn(k, 'SOL', solUsd, env),
+        USDC: priceIn(k, 'USDC', solUsd, env),
+        ...(env.SKR_MINT ? { SKR: priceIn(k, 'SKR', solUsd, env) } : {}),
+      },
+    ]),
   );
 }
 
@@ -43,6 +52,9 @@ export interface SpotOwner {
   mintError?: string;
   /** owner changed on chain (sold / transferred) since the purchase */
   movedAt?: number;
+  /** rentals (patron banners): shown until this time */
+  until?: number;
+  order?: string;
 }
 
 export interface Profile {
@@ -77,6 +89,8 @@ export interface Order {
   line?: string;
   used?: boolean; // paid lantern already lit
   pet?: number; // which pet (kind 'pet')
+  /** legendary pet reservation (supply check) */
+  legend?: boolean;
   pid?: string; // visitor id that gets the pet (also kept by wallet)
 }
 
@@ -194,33 +208,42 @@ export class Ledger extends DurableObject<Env> {
     if (currency !== 'SOL' && currency !== 'USDC' && currency !== 'SKR') return { error: 'Unsupported currency' };
     if (currency === 'SKR' && !this.env.SKR_MINT) return { error: 'SKR payments are not on yet.' };
     const kind = (meta.kind ?? 'tip') as OrderKind;
-    if (!['tip', 'lantern24', 'lantern7d', 'bless24', 'pet', 'stone', 'tree'].includes(kind)) return { error: 'Unknown item' };
+    if (!['tip', 'lantern24', 'lantern7d', 'bless24', 'pet', 'stone', 'tree', 'cushion', 'banner'].includes(kind)) return { error: 'Unknown item' };
     const lim = LIMITS[currency];
-    if (kind !== 'tip') amount = itemPrice(kind as Exclude<OrderKind, 'tip'>, currency, this.env);
-    else if (!(amount >= lim.min && amount <= lim.max)) return { error: `Amount must be between ${lim.min} and ${lim.max} ${currency}` };
     let spot: number | undefined;
     let name: string | undefined;
     let line: string | undefined;
-    if (kind === 'stone' || kind === 'tree') {
-      if (!(this.env.TREASURY_KEY || this.env.DEV_NET_SOL) || !this.env.STONE_COLLECTION || !this.env.TREE_COLLECTION) return { error: 'Stones and trees are not on sale yet.' };
-      spot = Math.floor(Number(meta.spot));
-      const max = kind === 'stone' ? STONE_COUNT : TREE_COUNT;
-      if (!(spot >= 0 && spot < max)) return { error: 'No such spot' };
-      if (await this.ctx.storage.get(`spot:${kind}:${spot}`)) return { error: 'Someone already owns this one.' };
-      const res = await this.ctx.storage.get<{ order: string; until: number }>(`res:${kind}:${spot}`);
-      if (res && res.until > Date.now()) return { error: 'Someone is buying this one right now. Try another.' };
-      name = cleanName(meta.name);
-      line = LINES.includes(String(meta.line)) ? String(meta.line) : LINES[0];
-      if (!name) return { error: 'Add a name for your ' + kind };
-    }
     let pet: number | undefined;
     let pid: string | undefined;
+    let legend = false;
     if (kind === 'pet') {
       pet = Math.floor(Number(meta.pet));
       if (!(pet >= 1 && pet < PETS.length)) return { error: 'No such pet' };
       pid = typeof meta.pid === 'string' && /^[a-z0-9]{8,16}$/.test(meta.pid) ? meta.pid : undefined;
       if (!pid && !payer) return { error: 'Missing visitor id' };
+      const supply = PETS[pet].legend;
+      if (supply) {
+        legend = true;
+        const left = supply - (await this.legendTaken(pet));
+        if (left <= 0) return { error: `All ${supply} ${PETS[pet].name}s are adopted.` };
+      }
     }
+    if (kind in SPOTS) {
+      const sk = kind as SpotKind;
+      if (SPOTS[sk].nft && !(this.env.TREASURY_KEY || this.env.DEV_NET_SOL) ) return { error: 'Not on sale yet.' };
+      if (SPOTS[sk].nft && !this.collectionOf(sk)) return { error: `${SPOTS[sk].label}s are not on sale yet.` };
+      spot = Math.floor(Number(meta.spot));
+      if (!(spot >= 0 && spot < SPOTS[sk].count)) return { error: 'No such spot' };
+      const held = await this.ctx.storage.get<SpotOwner>(`spot:${kind}:${spot}`);
+      if (held && (!held.until || held.until > Date.now())) return { error: sk === 'banner' ? 'This banner is taken. Try another one.' : 'Someone already owns this one.' };
+      const res = await this.ctx.storage.get<{ order: string; until: number }>(`res:${kind}:${spot}`);
+      if (res && res.until > Date.now()) return { error: 'Someone is buying this one right now. Try another.' };
+      name = cleanName(meta.name);
+      line = LINES.includes(String(meta.line)) ? String(meta.line) : LINES[0];
+      if (!name) return { error: 'Add a name for your ' + SPOTS[sk].label.toLowerCase() };
+    }
+    if (kind !== 'tip') amount = priceIn(kind === 'pet' ? (legend ? 'petLegend' : 'pet') : (kind as PricedKind), currency, await this.solUsd(), this.env);
+    else if (!(amount >= lim.min && amount <= lim.max)) return { error: `Amount must be between ${lim.min} and ${lim.max} ${currency}` };
     const raw = BigInt(Math.round(amount * 10 ** lim.decimals)).toString();
     const now = Date.now();
     const mint = currency === 'USDC' ? this.env.USDC_MINT : currency === 'SKR' ? this.env.SKR_MINT : undefined;
@@ -245,8 +268,10 @@ export class Ledger extends DurableObject<Env> {
       line,
       pet,
       pid,
+      legend: legend || undefined,
     };
     await this.ctx.storage.put(`o:${o.id}`, o);
+    if (legend && pet) await this.ctx.storage.put(`legres:${pet}:${o.id}`, o.expiresAt);
     if (spot !== undefined) await this.ctx.storage.put(`res:${kind}:${spot}`, { order: o.id, until: o.expiresAt });
     // remember it so the alarm can confirm it even if the buyer closes the app mid-payment
     await this.ctx.storage.put(`pending:${o.id}`, now);
@@ -270,7 +295,7 @@ export class Ledger extends DurableObject<Env> {
     await this.ctx.storage.put(`o:${o.id}`, o);
     await this.ctx.storage.put(`sig:${sig}`, o.id);
     await this.ctx.storage.delete(`pending:${o.id}`);
-    if (o.kind === 'pet' && o.pet) await this.givePet(o.pet, o.pid, r.payer);
+    if (o.kind === 'pet' && o.pet) await this.givePet(o.pet, o.pid, r.payer, o.id);
     const p = await this.getProfile(r.payer);
     p.supporter = true;
     p.tips += 1;
@@ -280,23 +305,31 @@ export class Ledger extends DurableObject<Env> {
 
   /** After a stone/tree order is paid: record the owner and mint the NFT to them (retried on later calls if it failed). */
   private async deliverSpot(o: Order): Promise<SpotOwner | undefined> {
-    if ((o.kind !== 'stone' && o.kind !== 'tree') || o.spot === undefined || !o.payer) return undefined;
-    const key = `spot:${o.kind}:${o.spot}`;
+    if (!(o.kind in SPOTS) || o.spot === undefined || !o.payer) return undefined;
+    const sk = o.kind as SpotKind;
+    const key = `spot:${sk}:${o.spot}`;
     let rec = await this.ctx.storage.get<SpotOwner>(key);
-    if (rec && rec.owner !== o.payer) return rec; // (cannot happen while reserved; kept safe)
+    if (sk === 'banner') {
+      // rented: 30 days from payment (a later rent by the same order is a no-op)
+      if (!rec || rec.order !== o.id) {
+        rec = { owner: o.payer, name: o.name ?? '', line: o.line ?? '', until: Date.now() + BANNER_DAYS * 86400000, order: o.id };
+        await this.ctx.storage.put(key, rec);
+      }
+      await this.ctx.storage.delete(`res:${sk}:${o.spot}`);
+      return rec;
+    }
+    if (rec && rec.owner !== o.payer && !rec.movedAt) return rec; // (cannot happen while reserved; kept safe)
     rec = rec ?? { owner: o.payer, name: o.name ?? '', line: o.line ?? '' };
     if (!rec.asset) {
       try {
         const treasury = await treasurySigner((this.env.TREASURY_KEY || this.env.DEV_NET_SOL)!);
-        const collection = o.kind === 'stone' ? this.env.STONE_COLLECTION! : this.env.TREE_COLLECTION!;
-        const label = o.kind === 'stone' ? 'Stone' : 'Tree';
         const m = await mintSpotAsset({
           rpcUrl: serverRpc(this.env, 'cluster'),
           treasury,
-          collection,
+          collection: this.collectionOf(sk)!,
           owner: o.payer,
-          name: `Quiet Hall ${label} #${o.spot + 1}`,
-          uri: `${this.env.PUBLIC_URL}/api/meta/${o.kind}/${o.spot}.json`,
+          name: `Quiet Hall ${SPOTS[sk].label} #${o.spot + 1}`,
+          uri: `${this.env.PUBLIC_URL}/api/meta/${sk}/${o.spot}.json`,
         });
         rec.asset = m.asset;
         rec.sig = m.sig;
@@ -307,7 +340,7 @@ export class Ledger extends DurableObject<Env> {
       }
     }
     await this.ctx.storage.put(key, rec);
-    await this.ctx.storage.delete(`res:${o.kind}:${o.spot}`);
+    await this.ctx.storage.delete(`res:${sk}:${o.spot}`);
     return rec;
   }
 
@@ -341,13 +374,14 @@ export class Ledger extends DurableObject<Env> {
     return changed;
   }
 
-  async spots(kind: 'stone' | 'tree'): Promise<Record<number, SpotOwner>> {
+  async spots(kind: SpotKind): Promise<Record<number, SpotOwner>> {
     const out: Record<number, SpotOwner> = {};
-    for (const [k, v] of await this.ctx.storage.list<SpotOwner>({ prefix: `spot:${kind}:` })) out[Number(k.split(':')[2])] = v;
+    const now = Date.now();
+    for (const [k, v] of await this.ctx.storage.list<SpotOwner>({ prefix: `spot:${kind}:` })) if (!v.until || v.until > now) out[Number(k.split(':')[2])] = v;
     return out;
   }
 
-  async spot(kind: 'stone' | 'tree', n: number) {
+  async spot(kind: SpotKind, n: number) {
     return (await this.ctx.storage.get<SpotOwner>(`spot:${kind}:${n}`)) ?? null;
   }
 
@@ -361,12 +395,72 @@ export class Ledger extends DurableObject<Env> {
   }
 
   /** Record a bought pet for the visitor id and the paying wallet (so it comes back after signing in elsewhere). */
-  private async givePet(k: number, pid: string | undefined, wallet: string) {
+  private async givePet(k: number, pid: string | undefined, wallet: string, orderId?: string) {
     for (const key of [pid ? `pets:pid:${pid}` : '', `pets:w:${wallet}`]) {
       if (!key) continue;
       const list = (await this.ctx.storage.get<number[]>(key)) ?? [];
       if (!list.includes(k)) await this.ctx.storage.put(key, [...list, k].sort());
     }
+    // legendary: number it (#n of supply), once per owner
+    if (PETS[k]?.legend && !(await this.ctx.storage.get(`petno:${k}:w:${wallet}`))) {
+      const n = ((await this.ctx.storage.get<number>(`legsold:${k}`)) ?? 0) + 1;
+      await this.ctx.storage.put(`legsold:${k}`, n);
+      await this.ctx.storage.put(`petno:${k}:w:${wallet}`, n);
+      if (pid) await this.ctx.storage.put(`petno:${k}:p:${pid}`, n);
+    }
+    if (orderId) await this.ctx.storage.delete(`legres:${k}:${orderId}`);
+  }
+
+  /** Legendary pets sold plus ones being paid for right now (so the last few can't be oversold). */
+  private async legendTaken(k: number) {
+    const sold = (await this.ctx.storage.get<number>(`legsold:${k}`)) ?? 0;
+    let held = 0;
+    for (const [key, until] of await this.ctx.storage.list<number>({ prefix: `legres:${k}:` })) {
+      if (until > Date.now()) held++;
+      else await this.ctx.storage.delete(key);
+    }
+    return sold + held;
+  }
+
+  /** {pet: {sold, supply}} for every legendary pet */
+  async legends() {
+    const out: Record<number, { sold: number; supply: number }> = {};
+    for (const [i, p] of PETS.entries()) if (p.legend) out[i] = { sold: (await this.ctx.storage.get<number>(`legsold:${i}`)) ?? 0, supply: p.legend };
+    return out;
+  }
+
+  /** your legendary numbers {pet: n} */
+  async petNumbers(pid: string, wallet: string) {
+    const out: Record<number, number> = {};
+    for (const [i, p] of PETS.entries()) {
+      if (!p.legend) continue;
+      const n = (wallet && (await this.ctx.storage.get<number>(`petno:${i}:w:${wallet}`))) || (pid && (await this.ctx.storage.get<number>(`petno:${i}:p:${pid}`)));
+      if (n) out[i] = n;
+    }
+    return out;
+  }
+
+  /** NFT collection for a spot kind (unset = not on sale) */
+  collectionOf(kind: SpotKind) {
+    return { stone: this.env.STONE_COLLECTION, tree: this.env.TREE_COLLECTION, cushion: this.env.CUSHION_COLLECTION, banner: undefined }[kind];
+  }
+
+  /** Live SOL/USD (Jupiter price API), cached 5 min; falls back to the last known price, then 150. */
+  async solUsd(): Promise<number> {
+    const c = await this.ctx.storage.get<{ p: number; at: number }>('solusd');
+    if (c && Date.now() - c.at < 5 * 60000) return c.p;
+    try {
+      const r = await fetch('https://lite-api.jup.ag/price/v3?ids=So11111111111111111111111111111111111111112', { signal: AbortSignal.timeout(4000) });
+      const j = (await r.json()) as Record<string, { usdPrice?: number }>;
+      const p = Number(j['So11111111111111111111111111111111111111112']?.usdPrice);
+      if (p > 1 && p < 100000) {
+        await this.ctx.storage.put('solusd', { p, at: Date.now() });
+        return p;
+      }
+    } catch {
+      /* keep the last price */
+    }
+    return c?.p ?? 150;
   }
 
   /** Pets owned by this visitor id and/or signed-in wallet. */

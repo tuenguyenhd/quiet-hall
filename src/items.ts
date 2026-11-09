@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { apiGet } from './api';
 import { haptic } from './audio';
 import { BADGES, applyEvent, badge, daysLeft, isActive, type BadgeEvent, type BadgeStore } from './badges';
-import { LINES, STONE_COUNT, TREE_COUNT, WISHES, cleanName } from './layout';
+import { BANNER_DAYS, LINES, PRICE_USD, SPOTS, WISHES, cleanName, type SpotKind } from './layout';
 import { Lanterns, describe, type LanternData } from './lanterns';
 import type { Msg } from './net';
 import type { World } from './world';
@@ -15,12 +15,15 @@ interface SpotInfo {
   name: string;
   line: string;
   asset: string | null;
+  until: number | null;
 }
-interface SpotsResp {
-  stone: Record<string, SpotInfo>;
-  tree: Record<string, SpotInfo>;
-  prices: Record<string, { SOL: number; USDC: number; SKR?: number }>;
+interface SpotsResp extends Record<SpotKind, Record<string, SpotInfo>> {
+  prices: Record<string, { USD: number; SOL: number; USDC: number; SKR?: number }>;
   onSale: boolean;
+  sale: Record<SpotKind, boolean>;
+  legends: Record<string, { sold: number; supply: number }>;
+  solUsd: number;
+  priceScale: number;
   cluster: string;
 }
 
@@ -157,11 +160,12 @@ export function setupItems(h: ItemsHooks) {
     } catch {
       return;
     }
-    for (const kind of ['stone', 'tree'] as const) {
+    for (const kind of Object.keys(SPOTS) as SpotKind[]) {
       const m = new Map<number, { name: string; line: string }>();
-      for (const [k, v] of Object.entries(spots[kind])) m.set(Number(k), { name: v.name, line: v.line });
+      for (const [k, v] of Object.entries(spots[kind] ?? {})) m.set(Number(k), { name: v.name, line: v.line });
       h.world.setOwned(kind, m);
     }
+    onSpots?.();
     // paid lanterns need the same on-chain setup as stones/trees
     document.querySelector('#lanternsheet .paid-row')?.classList.toggle('hidden', !spots.onSale);
     document.querySelector('#lanternsheet .paid-row')?.previousElementSibling?.classList.toggle('hidden', !spots.onSale);
@@ -178,31 +182,43 @@ export function setupItems(h: ItemsHooks) {
     });
     lines.appendChild(b);
   });
-  let current: { kind: 'stone' | 'tree'; i: number } | null = null;
+  let current: { kind: SpotKind; i: number } | null = null;
+  let onSpots: (() => void) | null = null;
   const sStatus = (t: string, err = false) => {
     $('spot-status').textContent = t;
     $('spot-status').classList.toggle('err', err);
   };
-  function openSpot(kind: 'stone' | 'tree', i: number) {
+  const usd = (n: number) => `$${n % 1 ? n.toFixed(2) : n}`;
+  const COPY: Record<SpotKind, (left: number, total: number) => string> = {
+    stone: (l, t) => `Only ${t} stones exist; ${l} are still free. Yours shows your name and a line to everyone in the Stone Garden, and comes as an NFT in your wallet.`,
+    tree: (l, t) => `Only ${t} maples exist; ${l} are still free. Your tree grows taller with your name and a line, and comes as an NFT in your wallet.`,
+    cushion: (l, t) => `One of the ${t} cushions in the Main Hall, forever yours: it turns gold, carries your name and a line, and comes as an NFT. ${l} of ${t} left.`,
+    banner: (l, t) => `Your name on the front of the Main Hall for ${BANNER_DAYS} days: the first thing everyone sees when they arrive. ${l} of ${t} banners free right now.`,
+  };
+  function openSpot(kind: SpotKind, i: number) {
     if (i < 0) return;
     current = { kind, i };
-    const label = kind === 'stone' ? 'Stone' : 'Tree';
-    const total = kind === 'stone' ? STONE_COUNT : TREE_COUNT;
-    const owned = spots?.[kind][String(i)];
-    $('spot-kind').textContent = `${label} · ${kind === 'stone' ? 'Stone Garden' : 'Maple Grove'}`;
-    $('spot-title').textContent = owned ? owned.name : `${label} #${i + 1}`;
-    const taken = spots ? Object.keys(spots[kind]).length : 0;
+    const info = SPOTS[kind];
+    const owned = spots?.[kind]?.[String(i)];
+    $('spot-kind').textContent = `${info.label} · ${info.place}`;
+    $('spot-title').textContent = owned ? owned.name : `${info.label} #${i + 1}`;
+    const taken = spots ? Object.keys(spots[kind] ?? {}).length : 0;
+    const until = owned?.until ? ` until ${new Date(owned.until).toLocaleDateString()}` : '';
     $('spot-desc').textContent = owned
-      ? `“${owned.line}” · ${label} #${i + 1} · held by ${short(owned.owner)}${owned.asset ? ' · NFT ' + short(owned.asset) : ''}`
-      : `Only ${total} ${kind}s exist; ${total - taken} are still free. Yours shows your name and a line to everyone in the hall, and comes as an NFT in your wallet.`;
+      ? `“${owned.line}” · ${info.label} #${i + 1} · ${kind === 'banner' ? 'rented' : 'held'} by ${short(owned.owner)}${until}${owned.asset ? ' · NFT ' + short(owned.asset) : ''}`
+      : COPY[kind](info.count - taken, info.count);
     $('spot-buy').classList.toggle('hidden', !!owned);
-    $('spot-price').textContent = fmt(kind);
-    $('spot-note').textContent = spots?.onSale
-      ? spots.cluster === 'mainnet'
-        ? 'Resale on NFT marketplaces later. We never promise its value will rise.'
-        : `Devnet test mode: uses test SOL. Resale later.`
-      : 'Not on sale yet.';
-    ($('btn-buy-spot') as HTMLButtonElement).disabled = !spots?.onSale;
+    $('spot-price').textContent = `${usd(PRICE_USD[kind])}${kind === 'banner' ? ` / ${BANNER_DAYS} days` : ''} · ${fmt(kind)}`;
+    const onSale = !!spots?.sale?.[kind];
+    $('spot-note').textContent = !onSale
+      ? 'Not on sale yet.'
+      : spots!.cluster === 'mainnet'
+        ? kind === 'banner'
+          ? 'Cosmetic only. Renew any time after it ends.'
+          : 'Resellable on NFT marketplaces (5% to the hall). We never promise its value will rise.'
+        : `Devnet test mode: paid in test SOL at ${Math.round((spots!.priceScale ?? 1) * 100)}% of the real price.`;
+    ($('btn-buy-spot') as HTMLButtonElement).disabled = !onSale;
+    $('btn-buy-spot').firstChild!.textContent = kind === 'banner' ? 'Rent it · ' : 'Own it · ';
     sStatus('');
     $('spotsheet').classList.remove('hidden');
   }
@@ -213,7 +229,14 @@ export function setupItems(h: ItemsHooks) {
     const r = await buy({ kind: current.kind, spot: current.i, name, line }, sStatus);
     if (r) {
       const sp = r.spot as { asset?: string; mintError?: string } | undefined;
-      sStatus(sp?.asset ? `It's yours ✦ NFT ${short(sp.asset)} is in your wallet.` : `Paid. Minting is retrying (${sp?.mintError ?? 'pending'}).`, !sp?.asset);
+      sStatus(
+        current.kind === 'banner'
+          ? `Your banner is up ✦ ${BANNER_DAYS} days on the front of the hall.`
+          : sp?.asset
+            ? `It's yours ✦ NFT ${short(sp.asset)} is in your wallet.`
+            : `Paid. Minting is retrying (${sp?.mintError ?? 'pending'}).`,
+        current.kind !== 'banner' && !sp?.asset,
+      );
       await loadSpots();
       h.send({ t: 'spots' });
       $('spot-buy').classList.add('hidden');
@@ -237,6 +260,15 @@ export function setupItems(h: ItemsHooks) {
     },
     badgeEvent,
     openSpot,
+    /** owner of a spot (null = free), whether that kind is on sale */
+    spotOwner: (kind: SpotKind, i: number) => spots?.[kind]?.[String(i)] ?? null,
+    saleOf: (kind: SpotKind) => !!spots?.sale?.[kind],
+    /** legendary pet supply {sold, supply} */
+    legend: (pet: number) => spots?.legends?.[String(pet)] ?? null,
+    usd: (kind: keyof typeof PRICE_USD) => usd(PRICE_USD[kind]),
+    set onSpotsChange(f: () => void) {
+      onSpots = f;
+    },
     onMessage(m: Msg) {
       if (m.t === 'welcome') lanterns.set((m.lanterns as LanternData[]) ?? []);
       else if (m.t === 'lantern') {

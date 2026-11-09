@@ -58,7 +58,7 @@ const free = frees[Math.floor(Math.random() * frees.length)];
 const anon = await j('/api/tip/order', { kind: 'stone', spot: free, name: 'Test', currency: 'SOL' });
 t('anonymous cannot buy a stone', anon.status === 400, anon.body.error);
 const order = await j('/api/tip/order', { kind: 'stone', spot: free, name: 'Quiet Tester', line: 'just breathe', currency: 'SOL', token });
-t(`order stone #${free + 1}`, order.status === 200 && order.body.raw === String(spots.prices.stone.SOL * 1e9), `${order.body.amount} SOL`);
+t(`order stone #${free + 1}`, order.status === 200 && Math.abs(order.body.amount - spots.prices.stone.SOL) < 1e-9, `${order.body.amount} SOL`);
 const dup = await j('/api/tip/order', { kind: 'stone', spot: free, name: 'Other', currency: 'SOL', token });
 t('same spot is reserved for the first buyer', dup.status === 400, dup.body.error);
 const paid = await pay(order.body);
@@ -143,6 +143,35 @@ ws2.send(JSON.stringify({ t: 'hello', color: 3, pet: 2, pid: `e2f${Date.now().to
 await wait(1500);
 const w2 = m2.find((m) => m.t === 'welcome');
 t('pet comes back on another device (same wallet)', w2?.me.pets.includes(2) && w2.me.pt === 2);
+
+// ---------- legendary pet (numbered, limited) ----------
+if (!SKIP.has('legend')) {
+  const L = Object.keys(spots.legends)[0];
+  const lo2 = await j('/api/tip/order', { kind: 'pet', pet: Number(L), pid: PID, currency: 'SOL', token });
+  t('legendary pet priced as legendary', lo2.status === 200 && lo2.body.amount === spots.prices.petLegend.SOL, `${lo2.body.amount} SOL`);
+  const lp2 = await pay(lo2.body);
+  t('legendary pet paid', !!lp2);
+  const after2 = (await j('/api/spots')).body.legends[L];
+  t('legendary count went up', after2.sold === spots.legends[L].sold + 1, `${after2.sold}/${after2.supply}`);
+  ws2.send(JSON.stringify({ t: 'pet', k: Number(L) }));
+  await wait(1500);
+  const pm2 = m2.filter((m) => m.t === 'pets').at(-1);
+  t('you get a number', pm2?.petNos?.[L] >= 1, `#${pm2?.petNos?.[L]}`);
+}
+
+// ---------- patron banner (rented 30 days) ----------
+if (!SKIP.has('banner')) {
+  const free = [...Array(6).keys()].find((i) => !spots.banner[i]);
+  if (free === undefined) t('a free banner slot', false, 'all 6 rented');
+  else {
+    const bo2 = await j('/api/tip/order', { kind: 'banner', spot: free, name: 'Quiet Tester', line: 'just breathe', currency: 'SOL', token });
+    t('banner order', bo2.status === 200 && bo2.body.amount === spots.prices.banner.SOL, `${bo2.body.amount} SOL`);
+    const bp2 = await pay(bo2.body);
+    t('banner paid', !!bp2);
+    const b2 = (await j('/api/spots')).body.banner[free];
+    t('banner up for 30 days', b2?.name === 'Quiet Tester' && b2.until - Date.now() > 29 * 86400000, `#${free + 1}`);
+  }
+}
 ws2.close();
 
 console.log(`\nbalance now ${await bal()} SOL\n${pass} passed, ${fail} failed`);

@@ -40,6 +40,8 @@ USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
 PUBLIC_URL = "https://quiet-hall.ted-233.workers.dev"
 # devnet only: these wallets act as Seeker owners (gold light, Seeker hall, longer free items) for testing on a
 # normal Android phone. Public addresses, comma-separated. Ignored when SOLANA_CLUSTER = "mainnet".
+# devnet: everything costs 1% of the real USD price (in test SOL) so testing is cheap. Remove (= 1) on mainnet.
+PRICE_SCALE = "0.01"
 SEEKER_TEST_WALLETS = "Cz1s2LVfjXe3VkBCcQdwRzS46PTAw5meoAfHirTjwKyQ"
 # devnet NFT collections (public addresses; owned by the DEV_NET_SOL treasury)
 STONE_COLLECTION = "H8wEprMeHSZMe3SQPneH3cq3J4WqE7j1hdKLfd8qBwaf"

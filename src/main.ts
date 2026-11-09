@@ -10,7 +10,7 @@ import { audio, haptic } from './audio';
 import { Net, type Msg } from './net';
 import { Meditation } from './meditation';
 import { LIGHTS } from './palette';
-import { BLESS, LIGHT_COUNT, PETS, SPECIES, SPECIES_ORDER } from './layout';
+import { BLESS, LIGHT_COUNT, PETS, SPECIES, SPECIES_ORDER, type SpotKind } from './layout';
 import { updateEffects } from './effects';
 import { Pet } from './pets';
 import { setupFrens } from './frens';
@@ -212,7 +212,7 @@ net.onMessage = (m: Msg) => {
         store.set('inv', myInvite);
       }
       me.setBless(mine?.bl ?? -1, (mine?.bu ?? 0) - clockOffset);
-      gotPets((m.me as { pets?: number[] })?.pets ?? [], (m.me as { pt?: number })?.pt ?? 0);
+      gotPets((m.me as { pets?: number[] })?.pets ?? [], (m.me as { pt?: number })?.pt ?? 0, (m.me as { petNos?: Record<string, number> })?.petNos);
       setInvites(Number(m.invites) || 0, false);
       if (m.room === 'seeker') toast('Seeker hall ✦ only verified Seeker owners sit here.', 4000);
       renderStats();
@@ -270,7 +270,7 @@ net.onMessage = (m: Msg) => {
       break;
     }
     case 'pets':
-      gotPets(m.pets as number[], Number(m.pt) || 0);
+      gotPets(m.pets as number[], Number(m.pt) || 0, m.petNos as Record<string, number> | undefined);
       break;
     case 'petNo':
       toast(String(m.reason ?? 'Adopt this pet first.'));
@@ -371,6 +371,7 @@ function arrive() {
       me.root.rotation.y = p.seat.ry;
       currentSeat = p.seat;
     }
+    showCushionOffer(p.seat);
     med.openSheet();
   } else if (p.kind === 'bell') ringBell();
   else strikeBowl();
@@ -423,7 +424,7 @@ controls.onTap = (x, y) => {
         return;
       }
       if (action === 'spot') {
-        onSpotTap(o.userData.kind as 'stone' | 'tree', hit.instanceId ?? -1);
+        onSpotTap(o.userData.kind as SpotKind, (o.userData.index as number | undefined) ?? hit.instanceId ?? -1);
         return;
       }
       const at = action === 'bell' ? world.bellPos : world.bowlPos;
@@ -456,7 +457,27 @@ $('btn-greet').addEventListener('click', () => {
   haptic(10);
   net.send({ t: 'emote', e: 'greet' });
 });
-$('btn-sit').addEventListener('click', () => med.openSheet());
+$('btn-sit').addEventListener('click', () => {
+  showCushionOffer(null);
+  med.openSheet();
+});
+/** sitting on a Main Hall cushion: show its Founder (gold name) or offer to own it */
+function showCushionOffer(seat: Seat | null | undefined) {
+  const el = $('sit-cushion');
+  const m = seat ? /^hall-(\d+)$/.exec(seat.id) : null;
+  if (!m) return el.classList.add('hidden');
+  const i = Number(m[1]);
+  const o = items.spotOwner('cushion', i);
+  el.classList.remove('hidden');
+  el.dataset.i = String(i);
+  el.textContent = o ? `✦ Founder cushion of ${o.name} · “${o.line}”` : `✦ Own this Founder Cushion #${i + 1} · ${items.usd('cushion')}`;
+  el.classList.toggle('taken', !!o);
+}
+$('sit-cushion').addEventListener('click', () => {
+  if ($('sit-cushion').classList.contains('taken')) return;
+  $('sheet').classList.add('hidden');
+  items.openSpot('cushion', Number($('sit-cushion').dataset.i));
+});
 
 /** share result: a status line, or the bare link when nothing could share/copy it → let the person copy it by hand */
 function shareResult(msg: string) {
@@ -638,7 +659,10 @@ renderDegen();
 
 // ---------- pets (paid once, yours forever) ----------
 let petPick = myPet; // the pet shown in the sheet (may be one you don't own yet)
-function gotPets(list: number[], pt: number) {
+/** your numbers for legendary pets {pet: n} (e.g. Baby Dragon #7 / 100) */
+let myPetNos: Record<string, number> = {};
+function gotPets(list: number[], pt: number, nos?: Record<string, number>) {
+  if (nos) myPetNos = nos;
   myPets = list.filter((k) => k > 0 && k < PETS.length);
   store.set('pets', JSON.stringify(myPets));
   if (pt !== myPet) {
@@ -670,6 +694,8 @@ function renderPets() {
       b.querySelector('.e')!.textContent = p.emoji;
       b.querySelector('small')!.textContent = p.name;
       b.title = owned ? p.name : `${p.name} · tap to try on`;
+      if (p.legend) b.classList.add('legend');
+      if (owned && p.legend && myPetNos[i]) b.querySelector('small')!.textContent = `${p.name} #${myPetNos[i]}`;
       const on = i === (inSheet ? petPick : myPet);
       b.classList.toggle('on', on);
       if (on) selected = b;
@@ -692,9 +718,16 @@ function renderPets() {
   $('btn-adopt').classList.toggle('hidden', own);
   $('pet-note').classList.toggle('hidden', own);
   document.querySelector('#petsheet .paywith')?.classList.toggle('hidden', own);
-  const price = items.price('pet');
-  $('btn-adopt').textContent = `Adopt ${PETS[petPick].name}${price ? ' · ' + price : ''}`;
-  ($('btn-adopt') as HTMLButtonElement).disabled = !items.onSale;
+  const pk = PETS[petPick];
+  const kind = pk.legend ? 'petLegend' : 'pet';
+  const price = items.price(kind);
+  const lg = pk.legend ? items.legend(petPick) : null;
+  const left = lg ? lg.supply - lg.sold : 0;
+  $('btn-adopt').textContent = pk.legend && lg && left <= 0 ? `${pk.name}: all ${lg.supply} adopted` : `Adopt ${pk.name} · ${items.usd(kind)}${price ? ' · ' + price : ''}`;
+  ($('btn-adopt') as HTMLButtonElement).disabled = !items.onSale || (!!lg && left <= 0);
+  $('pet-note').textContent = pk.legend
+    ? `✦ Legendary: only ${pk.legend} will ever exist${lg ? ` · ${left} left` : ''}. Numbered (#1–${pk.legend}) with a gold aura. Paid once with your wallet.`
+    : 'Paid once with your wallet. Sign in with the same wallet on another phone and your pets come along.';
 }
 /** try-on: a locked pet walks beside you (only on your screen) while the sheet is open; the sheet moves down so you can see it */
 function previewPet() {
@@ -900,7 +933,7 @@ $('world').addEventListener('click', () => {
 });
 
 // ---------- where am I ----------
-const onSpotTap = (kind: 'stone' | 'tree', i: number) => items.openSpot(kind, i);
+const onSpotTap = (kind: SpotKind, i: number) => items.openSpot(kind, i);
 let lastPlace = '';
 const seenPlaces = new Set<string>(JSON.parse(store.get('places') ?? '[]'));
 function placeTick() {

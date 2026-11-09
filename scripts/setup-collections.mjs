@@ -23,6 +23,7 @@ console.log('balance', Number(bal) / 1e9, 'SOL (devnet)');
 for (const [key, name, kind] of [
   ['STONE_COLLECTION', 'Quiet Hall Stones', 'stone'],
   ['TREE_COLLECTION', 'Quiet Hall Trees', 'tree'],
+  ['CUSHION_COLLECTION', 'Quiet Hall Founder Cushions', 'cushion'],
 ]) {
   if (vars[key]) {
     console.log(`${key} already set: ${vars[key]}`);

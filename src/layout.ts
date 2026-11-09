@@ -120,7 +120,8 @@ export function cleanName(s: unknown) {
 }
 
 /** Pets that follow you (bought once, yours forever; everyone sees them). Index 0 = no pet. Shared by app and server. */
-export const PETS = [
+/** `legend` = limited supply (numbered #n / supply), priced as a legendary pet */
+export const PETS: readonly { key: string; name: string; emoji: string; legend?: number }[] = [
   { key: 'none', name: 'No pet', emoji: '✕' },
   { key: 'shiba', name: 'Shiba', emoji: '🐕' },
   { key: 'husky', name: 'Husky', emoji: '🐺' },
@@ -132,13 +133,13 @@ export const PETS = [
   { key: 'sharpei', name: 'Shar Pei', emoji: '🐶' },
   { key: 'bulldog', name: 'Bulldog', emoji: '🐕' },
   { key: 'stripe', name: 'Stripe', emoji: '🐱' },
-  { key: 'dragon', name: 'Baby Dragon', emoji: '🐉' },
+  { key: 'dragon', name: 'Baby Dragon', emoji: '🐉', legend: 100 },
   { key: 'chick', name: 'Chick', emoji: '🐣' },
-  { key: 'tiger', name: 'Tiger', emoji: '🐯' },
+  { key: 'tiger', name: 'Tiger', emoji: '🐯', legend: 100 },
   { key: 'duck', name: 'Chip Duck', emoji: '🦆' },
   { key: 'penguin', name: 'Penguin', emoji: '🐧' },
-  { key: 'axolotl', name: 'Axolotl', emoji: '🦎' },
-] as const;
+  { key: 'axolotl', name: 'Axolotl', emoji: '🦎', legend: 100 },
+];
 
 /** Blessings from the resident frens (index = fren). Free 1 h once a day; paid 24 h. Cosmetic only. */
 export const BLESS = [
@@ -156,3 +157,28 @@ export const FREE_SEEKER_MS = 600000;
 /** Free lantern: 1 minute (Seeker owners 10 min). */
 export const LANTERN_FREE_MS = 60000;
 export const BLESS_PAID_MS = 86400000;
+
+/** Prices in US dollars (fixed). SOL / SKR amounts are worked out from the live SOL price when you buy. */
+export const PRICE_USD = {
+  bless24: 2.99,
+  lantern24: 4.99,
+  lantern7d: 14.99,
+  pet: 9.99,
+  petLegend: 99,
+  stone: 149,
+  tree: 249,
+  cushion: 499,
+  banner: 149,
+} as const;
+export type PricedKind = keyof typeof PRICE_USD;
+
+/** Scarce things you can own (or rent) at a fixed place in the world. */
+export const SPOTS = {
+  stone: { count: 108, label: 'Stone', place: 'Stone Garden', nft: true },
+  tree: { count: 64, label: 'Tree', place: 'Maple Grove', nft: true },
+  cushion: { count: 24, label: 'Founder Cushion', place: 'Main Hall', nft: true },
+  banner: { count: 6, label: 'Patron Banner', place: 'Hall front', nft: false },
+} as const;
+export type SpotKind = keyof typeof SPOTS;
+/** Patron banners are rented: this many days per payment. */
+export const BANNER_DAYS = 30;

@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { b64, decodeText, parseSiws, readSession, signSession, verifySignature } from './auth';
 import { Ledger, priceTable, type SpotOwner } from './ledger';
 import { serverRpc } from './solana';
-import { STONE_COUNT, TREE_COUNT, BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
+import { SPOTS, BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
 
 export { Ledger };
 
@@ -32,6 +32,10 @@ export interface Env {
   /** Mainnet: treasury secret key (base58) for minting; preferred over DEV_NET_SOL. Secret. */
   TREASURY_KEY?: string;
   STONE_COLLECTION?: string;
+  /** Founder Cushions (24, Main Hall) NFT collection; unset = cushions not on sale */
+  CUSHION_COLLECTION?: string;
+  /** prices × this (devnet: 0.01 so tests cost pennies of test SOL); mainnet: unset = 1 */
+  PRICE_SCALE?: string;
   TREE_COLLECTION?: string;
   /** Base URL used in NFT metadata links. */
   PUBLIC_URL: string;
@@ -142,28 +146,42 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   if (path === '/api/spots') {
     // owners follow the chain (marketplace sales / transfers); cheap, throttled inside
     await L.syncOwners(new URL(req.url).searchParams.get('refresh') === '1');
-    const sell = !!((env.TREASURY_KEY || env.DEV_NET_SOL) && env.STONE_COLLECTION && env.TREE_COLLECTION);
+    const treasury = !!(env.TREASURY_KEY || env.DEV_NET_SOL);
     const strip = (o: Record<number, SpotOwner>) =>
-      Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { owner: v.owner, name: v.name, line: v.line, asset: v.asset ?? null }]));
-    return json({ stone: strip(await L.spots('stone')), tree: strip(await L.spots('tree')), prices: priceTable(env), onSale: sell, cluster: env.SOLANA_CLUSTER });
+      Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { owner: v.owner, name: v.name, line: v.line, asset: v.asset ?? null, until: v.until ?? null }]));
+    const solUsd = await L.solUsd();
+    return json({
+      stone: strip(await L.spots('stone')),
+      tree: strip(await L.spots('tree')),
+      cushion: strip(await L.spots('cushion')),
+      banner: strip(await L.spots('banner')),
+      legends: await L.legends(),
+      prices: priceTable(env, solUsd),
+      solUsd,
+      priceScale: Number(env.PRICE_SCALE) > 0 ? Number(env.PRICE_SCALE) : 1,
+      // lanterns / blessings / pets / banners need no NFT collection; stones, trees, cushions do
+      onSale: treasury && !!env.STONE_COLLECTION && !!env.TREE_COLLECTION,
+      sale: { stone: treasury && !!env.STONE_COLLECTION, tree: treasury && !!env.TREE_COLLECTION, cushion: treasury && !!env.CUSHION_COLLECTION, banner: true },
+      cluster: env.SOLANA_CLUSTER,
+    });
   }
-  const meta = /^\/api\/meta\/(stone|tree)\/(collection|\d+)\.json$/.exec(path);
+  const meta = /^\/api\/meta\/(stone|tree|cushion)\/(collection|\d+)\.json$/.exec(path);
   if (meta) {
-    const kind = meta[1] as 'stone' | 'tree';
-    const label = kind === 'stone' ? 'Stone' : 'Tree';
+    const kind = meta[1] as 'stone' | 'tree' | 'cushion';
+    const info = SPOTS[kind];
     const image = `${env.PUBLIC_URL}/items/${kind}.svg`;
     if (meta[2] === 'collection')
-      return json({ name: `Quiet Hall ${label}s`, description: `${kind === 'stone' ? 108 : 64} ${kind}s in the Quiet Hall, each in a fixed spot.`, image, external_url: 'https://quiet-hall.vercel.app' });
+      return json({ name: `Quiet Hall ${info.label}s`, description: `${info.count} ${info.label.toLowerCase()}s in the Quiet Hall (${info.place}), each in a fixed spot.`, image, external_url: 'https://quiet-hall.vercel.app' });
     const n = Number(meta[2]);
-    if (!(n < (kind === 'stone' ? STONE_COUNT : TREE_COUNT))) return json({ error: 'Not found' }, 404);
+    if (!(n < info.count)) return json({ error: 'Not found' }, 404);
     const rec = await L.spot(kind, n);
     return json({
-      name: `Quiet Hall ${label} #${n + 1}`,
-      description: rec ? `${rec.name}: ${rec.line}` : `An unclaimed ${kind} in the Quiet Hall.`,
+      name: `Quiet Hall ${info.label} #${n + 1}`,
+      description: rec ? `${rec.name}: ${rec.line}` : `An unclaimed ${info.label.toLowerCase()} in the Quiet Hall.`,
       image,
       external_url: 'https://quiet-hall.vercel.app',
       attributes: [
-        { trait_type: 'Place', value: kind === 'stone' ? 'Stone Garden' : 'Maple Grove' },
+        { trait_type: 'Place', value: info.place },
         { trait_type: 'Spot', value: n + 1 },
         ...(rec ? [{ trait_type: 'Name', value: rec.name }, { trait_type: 'Line', value: rec.line }] : []),
       ],
@@ -212,7 +230,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   }
   if (path === '/api/tip/order') {
     const payer = await readSession(env.SESSION_SECRET, body.token);
-    if ((body.kind === 'stone' || body.kind === 'tree') && !payer) return json({ error: 'Sign in first so your name goes on it.' }, 400);
+    if ((body.kind === 'stone' || body.kind === 'tree' || body.kind === 'cushion' || body.kind === 'banner') && !payer) return json({ error: 'Sign in first so your name goes on it.' }, 400);
     const o = await L.createOrder(ip, String(body.currency ?? 'SOL'), Number(body.amount), payer, {
       kind: typeof body.kind === 'string' ? body.kind : 'tip',
       spot: Number(body.spot),
@@ -571,7 +589,7 @@ export class Hall extends DurableObject<Env> {
           now,
           room,
           invites,
-          me: { g: a.g, sp: a.sp, bl: a.bl, bu: a.bu, pt: a.pt, pets: a.po, inv: a.inv },
+          me: { g: a.g, sp: a.sp, bl: a.bl, bu: a.bu, pt: a.pt, pets: a.po, inv: a.inv, petNos: await ledger(this.env).petNumbers(a.pid, a.addr) },
           players: this.live(ws).map(pub),
           lanterns: await this.lanterns(),
           stats: this.stats(),
@@ -623,7 +641,7 @@ export class Hall extends DurableObject<Env> {
         a.po = await ledger(this.env).ownedPets(a.pid, a.addr); // pets bought with this wallet on another device
         ws.serializeAttachment(a);
         this.broadcast({ t: 'p', id: a.id, g: a.g, sp: a.sp });
-        send(ws, { t: 'pets', pets: a.po, pt: a.pt });
+        send(ws, { t: 'pets', pets: a.po, pt: a.pt, petNos: await ledger(this.env).petNumbers(a.pid, a.addr) });
         return;
       }
       case 'lantern': {
@@ -649,7 +667,7 @@ export class Hall extends DurableObject<Env> {
           if (!a.po.includes(k)) return send(ws, { t: 'petNo', k, reason: 'Adopt this pet first.' });
         }
         a.pt = k;
-        send(ws, { t: 'pets', pets: a.po, pt: a.pt });
+        send(ws, { t: 'pets', pets: a.po, pt: a.pt, petNos: await ledger(this.env).petNumbers(a.pid, a.addr) });
         ws.serializeAttachment(a);
         this.broadcast({ t: 'pt', id: a.id, k }, ws);
         return;

@@ -12,7 +12,11 @@ const v = (k) => /"([^"]+)"/.exec(toml.split('\n').find((l) => l.startsWith(k + 
 const treasury = await treasurySigner(vars.DEV_NET_SOL);
 const creator = address(v('TIP_RECIPIENT'));
 const rpc = 'https://api.devnet.solana.com';
-for (const k of ['STONE_COLLECTION', 'TREE_COLLECTION']) {
+for (const k of (process.env.ONLY ?? 'STONE_COLLECTION,TREE_COLLECTION,CUSHION_COLLECTION').split(',')) {
+  if (!v(k)) {
+    console.log(`- ${k} not in wrangler.toml`);
+    continue;
+  }
   try {
     const sig = await sendAndConfirm(rpc, treasury, [addRoyaltiesIx(address(v(k)), treasury, creator, bps)]);
     console.log(`✔ ${k} royalties ${bps / 100}% → ${creator}  ${sig}`);

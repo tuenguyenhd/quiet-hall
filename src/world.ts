@@ -4,7 +4,7 @@ import { add, fbm, mat, mesh, rng, segDist, smoothstep, textTexture } from './bu
 import { addBrandBanners } from './brand';
 import { dressWorld } from './world-assets';
 import { BELL, BOUNDS, GARDEN, GROVE, HALL, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
-import { buildPlaces } from './places';
+import { buildPlaces, labelSprite } from './places';
 
 export interface Obstacle {
   x: number;
@@ -55,7 +55,7 @@ export interface World {
   heightAt(x: number, z: number): number;
   walkable(x: number, z: number): boolean;
   placeAt(x: number, z: number): PlaceInfo | null;
-  setOwned(kind: 'stone' | 'tree', owned: Map<number, { name: string; line: string }>): void;
+  setOwned(kind: 'stone' | 'tree' | 'cushion' | 'banner', owned: Map<number, { name: string; line: string }>): void;
   swingBell(): void;
   setTheme(theme: Theme): void;
   update(t: number, dt: number, focus: THREE.Vector3): void;
@@ -441,16 +441,111 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   const zafuM = mat(C.cushion);
   const zabuM = mat(C.mat);
   let ci = 0;
+  const zafus: THREE.Mesh[] = [];
   for (const z of [HZ - 2.2, HZ + 0.2, HZ + 2.6, HZ + 5])
     for (const x of [-7.5, -4.5, -1.5, 1.5, 4.5, 7.5]) {
       const g = new THREE.Group();
       g.position.set(x, H, z);
       add(mesh(zabuG, zabuM, 0, 0.03, 0), g, false, true);
-      add(mesh(zafuG, zafuM, 0, 0.18, 0), g);
+      const zafu = mesh(zafuG, zafuM, 0, 0.18, 0);
+      zafus.push(zafu);
+      add(zafu, g);
       hall.add(g);
       ctx.addSeat({ id: `hall-${ci++}`, x, y: H, z, ry: Math.PI, place: 'hall' }, g);
     }
   scene.add(hall);
+
+  // ---------- Founder Cushions (24, owned): gold cushion + name plate when you're near ----------
+  const goldZafu = mat('#ffcf3f', { emissive: '#ffb000', emissiveIntensity: 0.25, roughness: 0.4, metalness: 0.2 });
+  const cushionLabels: THREE.Sprite[] = [];
+  const setCushions = (owned: Map<number, { name: string; line: string }>) => {
+    for (const l of cushionLabels) l.removeFromParent();
+    cushionLabels.length = 0;
+    zafus.forEach((z, i) => {
+      z.material = owned.has(i) ? goldZafu : zafuM;
+      const o = owned.get(i);
+      if (!o) return;
+      const l = labelSprite(o.name, o.line);
+      l.scale.multiplyScalar(0.7);
+      const w = new THREE.Vector3();
+      z.getWorldPosition(w);
+      l.position.set(w.x, w.y + 1.6, w.z);
+      l.visible = false;
+      scene.add(l);
+      cushionLabels.push(l);
+    });
+  };
+  updaters.push(() => {
+    for (const l of cushionLabels) l.visible = l.position.distanceTo(ctx.focus) < 5;
+  });
+
+  // ---------- Patron Banners (6, rented 30 days) hanging on the front columns ----------
+  const banners: THREE.Mesh[] = [];
+  const bannerTex = (i: number, o?: { name: string; line: string }) => {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 640;
+    const g = c.getContext('2d')!;
+    const draw = () => {
+      g.clearRect(0, 0, 256, 640);
+      g.fillStyle = o ? '#9945ff' : '#efe8d8';
+      g.strokeStyle = '#160d2e';
+      g.lineWidth = 10;
+      g.beginPath();
+      g.moveTo(8, 8);
+      g.lineTo(248, 8);
+      g.lineTo(248, 600);
+      g.lineTo(128, 560);
+      g.lineTo(8, 600);
+      g.closePath();
+      g.fill();
+      g.stroke();
+      g.textAlign = 'center';
+      g.fillStyle = o ? '#ffe14d' : '#9c927e';
+      g.font = '400 30px "Lilita One", system-ui, sans-serif';
+      g.fillText(o ? '✦ PATRON ✦' : 'PATRON BANNER', 128, 64);
+      g.fillStyle = o ? '#fffaf0' : '#b3a990';
+      const name = o ? o.name : 'your name here';
+      // vertical stack of words, each fitted to the width
+      const words = name.split(' ').slice(0, 3);
+      words.forEach((w, k) => {
+        let fs = 84;
+        do g.font = `400 ${(fs -= 4)}px "Lilita One", system-ui, sans-serif`;
+        while (g.measureText(w).width > 210 && fs > 30);
+        g.fillText(w, 128, 190 + k * 100);
+      });
+      g.font = '400 24px "Lilita One", system-ui, sans-serif';
+      g.fillStyle = o ? '#14f195' : '#b3a990';
+      g.fillText(o ? o.line : `#${i + 1} · tap to rent`, 128, 500);
+    };
+    draw();
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    document.fonts?.load('400 40px "Lilita One"').then(() => {
+      draw();
+      t.needsUpdate = true;
+    });
+    return t;
+  };
+  const bannerG = new THREE.PlaneGeometry(0.95, 2.4);
+  colX.forEach((x, i) => {
+    const m = new THREE.Mesh(bannerG, new THREE.MeshBasicMaterial({ map: bannerTex(i), transparent: true, toneMapped: false, side: THREE.DoubleSide }));
+    m.position.set(x, H + 3.4, HZ + HD - 0.4 + 0.42);
+    m.userData.action = 'spot';
+    m.userData.kind = 'banner';
+    m.userData.index = i;
+    hall.add(m);
+    clickables.push(m);
+    banners.push(m);
+  });
+  const setBanners = (owned: Map<number, { name: string; line: string }>) => {
+    banners.forEach((m, i) => {
+      const mt = m.material as THREE.MeshBasicMaterial;
+      mt.map?.dispose();
+      mt.map = bannerTex(i, owned.get(i));
+      mt.needsUpdate = true;
+    });
+  };
 
   // ---------- lanterns along the main path ----------
   const lampMat = mat('#fff3d6', { emissive: C.lamp, emissiveIntensity: 0.9 });
@@ -532,8 +627,8 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
 
   // ---------- "built on Solana" / "made for Seeker" banners flanking the hall steps ----------
   addBrandBanners(scene, obstacles, terrain, [
-    { x: -4.8, z: HZ + HD + 2.2, ry: 0 },
-    { x: 4.8, z: HZ + HD + 2.2, ry: 0 },
+    { x: -8.2, z: HZ + HD + 2.2, ry: 0 },
+    { x: 8.2, z: HZ + HD + 2.2, ry: 0 },
   ]);
 
   // ---------- places ----------
@@ -776,7 +871,11 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     walkable,
     placeAt,
     spots,
-    setOwned: (k, o) => spots.setOwned(k, o),
+    setOwned: (k, o) => {
+      if (k === 'cushion') setCushions(o);
+      else if (k === 'banner') setBanners(o);
+      else spots.setOwned(k, o);
+    },
     swingBell() {
       swing = 1;
     },
