@@ -1597,3 +1597,25 @@ body:has(.fren-mini:not(.hidden)) .chat {
   color: #d9ccff;
   font-size: 12px;
 }
+.pump-status {
+  margin: 8px 0 4px;
+  padding: 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: #fff3b0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.pump-status div + div {
+  margin-top: 4px;
+}
+.pump-status div.up {
+  color: #0a7a4f;
+  font-weight: 600;
+}
+.pump-pick button.picked:disabled {
+  opacity: 1;
+  box-shadow: var(--hard);
+  outline: 3px solid #ffe14d;
+  outline-offset: 2px;
+}
