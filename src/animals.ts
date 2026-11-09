@@ -14,11 +14,28 @@ export interface Kind {
   walk: string;
   idles: string[];
   hop?: boolean;
+  /** pixel-art texture: keep it crisp (PSX look) */
+  pixel?: boolean;
 }
 const KINDS: Record<string, Kind> = {
   shiba: { url: '/models/shiba.glb', height: 0.9, speed: 0.9, walk: 'Walk', idles: ['Idle', 'Idle_2', 'Eating', 'Idle_2_HeadLow'] },
   husky: { url: '/models/husky.glb', height: 1.0, speed: 1.0, walk: 'Walk', idles: ['Idle', 'Idle_2', 'Eating', 'Idle_2_HeadLow'] },
   frog: { url: '/models/frog.glb', height: 0.34, speed: 1.4, walk: 'Frog_Jump', idles: ['Frog_Idle'], hop: true },
+  // Pet Turtle PSX by Bonvikt (CC-BY): only two poses; it stretches out to walk and hides in its shell to sit
+  turtle: { url: '/models/pets/turtle.glb', height: 0.28, speed: 0.5, walk: 'StretchingPose', idles: ['StretchingPose', 'HidingPose'], pixel: true },
+  // pets from Sketchfab (CC-BY, see public/models/CREDITS.md); clips are mapped in pets.ts
+  slime: { url: '/models/pets/slime.glb', height: 0.32, speed: 1, walk: '', idles: [] },
+  hamster: { url: '/models/pets/hamster.glb', height: 0.34, speed: 1, walk: '', idles: [] },
+  teddy: { url: '/models/pets/teddy.glb', height: 0.5, speed: 1, walk: '', idles: [] },
+  sharpei: { url: '/models/pets/sharpei.glb', height: 0.5, speed: 1, walk: '', idles: [] },
+  bulldog: { url: '/models/pets/bulldog.glb', height: 0.42, speed: 1, walk: '', idles: [], pixel: true },
+  stripe: { url: '/models/pets/stripe.glb', height: 0.42, speed: 1, walk: '', idles: [] },
+  dragon: { url: '/models/pets/dragon.glb', height: 0.55, speed: 1, walk: '', idles: [] },
+  chick: { url: '/models/pets/chick.glb', height: 0.26, speed: 1, walk: '', idles: [] },
+  tiger: { url: '/models/pets/tiger.glb', height: 0.5, speed: 1, walk: '', idles: [] },
+  duck: { url: '/models/pets/duck.glb', height: 0.42, speed: 1, walk: '', idles: [] },
+  penguin: { url: '/models/pets/penguin.glb', height: 0.42, speed: 1, walk: '', idles: [] },
+  axolotl: { url: '/models/pets/axolotl.glb', height: 0.22, speed: 1, walk: '', idles: [] },
 };
 
 interface Spawn {
@@ -58,19 +75,40 @@ export async function loadAnimal(kind: string, scale = 1): Promise<AnimalInst> {
   obj.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) {
       o.castShadow = true;
+      const map = ((o as THREE.Mesh).material as THREE.MeshStandardMaterial).map;
+      if (k.pixel && map) {
+        map.magFilter = THREE.NearestFilter;
+        map.minFilter = THREE.NearestFilter;
+        map.needsUpdate = true;
+      }
     }
   });
   // normalise size: models come in different units. Pose the skeleton first, or skinned meshes
   // report their raw bind-pose size (hundreds of units) and end up a few millimetres tall.
-  obj.updateMatrixWorld(true);
-  obj.traverse((o) => {
-    const sm = o as THREE.SkinnedMesh;
-    if (sm.isSkinnedMesh) {
-      sm.skeleton.update();
-      sm.computeBoundingBox();
-    }
-  });
-  const box = new THREE.Box3().setFromObject(obj);
+  const measure = () => {
+    obj.updateMatrixWorld(true);
+    obj.traverse((o) => {
+      const sm = o as THREE.SkinnedMesh;
+      if (sm.isSkinnedMesh) {
+        sm.skeleton.update();
+        sm.computeBoundingBox();
+      }
+    });
+    return new THREE.Box3().setFromObject(obj, true);
+  };
+  let box = measure();
+  // some clips (FBX exports) rescale the whole rig: if the animated pose is wildly bigger/smaller than the
+  // bind pose, size the model by the pose it will actually be shown in
+  if (g.animations.length) {
+    const probe = new THREE.AnimationMixer(obj);
+    probe.clipAction(g.animations[0]).play();
+    probe.update(0.01);
+    const posed = measure();
+    const r = (posed.max.y - posed.min.y) / Math.max(1e-6, box.max.y - box.min.y);
+    if (r > 3 || r < 1 / 3) box = posed;
+    probe.stopAllAction();
+    probe.uncacheRoot(obj);
+  }
   const h = box.max.y - box.min.y || 1;
   const f = (k.height * scale) / h;
   obj.scale.multiplyScalar(f);
@@ -80,9 +118,11 @@ export async function loadAnimal(kind: string, scale = 1): Promise<AnimalInst> {
   wrap.add(obj);
   const mixer = new THREE.AnimationMixer(obj);
   const acts: Record<string, THREE.AnimationAction> = {};
-  for (const n of [k.walk, ...k.idles]) {
-    const c = clip(g.animations, n);
-    if (c) acts[n] = mixer.clipAction(c);
+  // every clip, by full name and by short name ("Armature|Run" → "Run")
+  for (const c of g.animations) {
+    const a = mixer.clipAction(c);
+    acts[c.name] = a;
+    acts[c.name.replace(/^.*\|/, '')] ??= a;
   }
   return { obj: wrap, mixer, acts, k };
 }

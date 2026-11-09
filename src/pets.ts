@@ -8,9 +8,29 @@ import { disposeOwned } from './dispose';
 import { PETS } from './layout';
 
 /** size relative to the wandering animals (pets are a bit smaller, frogs a bit bigger) */
-const SCALE: Record<string, number> = { shiba: 0.62, husky: 0.6, frog: 0.9 };
-/** idle clip to use while the owner sits */
-const SIT: Record<string, string> = { shiba: 'Idle_2_HeadLow', husky: 'Idle_2_HeadLow', frog: 'Frog_Idle' }; // no sit clips: head-low rest
+const SCALE: Record<string, number> = { shiba: 0.62, husky: 0.6, frog: 0.9, turtle: 0.85 };
+/**
+ * Which clip a pet plays when walking / standing / sitting. '' = no clip: a choppy code waddle / bob /
+ * squash instead (degen style). `turn`: the model faces away from +z and needs turning (radians).
+ */
+const CLIPS: Record<string, { walk: string; idle: string; sit: string; turn?: number }> = {
+  shiba: { walk: 'Walk', idle: 'Idle', sit: 'Idle_2_HeadLow' },
+  husky: { walk: 'Walk', idle: 'Idle', sit: 'Idle_2_HeadLow' },
+  frog: { walk: 'Frog_Jump', idle: 'Frog_Idle', sit: 'Frog_Idle' },
+  turtle: { walk: 'StretchingPose', idle: 'StretchingPose', sit: 'HidingPose' }, // hides in its shell
+  slime: { walk: 'idle', idle: 'idle', sit: 'idle' },
+  hamster: { walk: 'Take 001', idle: 'Take 001', sit: 'Take 001' },
+  teddy: { walk: 'Run', idle: 'Idle', sit: 'sitting' },
+  sharpei: { walk: 'walking_cycle', idle: 'standing_idle', sit: 'sitting_idle' },
+  bulldog: { walk: '', idle: '', sit: 'Sitting' },
+  stripe: { walk: '', idle: '', sit: '' },
+  dragon: { walk: '', idle: '', sit: '' },
+  chick: { walk: 'Take 001', idle: 'Take 001', sit: 'Take 001' },
+  tiger: { walk: 'walk', idle: 'idle', sit: 'idle' },
+  duck: { walk: 'ArmatureAction', idle: 'ArmatureAction', sit: 'ArmatureAction' },
+  penguin: { walk: '', idle: '', sit: '' },
+  axolotl: { walk: '', idle: '', sit: '' },
+};
 
 export class Pet {
   root = new THREE.Group();
@@ -34,8 +54,9 @@ export class Pet {
       .then((inst) => {
         if (this.dead) return;
         this.inst = inst;
+        inst.obj.rotation.y = CLIPS[this.key]?.turn ?? 0;
         this.root.add(inst.obj);
-        this.play(inst.k.idles[0]);
+        this.play(CLIPS[this.key]?.idle ?? '');
       })
       .catch(() => {
         /* offline: no pet model */
@@ -43,12 +64,13 @@ export class Pet {
   }
 
   private play(name: string) {
-    const next = this.inst?.acts[name];
-    if (!next || next === this.cur) return;
-    next.reset().fadeIn(0.25).play();
+    const next = name ? this.inst?.acts[name] : undefined;
+    if (next === this.cur || (!next && !this.cur)) return;
+    if (next) next.reset().fadeIn(0.25).play();
     this.cur?.fadeOut(0.25);
-    this.cur = next;
+    this.cur = next ?? null;
   }
+  private t = 0;
 
   /** a pat: little hop + hearts */
   pat() {
@@ -86,8 +108,24 @@ export class Pet {
     }
     p.y = y;
     if (!this.inst || !near) return;
-    this.play(d > 0.3 ? this.inst.k.walk : sitting ? SIT[this.key] ?? this.inst.k.idles[0] : this.inst.k.idles[0]);
+    const c = CLIPS[this.key] ?? { walk: '', idle: '', sit: '' };
+    const moving = d > 0.3;
+    const name = moving ? c.walk : sitting ? c.sit : c.idle;
+    this.play(name);
     this.inst.mixer.update(dt);
+    // no clip for this state: choppy 8 fps code animation on the model (waddle / bob / squash)
+    this.t += dt;
+    const f = Math.floor(this.t * 8);
+    const m = this.inst.obj;
+    if (!name) {
+      m.rotation.z = moving ? (f % 2 ? 0.14 : -0.14) : 0;
+      m.position.y = moving ? (f % 2 ? 0.04 : 0) : !sitting && f % 16 < 8 ? 0.012 : 0;
+      m.scale.set(1, sitting ? 0.82 : 1, 1);
+    } else if (m.rotation.z || m.position.y || m.scale.y !== 1) {
+      m.rotation.z = 0;
+      m.position.y = 0;
+      m.scale.set(1, 1, 1);
+    }
   }
 
   dispose() {

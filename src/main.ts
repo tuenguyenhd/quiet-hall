@@ -12,7 +12,7 @@ import { Meditation } from './meditation';
 import { LIGHTS } from './palette';
 import { BLESS, LIGHT_COUNT, PETS, SPECIES, SPECIES_ORDER } from './layout';
 import { updateEffects } from './effects';
-import type { Pet } from './pets';
+import { Pet } from './pets';
 import { setupFrens } from './frens';
 import { TIER, describeTraits } from './degen';
 import { CHARS, poolPick } from './pool';
@@ -1100,6 +1100,7 @@ function frame(now: number) {
   me.update(dt, t);
   for (const a of others.values()) a.update(dt, t);
   for (const a of lineup) a.update(dt, t);
+  for (const lp of lineupPets) lp.pet.update(dt, lp.sit, true);
   world.update(t, dt, me.root.position);
   frens.update(t, dt, me.root.position);
   animals.update(dt, me.root.position);
@@ -1124,11 +1125,25 @@ requestAnimationFrame(frame);
 // dev-only: skip the welcome card for automated screenshots (?autoenter)
 if (import.meta.env.DEV && params.has('autoenter')) $('btn-enter').click();
 const lineup: Avatar[] = [];
+const lineupPets: { pet: Pet; sit: boolean }[] = [];
 // dev-only: ?lineup shows every character (front row standing, back row sitting) in front of you
 if (import.meta.env.DEV && params.has('lineup')) {
   const p = me.root.position;
   const cushions = world.seats.filter((x) => x.place === 'hall');
-  if (params.get('lineup') === 'pool') {
+  if (params.get('lineup') === 'pets') {
+    // every pet in two rows facing you (back row "sitting"), standing in for their owners
+    for (let k = 1; k < PETS.length; k++) {
+      const i = k - 1;
+      const owner = new THREE.Object3D();
+      const row = i % 2;
+      owner.position.set(p.x - 4.2 + Math.floor(i / 2) * 1.05, 0, p.z - 3.2 - row * 1.4);
+      owner.rotation.y = 0;
+      const pet = new Pet(k, owner, world.heightAt);
+      pet.root.position.set(owner.position.x - 0.95, world.heightAt(owner.position.x, owner.position.z), owner.position.z + 0.15);
+      scene.add(pet.root);
+      lineupPets.push({ pet, sit: params.get('sit') === '1' });
+    }
+  } else if (params.get('lineup') === 'pool') {
     // every pool character, in rows of 6; ?lineup=pool&page=N
     const page = Number(params.get('page') ?? 0);
     CHARS.slice(page * 12, page * 12 + 12).forEach((c, k) => {

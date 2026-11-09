@@ -125,6 +125,19 @@ export const PETS = [
   { key: 'shiba', name: 'Shiba', emoji: '🐕' },
   { key: 'husky', name: 'Husky', emoji: '🐺' },
   { key: 'frog', name: 'Frog', emoji: '🐸' },
+  { key: 'turtle', name: 'Turtle', emoji: '🐢' },
+  { key: 'slime', name: 'Ice Slime', emoji: '🍦' },
+  { key: 'hamster', name: 'Hamster', emoji: '🐹' },
+  { key: 'teddy', name: 'Teddy', emoji: '🧸' },
+  { key: 'sharpei', name: 'Shar Pei', emoji: '🐶' },
+  { key: 'bulldog', name: 'Bulldog', emoji: '🐕' },
+  { key: 'stripe', name: 'Stripe', emoji: '🐱' },
+  { key: 'dragon', name: 'Baby Dragon', emoji: '🐉' },
+  { key: 'chick', name: 'Chick', emoji: '🐣' },
+  { key: 'tiger', name: 'Tiger', emoji: '🐯' },
+  { key: 'duck', name: 'Chip Duck', emoji: '🦆' },
+  { key: 'penguin', name: 'Penguin', emoji: '🐧' },
+  { key: 'axolotl', name: 'Axolotl', emoji: '🦎' },
 ] as const;
 
 /** Blessings from the resident frens (index = fren). Free 1 h once a day; paid 24 h. Cosmetic only. */
