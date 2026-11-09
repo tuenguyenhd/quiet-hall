@@ -658,6 +658,7 @@ function renderPets() {
   $('btn-pat').classList.toggle('hidden', !own || !me.pet);
   $('btn-adopt').classList.toggle('hidden', own);
   $('pet-note').classList.toggle('hidden', own);
+  document.querySelector('#petsheet .paywith')?.classList.toggle('hidden', own);
   const price = items.price('pet');
   $('btn-adopt').textContent = `Adopt ${PETS[petPick].name}${price ? ' · ' + price : ''}`;
   ($('btn-adopt') as HTMLButtonElement).disabled = !items.onSale;
@@ -668,6 +669,7 @@ function openPets() {
   $('petsheet').classList.remove('hidden');
 }
 renderPets();
+items.onPayChange = () => renderPets();
 $('btn-pet').addEventListener('click', () => {
   petPick = myPet || 1;
   openPets();
@@ -685,7 +687,7 @@ $('btn-adopt').addEventListener('click', async () => {
     $('pet-status').textContent = t;
     $('pet-status').classList.toggle('err', err);
   };
-  const r = await acct.buy({ kind: 'pet', pet: k, pid }, say);
+  const r = await items.buy({ kind: 'pet', pet: k, pid }, say);
   if (!r) return;
   myPets = [...new Set([...myPets, k])];
   store.set('pets', JSON.stringify(myPets));
@@ -721,7 +723,7 @@ $('btn-bless-free').addEventListener('click', () => {
   net.send({ t: 'bless', f: frenIdx });
 });
 $('btn-bless-paid').addEventListener('click', async () => {
-  const r = await acct.buy({ kind: 'bless24' }, frenStatus);
+  const r = await items.buy({ kind: 'bless24' }, frenStatus);
   const order = r?.order as { id: string } | undefined;
   if (order) net.send({ t: 'bless', f: frenIdx, order: order.id });
 });

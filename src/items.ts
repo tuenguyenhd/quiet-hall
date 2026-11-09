@@ -19,7 +19,7 @@ interface SpotInfo {
 interface SpotsResp {
   stone: Record<string, SpotInfo>;
   tree: Record<string, SpotInfo>;
-  prices: Record<string, { SOL: number; USDC: number }>;
+  prices: Record<string, { SOL: number; USDC: number; SKR?: number }>;
   onSale: boolean;
   cluster: string;
 }
@@ -30,17 +30,49 @@ export interface ItemsHooks {
   send(m: Record<string, unknown>): void;
   toast(text: string, ms?: number): void;
   buy(
-    item: { kind: string; spot?: number; name?: string; line?: string; pet?: number; pid?: string },
+    item: { kind: string; currency?: Pay; spot?: number; name?: string; line?: string; pet?: number; pid?: string },
     say: (t: string, err?: boolean) => void,
   ): Promise<Record<string, unknown> | null>;
   store: { get(k: string): string | null; set(k: string, v: string): void };
 }
 
+type Pay = 'SOL' | 'USDC' | 'SKR';
 const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 
 export function setupItems(h: ItemsHooks) {
   const lanterns = new Lanterns(h.scene);
   let spots: SpotsResp | null = null;
+  // which currency paid items use (SOL / USDC / SKR when on); one choice shared by every sheet
+  let pay: Pay = (['SOL', 'USDC', 'SKR'] as Pay[]).find((c) => c === h.store.get('pay')) ?? 'SOL';
+  const fmt = (kind: string) => {
+    const p = spots?.prices[kind];
+    const v = p?.[pay];
+    return v != null ? `${v} ${pay}` : '';
+  };
+  function renderPay() {
+    const opts: Pay[] = spots?.prices.pet?.SKR != null ? ['SOL', 'USDC', 'SKR'] : ['SOL', 'USDC'];
+    if (!opts.includes(pay)) pay = 'SOL';
+    for (const box of document.querySelectorAll<HTMLElement>('.paywith')) {
+      box.replaceChildren();
+      for (const c of opts) {
+        const b = document.createElement('button');
+        b.textContent = c === 'SKR' ? 'SKR ✦' : c;
+        b.classList.toggle('on', c === pay);
+        b.addEventListener('click', () => {
+          pay = c;
+          h.store.set('pay', c);
+          renderPay();
+        });
+        box.appendChild(b);
+      }
+    }
+    for (const el of document.querySelectorAll<HTMLElement>('.price')) el.textContent = fmt(el.dataset.k!);
+    if (current) $('spot-price').textContent = fmt(current.kind);
+    for (const el of document.querySelectorAll('.skr-only')) el.classList.toggle('hidden', !opts.includes('SKR'));
+    onPay?.();
+  }
+  let onPay: (() => void) | null = null;
+  const buy: ItemsHooks['buy'] = (item, say) => h.buy({ currency: pay, ...item }, say);
   let wish = 0;
   let line = LINES[0];
 
@@ -110,7 +142,7 @@ export function setupItems(h: ItemsHooks) {
   });
   for (const b of document.querySelectorAll<HTMLElement>('#lanternsheet [data-tier]')) {
     b.addEventListener('click', async () => {
-      const r = await h.buy({ kind: b.dataset.tier! }, lStatus);
+      const r = await buy({ kind: b.dataset.tier! }, lStatus);
       const order = r?.order as { id: string } | undefined;
       if (order) h.send({ t: 'lantern', wish, name: cleanName(($('lantern-name') as HTMLInputElement).value), order: order.id });
     });
@@ -131,10 +163,7 @@ export function setupItems(h: ItemsHooks) {
     // paid lanterns need the same on-chain setup as stones/trees
     document.querySelector('#lanternsheet .paid-row')?.classList.toggle('hidden', !spots.onSale);
     document.querySelector('#lanternsheet .paid-row')?.previousElementSibling?.classList.toggle('hidden', !spots.onSale);
-    for (const el of document.querySelectorAll<HTMLElement>('.price')) {
-      const p = spots.prices[el.dataset.k!];
-      el.textContent = p ? `${p.SOL} SOL` : '';
-    }
+    renderPay();
   }
   const lines = $('spot-lines');
   LINES.forEach((l, i) => {
@@ -165,8 +194,7 @@ export function setupItems(h: ItemsHooks) {
       ? `“${owned.line}” · ${label} #${i + 1} · held by ${short(owned.owner)}${owned.asset ? ' · NFT ' + short(owned.asset) : ''}`
       : `Only ${total} ${kind}s exist; ${total - taken} are still free. Yours shows your name and a line to everyone in the hall, and comes as an NFT in your wallet.`;
     $('spot-buy').classList.toggle('hidden', !!owned);
-    const price = spots?.prices[kind];
-    $('spot-price').textContent = price ? `${price.SOL} SOL` : '';
+    $('spot-price').textContent = fmt(kind);
     $('spot-note').textContent = spots?.onSale
       ? spots.cluster === 'mainnet'
         ? 'Resale on NFT marketplaces later. We never promise its value will rise.'
@@ -180,7 +208,7 @@ export function setupItems(h: ItemsHooks) {
     if (!current) return;
     const name = cleanName(($('spot-name') as HTMLInputElement).value);
     if (!name) return sStatus('Add a name first.', true);
-    const r = await h.buy({ kind: current.kind, spot: current.i, name, line }, sStatus);
+    const r = await buy({ kind: current.kind, spot: current.i, name, line }, sStatus);
     if (r) {
       const sp = r.spot as { asset?: string; mintError?: string } | undefined;
       sStatus(sp?.asset ? `It's yours ✦ NFT ${short(sp.asset)} is in your wallet.` : `Paid. Minting is retrying (${sp?.mintError ?? 'pending'}).`, !sp?.asset);
@@ -198,9 +226,12 @@ export function setupItems(h: ItemsHooks) {
       return !!spots?.onSale;
     },
     /** display price of a paid item, e.g. "0.015 SOL" ('' until loaded) */
-    price(kind: string) {
-      const p = spots?.prices[kind];
-      return p ? `${p.SOL} SOL` : '';
+    price: fmt,
+    /** buy with the chosen currency */
+    buy,
+    /** called when the pay currency changes (to refresh labels elsewhere) */
+    set onPayChange(f: () => void) {
+      onPay = f;
     },
     badgeEvent,
     openSpot,

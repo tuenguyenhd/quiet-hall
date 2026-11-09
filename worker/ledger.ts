@@ -3,8 +3,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import { getBase58Decoder } from '@solana/kit';
 import type { Env } from './index';
-import { associatedTokenAccount, seekerMints, serverRpc, signatureForReference, verifyTip } from './solana';
-import { mintSpotAsset, treasurySigner } from './core';
+import { type Currency, associatedTokenAccount, seekerMints, serverRpc, signatureForReference, verifyTip } from './solana';
+import { assetOwners, mintSpotAsset, treasurySigner } from './core';
 import { LINES, PETS, STONE_COUNT, TREE_COUNT, cleanName } from '../src/layout';
 
 export type OrderKind = 'tip' | 'lantern24' | 'lantern7d' | 'bless24' | 'pet' | 'stone' | 'tree';
@@ -17,6 +17,22 @@ export const PRICES: Record<Exclude<OrderKind, 'tip'>, { SOL: number; USDC: numb
   stone: { SOL: 0.025, USDC: 24 },
   tree: { SOL: 0.04, USDC: 34 },
 };
+/** SKR price = USDC price × SKR_PER_USDC (set for mainnet from the market; default 50), rounded to whole SKR. */
+export function skrRate(env: { SKR_PER_USDC?: string }) {
+  const r = Number(env.SKR_PER_USDC);
+  return r > 0 ? r : 50;
+}
+export function itemPrice(kind: Exclude<OrderKind, 'tip'>, currency: Currency, env: { SKR_PER_USDC?: string }) {
+  const p = PRICES[kind];
+  return currency === 'SKR' ? Math.ceil(p.USDC * skrRate(env)) : p[currency];
+}
+/** Price table for the app, including SKR when it is switched on. */
+export function priceTable(env: { SKR_MINT?: string; SKR_PER_USDC?: string }) {
+  return Object.fromEntries(
+    Object.entries(PRICES).map(([k, p]) => [k, { ...p, ...(env.SKR_MINT ? { SKR: itemPrice(k as Exclude<OrderKind, 'tip'>, 'SKR', env) } : {}) }]),
+  );
+}
+
 export interface SpotOwner {
   owner: string;
   name: string;
@@ -25,6 +41,8 @@ export interface SpotOwner {
   sig?: string;
   mintedAt?: number;
   mintError?: string;
+  /** owner changed on chain (sold / transferred) since the purchase */
+  movedAt?: number;
 }
 
 export interface Profile {
@@ -39,7 +57,7 @@ export interface Order {
   id: string;
   reference: string;
   recipient: string;
-  currency: 'SOL' | 'USDC';
+  currency: Currency;
   amount: number;
   raw: string;
   decimals: number;
@@ -63,7 +81,7 @@ export interface Order {
 const NONCE_TTL = 10 * 60000;
 const ORDER_TTL = 10 * 60000;
 const SEEKER_RECHECK = 60 * 60000;
-const LIMITS = { SOL: { min: 0.001, max: 10, decimals: 9 }, USDC: { min: 0.5, max: 500, decimals: 6 } } as const;
+const LIMITS = { SOL: { min: 0.001, max: 10, decimals: 9 }, USDC: { min: 0.5, max: 500, decimals: 6 }, SKR: { min: 10, max: 1000000, decimals: 6 } } as const;
 
 const rand = (n: number) => crypto.getRandomValues(new Uint8Array(n));
 const hex = (b: Uint8Array) => [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
@@ -151,11 +169,12 @@ export class Ledger extends DurableObject<Env> {
     meta: { kind?: string; spot?: number; name?: string; line?: string; pet?: number; pid?: string } = {},
   ): Promise<Order | { error: string }> {
     if (await this.limited(`order:${ip}`, 10)) return { error: 'Too many requests. Try again in a minute.' };
-    if (currency !== 'SOL' && currency !== 'USDC') return { error: 'Unsupported currency' };
+    if (currency !== 'SOL' && currency !== 'USDC' && currency !== 'SKR') return { error: 'Unsupported currency' };
+    if (currency === 'SKR' && !this.env.SKR_MINT) return { error: 'SKR payments are not on yet.' };
     const kind = (meta.kind ?? 'tip') as OrderKind;
     if (!['tip', 'lantern24', 'lantern7d', 'bless24', 'pet', 'stone', 'tree'].includes(kind)) return { error: 'Unknown item' };
     const lim = LIMITS[currency];
-    if (kind !== 'tip') amount = PRICES[kind as Exclude<OrderKind, 'tip'>][currency];
+    if (kind !== 'tip') amount = itemPrice(kind as Exclude<OrderKind, 'tip'>, currency, this.env);
     else if (!(amount >= lim.min && amount <= lim.max)) return { error: `Amount must be between ${lim.min} and ${lim.max} ${currency}` };
     let spot: number | undefined;
     let name: string | undefined;
@@ -182,7 +201,7 @@ export class Ledger extends DurableObject<Env> {
     }
     const raw = BigInt(Math.round(amount * 10 ** lim.decimals)).toString();
     const now = Date.now();
-    const mint = currency === 'USDC' ? this.env.USDC_MINT : undefined;
+    const mint = currency === 'USDC' ? this.env.USDC_MINT : currency === 'SKR' ? this.env.SKR_MINT : undefined;
     const o: Order = {
       id: hex(rand(8)),
       reference: getBase58Decoder().decode(rand(32)), // random public key, Solana Pay "reference"
@@ -268,6 +287,36 @@ export class Ledger extends DurableObject<Env> {
     await this.ctx.storage.put(key, rec);
     await this.ctx.storage.delete(`res:${o.kind}:${o.spot}`);
     return rec;
+  }
+
+  /**
+   * Refresh stone/tree owners from chain, so marketplace sales and transfers show the new holder.
+   * Throttled: at most every 5 min (or every 20 s when `force`). Returns how many owners changed.
+   */
+  async syncOwners(force = false): Promise<number> {
+    const last = (await this.ctx.storage.get<number>('sync:at')) ?? 0;
+    if (Date.now() - last < (force ? 20000 : 5 * 60000)) return 0;
+    await this.ctx.storage.put('sync:at', Date.now());
+    const recs = await this.ctx.storage.list<SpotOwner>({ prefix: 'spot:' });
+    const withAsset = [...recs].filter(([, r]) => r.asset);
+    if (!withAsset.length) return 0;
+    let owners: Map<string, string>;
+    try {
+      owners = await assetOwners(serverRpc(this.env, 'cluster'), withAsset.map(([, r]) => r.asset!));
+    } catch {
+      return 0; // RPC hiccup: try again next time
+    }
+    let changed = 0;
+    for (const [k, r] of withAsset) {
+      const now = owners.get(r.asset!);
+      if (now && now !== r.owner) {
+        r.owner = now;
+        r.movedAt = Date.now();
+        await this.ctx.storage.put(k, r);
+        changed++;
+      }
+    }
+    return changed;
   }
 
   async spots(kind: 'stone' | 'tree'): Promise<Record<number, SpotOwner>> {

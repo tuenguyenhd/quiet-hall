@@ -10,6 +10,8 @@ import {
   createSolanaRpc,
   createTransactionMessage,
   generateKeyPairSigner,
+  getAddressEncoder,
+  getBase58Decoder,
   getBase58Encoder,
   getBase64EncodedWireTransaction,
   pipe,
@@ -119,4 +121,73 @@ export async function mintSpotAsset(opts: {
   const ix = createAssetIx(asset, address(opts.collection), opts.treasury, opts.treasury, address(opts.owner), opts.name, opts.uri);
   const sig = await sendAndConfirm(opts.rpcUrl, opts.treasury, [ix]);
   return { asset: asset.address as string, sig };
+}
+
+/** TransferV1: move an asset to `newOwner` (the current owner signs as authority). */
+export function transferAssetIx(asset: Address, collection: Address, owner: KeyPairSigner, newOwner: Address): Instruction {
+  return {
+    programAddress: MPL_CORE,
+    accounts: [
+      { address: asset, role: AccountRole.WRITABLE },
+      { address: collection, role: AccountRole.READONLY },
+      { address: owner.address, role: AccountRole.WRITABLE_SIGNER, signer: owner }, // payer
+      { address: owner.address, role: AccountRole.READONLY_SIGNER, signer: owner }, // authority
+      { address: newOwner, role: AccountRole.READONLY },
+      { address: MPL_CORE, role: AccountRole.READONLY }, // systemProgram: none
+      { address: MPL_CORE, role: AccountRole.READONLY }, // logWrapper: none
+    ],
+    data: new Uint8Array([14, 0]), // compressionProof: None
+  } as Instruction;
+}
+
+/** AddCollectionPluginV1(Royalties): marketplaces pay `bps` (e.g. 500 = 5%) of each resale to `creator`. */
+export function addRoyaltiesIx(collection: Address, authority: KeyPairSigner, creator: Address, bps: number): Instruction {
+  const data = new Uint8Array(1 + 1 + 2 + 4 + 33 + 1 + 1);
+  const dv = new DataView(data.buffer);
+  let o = 0;
+  data[o++] = 3; // AddCollectionPluginV1
+  data[o++] = 0; // Plugin::Royalties
+  dv.setUint16(o, bps, true);
+  o += 2;
+  dv.setUint32(o, 1, true); // one creator
+  o += 4;
+  data.set(getAddressEncoder().encode(creator), o);
+  o += 32;
+  data[o++] = 100; // creator gets 100% of royalties
+  data[o++] = 0; // RuleSet::None
+  data[o++] = 0; // initAuthority: None
+  return {
+    programAddress: MPL_CORE,
+    accounts: [
+      { address: collection, role: AccountRole.WRITABLE },
+      { address: authority.address, role: AccountRole.WRITABLE_SIGNER, signer: authority }, // payer
+      { address: authority.address, role: AccountRole.READONLY_SIGNER, signer: authority }, // authority
+      { address: SYSTEM, role: AccountRole.READONLY },
+      { address: MPL_CORE, role: AccountRole.READONLY }, // logWrapper: none
+    ],
+    data,
+  } as Instruction;
+}
+
+/**
+ * Current owners of Core assets, read straight from their accounts (AssetV1: key u8, then owner pubkey).
+ * Works on any RPC. Missing / non-Core accounts are left out.
+ */
+export async function assetOwners(rpcUrl: string, assets: string[]): Promise<Map<string, string>> {
+  const rpc = createSolanaRpc(rpcUrl);
+  const dec = getBase58Decoder();
+  const out = new Map<string, string>();
+  for (let i = 0; i < assets.length; i += 100) {
+    const batch = assets.slice(i, i + 100);
+    const { value } = await rpc
+      .getMultipleAccounts(batch.map((a) => address(a)), { encoding: 'base64', dataSlice: { offset: 0, length: 33 }, commitment: 'confirmed' })
+      .send();
+    value.forEach((acc, j) => {
+      if (!acc || acc.owner !== MPL_CORE) return;
+      const bytes = Uint8Array.from(atob(acc.data[0]), (c) => c.charCodeAt(0));
+      if (bytes[0] !== 1) return; // Key::AssetV1
+      out.set(batch[j], dec.decode(bytes.slice(1, 33)));
+    });
+  }
+  return out;
 }

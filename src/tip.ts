@@ -37,7 +37,7 @@ export interface Order {
   id: string;
   reference: string;
   recipient: string;
-  currency: 'SOL' | 'USDC';
+  currency: 'SOL' | 'USDC' | 'SKR';
   amount: number;
   raw: string;
   decimals: number;

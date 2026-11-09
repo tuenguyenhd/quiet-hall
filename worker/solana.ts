@@ -1,5 +1,8 @@
 // On-chain reads: Seeker Genesis Token (mainnet, read-only) and tip verification (devnet for now).
 import { address, createSolanaRpc } from '@solana/kit';
+
+/** SOL, USDC, or SKR (the Seeker token; on when SKR_MINT is set). */
+export type Currency = 'SOL' | 'USDC' | 'SKR';
 import { getSeekerGenesisTokens } from '@solana-mobile/skr-genesis-token';
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 
@@ -50,7 +53,7 @@ export async function signatureForReference(url: string, reference: string) {
 }
 
 export interface TipCheck {
-  currency: 'SOL' | 'USDC';
+  currency: Currency;
   reference: string;
   recipient: string;
   raw: string; // smallest units

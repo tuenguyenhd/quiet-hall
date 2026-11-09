@@ -151,6 +151,7 @@
         <div class="chips" id="tip-currency">
           <button data-c="SOL" class="on">SOL</button>
           <button data-c="USDC">USDC</button>
+          <button data-c="SKR" class="skr-only hidden">SKR</button>
         </div>
         <div class="chips" id="tip-amounts"></div>
         <button class="primary" id="btn-send-tip">Send tip</button>
@@ -169,6 +170,7 @@
         <input class="field" id="lantern-name" maxlength="16" placeholder="A name (optional)" autocomplete="off" />
         <button class="primary" id="btn-light">Light it (free)</button>
         <div class="label">Special lanterns · golden, bigger</div>
+        <div class="chips paywith"></div>
         <div class="paid-row">
           <button class="secondary" data-tier="lantern24">24 hours · <b class="price" data-k="lantern24"></b></button>
           <button class="secondary" data-tier="lantern7d">7 days · <b class="price" data-k="lantern7d"></b></button>
@@ -184,6 +186,7 @@
         <p class="small">Adopt once, yours forever. It follows you everywhere and sits beside you when you sit. Everyone in the hall sees it.</p>
         <div class="chips pets" id="pet-pick"></div>
         <button class="primary" id="btn-pat">Give it a pat ❤️</button>
+        <div class="chips paywith adopt-only"></div>
         <button class="primary hidden" id="btn-adopt">Adopt</button>
         <p class="small hidden" id="pet-note">Paid once with your wallet. Sign in with the same wallet on another phone and your pets come along.</p>
         <p class="status" id="pet-status"></p>
@@ -199,6 +202,7 @@
         <button class="secondary" id="btn-fren-pat">🤲 Pat (free)</button>
         <button class="primary" id="btn-bless-free">✨ Get blessed · 1 min free</button>
         <div class="label bless-paid">Long blessing · sparkles for 24 h</div>
+        <div class="chips paywith bless-paid"></div>
         <div class="paid-row bless-paid">
           <button class="secondary" id="btn-bless-paid">✨ 24 hours · <b class="price" data-k="bless24"></b></button>
         </div>
@@ -216,6 +220,7 @@
         <div id="spot-buy">
           <input class="field" id="spot-name" maxlength="16" placeholder="Name on it (e.g. Mom, Satoshi)" autocomplete="off" />
           <div class="chips" id="spot-lines"></div>
+          <div class="chips paywith"></div>
           <button class="primary" id="btn-buy-spot">Own it · <span id="spot-price"></span></button>
           <p class="small" id="spot-note"></p>
         </div>

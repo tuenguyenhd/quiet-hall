@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { b64, decodeText, parseSiws, readSession, signSession, verifySignature } from './auth';
-import { Ledger, PRICES, type SpotOwner } from './ledger';
+import { Ledger, priceTable, type SpotOwner } from './ledger';
 import { BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
 
 export { Ledger };
@@ -18,6 +18,10 @@ export interface Env {
   HELIUS_API_KEY?: string;
   TIP_RECIPIENT: string;
   USDC_MINT: string;
+  /** SKR (Seeker token) mint; unset = SKR payments off (devnet has no SKR). Mainnet: SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3 */
+  SKR_MINT?: string;
+  /** how many SKR one USDC of price costs (default 50) */
+  SKR_PER_USDC?: string;
   /** Lets scripts/online-test.mjs open many sockets from one machine (?k=...). Secret; unset = off. */
   LOAD_TEST_KEY?: string;
   /** Devnet treasury secret key (base58) that pays for and signs NFT mints. Secret. */
@@ -118,13 +122,15 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   const L = ledger(env);
   if (path === '/api/health') return json({ ok: true, now: Date.now() });
   if (path === '/api/config') {
-    return json({ cluster: env.SOLANA_CLUSTER, rpc: env.SOLANA_RPC, recipient: env.TIP_RECIPIENT, usdcMint: env.USDC_MINT });
+    return json({ cluster: env.SOLANA_CLUSTER, rpc: env.SOLANA_RPC, recipient: env.TIP_RECIPIENT, usdcMint: env.USDC_MINT, skrMint: env.SKR_MINT || null });
   }
   if (path === '/api/spots') {
+    // owners follow the chain (marketplace sales / transfers); cheap, throttled inside
+    await L.syncOwners(new URL(req.url).searchParams.get('refresh') === '1');
     const sell = !!(env.DEV_NET_SOL && env.STONE_COLLECTION && env.TREE_COLLECTION);
     const strip = (o: Record<number, SpotOwner>) =>
       Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { owner: v.owner, name: v.name, line: v.line, asset: v.asset ?? null }]));
-    return json({ stone: strip(await L.spots('stone')), tree: strip(await L.spots('tree')), prices: PRICES, onSale: sell, cluster: env.SOLANA_CLUSTER });
+    return json({ stone: strip(await L.spots('stone')), tree: strip(await L.spots('tree')), prices: priceTable(env), onSale: sell, cluster: env.SOLANA_CLUSTER });
   }
   const meta = /^\/api\/meta\/(stone|tree)\/(collection|\d+)\.json$/.exec(path);
   if (meta) {

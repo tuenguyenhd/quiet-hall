@@ -25,7 +25,7 @@ export interface AccountHooks {
 
 const $ = (id: string) => document.getElementById(id)!;
 const KEY = 'qh.session';
-const AMOUNTS: Record<string, number[]> = { SOL: [0.01, 0.05, 0.1], USDC: [1, 3, 5] };
+const AMOUNTS: Record<string, number[]> = { SOL: [0.01, 0.05, 0.1], USDC: [1, 3, 5], SKR: [100, 250, 500] };
 
 function load(): Session | null {
   try {
@@ -56,7 +56,7 @@ export function setupAccount(h: AccountHooks) {
   let wallet: Wallet | null = null;
   let account: WalletAccount | null = null;
   let afterConnect: (() => void) | null = null;
-  let currency: 'SOL' | 'USDC' = 'SOL';
+  let currency: 'SOL' | 'USDC' | 'SKR' = 'SOL';
   let amount = AMOUNTS.SOL[1];
 
   registerWallets();
@@ -104,7 +104,7 @@ export function setupAccount(h: AccountHooks) {
       img.src = w.icon;
       img.alt = '';
       const span = document.createElement('span');
-      span.textContent = w.name === 'Mobile Wallet Adapter' ? 'Wallet on this phone (Seeker)' : w.name;
+      span.textContent = w.name === 'Mobile Wallet Adapter' ? 'Use Installed Wallet' : w.name;
       b.append(img, span);
       b.addEventListener('click', () => pick(w));
       list.appendChild(b);
@@ -216,7 +216,7 @@ export function setupAccount(h: AccountHooks) {
   $('tip-currency').addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest('button');
     if (!b) return;
-    currency = b.dataset.c as 'SOL' | 'USDC';
+    currency = b.dataset.c as 'SOL' | 'USDC' | 'SKR';
     amount = AMOUNTS[currency][1];
     for (const x of $('tip-currency').querySelectorAll('button')) x.classList.toggle('on', x === b);
     renderAmounts();
@@ -296,7 +296,7 @@ export function setupAccount(h: AccountHooks) {
    * `say` shows progress. Returns the server's confirmation or null.
    */
   async function buy(
-    item: { kind: string; currency?: 'SOL' | 'USDC'; spot?: number; name?: string; line?: string; pet?: number; pid?: string },
+    item: { kind: string; currency?: 'SOL' | 'USDC' | 'SKR'; spot?: number; name?: string; line?: string; pet?: number; pid?: string },
     say: (text: string, err?: boolean) => void,
   ) {
     const needSignIn = item.kind === 'stone' || item.kind === 'tree';
