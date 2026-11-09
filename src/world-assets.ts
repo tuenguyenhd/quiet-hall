@@ -3,6 +3,7 @@
 // The procedural cones/rocks stay until a model loads, so the world still works offline or on a slow link.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 export interface Placement {
   x: number;
@@ -12,7 +13,7 @@ export interface Placement {
   ry: number;
 }
 
-const loader = new GLTFLoader();
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder); // models are meshopt-compressed (scripts/optimize-glb.mjs)
 /** culling cell size (m) for instanced scenery */
 const CELL = 32;
 const cache = new Map<string, Promise<THREE.Object3D>>();

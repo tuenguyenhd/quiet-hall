@@ -2,6 +2,7 @@
 // Dogs stroll and sniff around the courtyard and garden; frogs hop along the lake shore.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { GARDEN, LAKE } from './layout';
 import { cullable } from './bake';
@@ -37,7 +38,7 @@ const SPAWNS: Spawn[] = [
 const clip = (clips: THREE.AnimationClip[], name: string) =>
   clips.find((c) => c.name === name) ?? clips.find((c) => c.name.endsWith(`|${name}`)) ?? clips.find((c) => c.name.endsWith(name));
 
-const loader = new GLTFLoader();
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder); // models are meshopt-compressed (scripts/optimize-glb.mjs)
 const cache = new Map<string, Promise<{ scene: THREE.Object3D; animations: THREE.AnimationClip[] }>>();
 
 export interface AnimalInst {

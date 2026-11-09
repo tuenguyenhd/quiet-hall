@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { own } from './dispose';
 import { cullable } from './bake';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 export const HUMAN_URLS = ['/models/man.glb', '/models/woman.glb', '/models/woman-dress.glb'];
@@ -11,7 +12,7 @@ const HEIGHT = 1.62;
 /** hip height in the sitting pose, as a share of standing height (measured from the model) */
 const SIT_HIP = 0.228;
 
-const loader = new GLTFLoader();
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder); // models are meshopt-compressed (scripts/optimize-glb.mjs)
 const cache = new Map<string, Promise<{ scene: THREE.Object3D; animations: THREE.AnimationClip[] }>>();
 const load = (url: string) => {
   if (!cache.has(url)) cache.set(url, loader.loadAsync(url));

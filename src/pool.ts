@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { cullable } from './bake';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import POOL from './chars.json';
 
@@ -39,7 +40,7 @@ export function poolPick(seed: number): PoolChar | null {
   return CHARS[Math.floor(h / 1000) % CHARS.length];
 }
 
-const loader = new GLTFLoader();
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder); // models are meshopt-compressed (scripts/optimize-glb.mjs)
 const cache = new Map<string, Promise<{ scene: THREE.Object3D; animations: THREE.AnimationClip[] }>>();
 const load = (url: string) => {
   if (!cache.has(url)) cache.set(url, loader.loadAsync(url));
