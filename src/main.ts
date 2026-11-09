@@ -748,15 +748,14 @@ function openFren(i: number) {
   frenIdx = i;
   const b = BLESS[i];
   $('fren-name').textContent = frens.name(i);
-  $('fren-desc').textContent = `${b.word[0].toUpperCase() + b.word.slice(1)}: ${b.fren} can bless you. You glow with ${b.fren}'s sparkles and everyone in the hall sees them.`;
+  $('fren-desc').textContent = `${b.word} ✦ sparkles everyone sees · just for looks`;
   for (const el of document.querySelectorAll('#frensheet .bless-paid')) el.classList.toggle('hidden', !items.onSale);
   frenStatus(me.blessF >= 0 ? `Blessed by ${BLESS[me.blessF].fren} · ${Math.max(1, Math.round((me.blessUntil - Date.now()) / 60000))} min left` : '');
   $('frensheet').classList.remove('hidden');
 }
 $('btn-fren-pat').addEventListener('click', () => {
   frens.pat(frenIdx);
-  haptic(15);
-  $('frensheet').classList.add('hidden');
+  haptic(15); // the small menu stays open: pat again, or get blessed
 });
 $('btn-bless-free').addEventListener('click', () => {
   if (!net.online) return frenStatus('Offline. Blessings need the hall connection.', true);
@@ -1092,7 +1091,8 @@ function perfGuard(ms: number) {
 }
 function frame(now: number) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, (now - last) / 1000);
+  // never negative: the first rAF timestamp can be older than `last` (a negative dt blew sit blends up)
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   perfGuard(now - last);
   last = now;
   const t = now / 1000;
@@ -1101,6 +1101,11 @@ function frame(now: number) {
   for (const a of others.values()) a.update(dt, t);
   for (const a of lineup) a.update(dt, t);
   for (const lp of lineupPets) lp.pet.update(dt, lp.sit, true);
+  // the fren menu closes itself when you walk away from that fren
+  if (!$('frensheet').classList.contains('hidden')) {
+    const fp = frens.pos(frenIdx);
+    if (fp && Math.hypot(fp.x - me.root.position.x, fp.z - me.root.position.z) > 8) $('frensheet').classList.add('hidden');
+  }
   world.update(t, dt, me.root.position);
   frens.update(t, dt, me.root.position);
   animals.update(dt, me.root.position);

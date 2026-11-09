@@ -196,21 +196,21 @@
       </div>
     </section>
 
-    <section id="frensheet" class="overlay hidden">
-      <div class="card">
-        <div class="label">Resident fren</div>
-        <h2 id="fren-name">Shibu</h2>
-        <p class="small" id="fren-desc"></p>
-        <button class="secondary" id="btn-fren-pat">🤲 Pat (free)</button>
-        <button class="primary" id="btn-bless-free">✨ Get blessed · 1 min free</button>
-        <div class="label bless-paid">Long blessing · sparkles for 24 h</div>
-        <div class="chips paywith bless-paid"></div>
-        <div class="paid-row bless-paid">
-          <button class="secondary" id="btn-bless-paid">✨ 24 hours · <b class="price" data-k="bless24"></b></button>
+    <!-- small menu above the action bar: the world stays visible and playable -->
+    <section id="frensheet" class="fren-mini hidden" aria-label="Fren menu">
+      <div class="fm-card">
+        <div class="fm-head">
+          <b id="fren-name">Shibu</b>
+          <small id="fren-desc"></small>
+          <button class="fm-x" data-close="frensheet" aria-label="Close">✕</button>
         </div>
-        <p class="small">Just for looks: sparkles around you that everyone sees. No luck, no rewards.</p>
+        <div class="fm-row">
+          <button id="btn-fren-pat">🤲 Pat</button>
+          <button id="btn-bless-free" class="go">✨ Bless · 1 min</button>
+          <button id="btn-bless-paid" class="bless-paid">✨ 24 h · <b class="price" data-k="bless24"></b></button>
+        </div>
+        <div class="chips paywith bless-paid fm-pay"></div>
         <p class="status" id="fren-status"></p>
-        <button class="ghost" data-close="frensheet">Close</button>
       </div>
     </section>
 

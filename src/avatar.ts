@@ -275,7 +275,7 @@ export class Avatar {
 
     // sit blend
     const sitTarget = this.state === 'sit' ? 1 : 0;
-    this.sitK += (sitTarget - this.sitK) * (1 - Math.exp(-dt * 3));
+    this.sitK = THREE.MathUtils.clamp(this.sitK + (sitTarget - this.sitK) * (1 - Math.exp(-Math.max(0, dt) * 3)), 0, 1);
     const s = this.sitK;
     this.robe.scale.y = 1 - 0.26 * s;
     this.lap.scale.set(1.2 * s + 0.0001, 0.42 * s + 0.0001, 1.0 * s + 0.0001);

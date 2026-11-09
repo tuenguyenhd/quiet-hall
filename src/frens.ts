@@ -116,6 +116,7 @@ export function setupFrens(scene: THREE.Scene, heightAt: (x: number, z: number) 
       return i;
     },
     name: (i: number) => list[i]?.f.name ?? '',
+    pos: (i: number) => (list[i] ? { x: list[i].f.x, z: list[i].f.z } : null),
     /** you pat the fren: hearts + a happy line */
     pat(i: number) {
       const n = list[i];
