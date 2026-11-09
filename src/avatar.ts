@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LIGHT_COUNT } from './layout';
 import { LIGHTS, ROBES } from './palette';
+import { addSleeves, buildRobe } from './body';
 import { buildCharacter, skinOf } from './species';
 
 // Shared geometry/materials: a small, round, hooded meditator in soft clay style.
@@ -58,7 +59,7 @@ export class Avatar {
 
   private body = new THREE.Group();
   private upper = new THREE.Group();
-  private robe: THREE.Mesh;
+  private robe: THREE.Object3D;
   private feet: THREE.Mesh[] = [];
   private lap: THREE.Mesh;
   private ring: THREE.Mesh;
@@ -85,9 +86,8 @@ export class Avatar {
       side: THREE.DoubleSide,
     });
 
-    this.robe = new THREE.Mesh(G.robe, this.robeMat);
-    this.robe.position.y = 0.62;
-    this.robe.castShadow = true;
+    const built = buildRobe(this.robeMat, ROBES[(color + 3) % ROBES.length], light);
+    this.robe = built.robe;
     this.body.add(this.robe);
 
     for (const sx of [-1, 1]) {
@@ -107,6 +107,7 @@ export class Avatar {
     this.upper.position.y = 0.85;
     const sp = Math.floor(color / LIGHT_COUNT);
     buildCharacter(sp, this.upper, this.body, robeColor);
+    addSleeves(this.upper, this.robeMat, built.sash);
     const hands = new THREE.Mesh(G.hands, sp ? new THREE.MeshStandardMaterial({ color: skinOf(sp), roughness: 0.85 }) : M.skin);
     hands.position.set(0, 0.0, 0.34);
     hands.scale.set(0.9, 1.2, 0.8);
@@ -198,8 +199,7 @@ export class Avatar {
     const sitTarget = this.state === 'sit' ? 1 : 0;
     this.sitK += (sitTarget - this.sitK) * (1 - Math.exp(-dt * 3));
     const s = this.sitK;
-    this.robe.scale.y = 1 - 0.28 * s;
-    this.robe.position.y = 0.62 - 0.12 * s;
+    this.robe.scale.y = 1 - 0.26 * s;
     this.lap.scale.set(1.2 * s + 0.0001, 0.42 * s + 0.0001, 1.0 * s + 0.0001);
     for (const f of this.feet) f.visible = s < 0.5;
     const breath = Math.sin((t * Math.PI * 2) / 10);

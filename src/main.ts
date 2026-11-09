@@ -812,6 +812,7 @@ function frame(now: number) {
   stepMe(dt);
   me.update(dt, t);
   for (const a of others.values()) a.update(dt, t);
+  for (const a of lineup) a.update(dt, t);
   world.update(t, dt, me.root.position);
   frens.update(t, dt, me.root.position);
   placeTick();
@@ -833,6 +834,25 @@ requestAnimationFrame(frame);
 
 // dev-only: skip the welcome card for automated screenshots (?autoenter)
 if (import.meta.env.DEV && params.has('autoenter')) $('btn-enter').click();
+const lineup: Avatar[] = [];
+// dev-only: ?lineup shows every character (front row standing, back row sitting) in front of you
+if (import.meta.env.DEV && params.has('lineup')) {
+  const p = me.root.position;
+  SPECIES.forEach((_, i) => {
+    for (const row of [0, 1]) {
+      const a = new Avatar(i * LIGHT_COUNT + ((i * 3 + row * 2) % LIGHT_COUNT), false);
+      const x = p.x + (i - 2) * 1.45;
+      const z = p.z - 4.6 - row * 1.8;
+      a.root.position.set(x, world.heightAt(x, z), z);
+      a.target.copy(a.root.position);
+      a.targetRy = a.root.rotation.y = row ? 0 : Math.PI * 0.08 * (i - 2);
+      a.state = row ? 'sit' : 'idle';
+      scene.add(a.root);
+      lineup.push(a);
+    }
+  });
+  controls.yaw = 0;
+}
 
 // tiny debug hook for automated checks
 (window as unknown as { __qh: unknown }).__qh = { others, stats, net, me: () => me, renderer };
