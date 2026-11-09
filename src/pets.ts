@@ -83,7 +83,8 @@ export class Pet {
     const p = this.root.position;
     // where to be: beside-and-behind when walking, right next to them when sitting
     const ry = o.rotation.y;
-    const [side, back] = sitting ? [0.95, -0.15] : [0.75, 0.7];
+    // beside you and a little ahead (behind you = between you and the camera = off-screen on a phone)
+    const [side, back] = sitting ? [0.95, -0.15] : [0.9, -0.3];
     const tx = o.position.x + Math.cos(ry) * -side - Math.sin(ry) * back;
     const tz = o.position.z + Math.sin(ry) * side - Math.cos(ry) * back;
     const dx = tx - p.x;
@@ -98,7 +99,9 @@ export class Pet {
       p.z += (dz / d) * step;
       this.root.rotation.y = lerpAngle(this.root.rotation.y, Math.atan2(dx, dz), 1 - Math.exp(-dt * 8));
     } else {
-      this.root.rotation.y = lerpAngle(this.root.rotation.y, ry, 1 - Math.exp(-dt * 3));
+      // resting: turn to look at you (you see its face / profile, not its back)
+      const face = Math.atan2(o.position.x - p.x, o.position.z - p.z);
+      this.root.rotation.y = lerpAngle(this.root.rotation.y, face, 1 - Math.exp(-dt * 3));
     }
     let y = this.heightAt(p.x, p.z);
     if (this.hopT >= 0) {

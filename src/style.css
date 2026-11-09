@@ -1273,3 +1273,70 @@ body {
 .fren-mini .status:empty {
   display: none;
 }
+
+/* ---------- pet picker: one scrolling row of emoji tiles ---------- */
+.pet-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding: 10px 10px 10px 4px; /* room for the lock badges */
+  margin: -6px -4px 8px;
+  scrollbar-width: none;
+}
+.pet-strip::-webkit-scrollbar {
+  display: none;
+}
+.pet-tile {
+  position: relative;
+  flex: 0 0 auto;
+  width: 64px;
+  height: 70px;
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 2px 2px 0 var(--ink);
+  color: var(--ink);
+  font-family: var(--pop);
+}
+.pet-tile .e {
+  font-size: 28px;
+  line-height: 1;
+}
+.pet-tile small {
+  font-size: 10.5px;
+  line-height: 1.1;
+  max-width: 60px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pet-tile i {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  font-style: normal;
+  font-size: 12px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+}
+.pet-tile.locked .e {
+  opacity: 0.75;
+}
+.pet-tile.on {
+  background: var(--yolk);
+  transform: translateY(-2px);
+  box-shadow: 3px 4px 0 var(--ink);
+}

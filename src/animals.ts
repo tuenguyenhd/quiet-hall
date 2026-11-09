@@ -24,18 +24,18 @@ const KINDS: Record<string, Kind> = {
   // Pet Turtle PSX by Bonvikt (CC-BY): only two poses; it stretches out to walk and hides in its shell to sit
   turtle: { url: '/models/pets/turtle.glb', height: 0.28, speed: 0.5, walk: 'StretchingPose', idles: ['StretchingPose', 'HidingPose'], pixel: true },
   // pets from Sketchfab (CC-BY, see public/models/CREDITS.md); clips are mapped in pets.ts
-  slime: { url: '/models/pets/slime.glb', height: 0.32, speed: 1, walk: '', idles: [] },
-  hamster: { url: '/models/pets/hamster.glb', height: 0.34, speed: 1, walk: '', idles: [] },
-  teddy: { url: '/models/pets/teddy.glb', height: 0.5, speed: 1, walk: '', idles: [] },
-  sharpei: { url: '/models/pets/sharpei.glb', height: 0.5, speed: 1, walk: '', idles: [] },
-  bulldog: { url: '/models/pets/bulldog.glb', height: 0.42, speed: 1, walk: '', idles: [], pixel: true },
-  stripe: { url: '/models/pets/stripe.glb', height: 0.42, speed: 1, walk: '', idles: [] },
-  dragon: { url: '/models/pets/dragon.glb', height: 0.55, speed: 1, walk: '', idles: [] },
-  chick: { url: '/models/pets/chick.glb', height: 0.26, speed: 1, walk: '', idles: [] },
-  tiger: { url: '/models/pets/tiger.glb', height: 0.5, speed: 1, walk: '', idles: [] },
-  duck: { url: '/models/pets/duck.glb', height: 0.42, speed: 1, walk: '', idles: [] },
-  penguin: { url: '/models/pets/penguin.glb', height: 0.42, speed: 1, walk: '', idles: [] },
-  axolotl: { url: '/models/pets/axolotl.glb', height: 0.22, speed: 1, walk: '', idles: [] },
+  slime: { url: '/models/pets/slime.glb', height: 0.4, speed: 1, walk: '', idles: [] },
+  hamster: { url: '/models/pets/hamster.glb', height: 0.45, speed: 1, walk: '', idles: [] },
+  teddy: { url: '/models/pets/teddy.glb', height: 0.68, speed: 1, walk: '', idles: [] },
+  sharpei: { url: '/models/pets/sharpei.glb', height: 0.62, speed: 1, walk: '', idles: [] },
+  bulldog: { url: '/models/pets/bulldog.glb', height: 0.58, speed: 1, walk: '', idles: [], pixel: true },
+  stripe: { url: '/models/pets/stripe.glb', height: 0.56, speed: 1, walk: '', idles: [] },
+  dragon: { url: '/models/pets/dragon.glb', height: 0.62, speed: 1, walk: '', idles: [] },
+  chick: { url: '/models/pets/chick.glb', height: 0.42, speed: 1, walk: '', idles: [] },
+  tiger: { url: '/models/pets/tiger.glb', height: 0.62, speed: 1, walk: '', idles: [] },
+  duck: { url: '/models/pets/duck.glb', height: 0.55, speed: 1, walk: '', idles: [] },
+  penguin: { url: '/models/pets/penguin.glb', height: 0.5, speed: 1, walk: '', idles: [] },
+  axolotl: { url: '/models/pets/axolotl.glb', height: 0.32, speed: 1, walk: '', idles: [] },
 };
 
 interface Spawn {
@@ -75,7 +75,10 @@ export async function loadAnimal(kind: string, scale = 1): Promise<AnimalInst> {
   obj.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) {
       o.castShadow = true;
-      const map = ((o as THREE.Mesh).material as THREE.MeshStandardMaterial).map;
+      const mat = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      // no reflections in this world: an untextured "fully metallic" material renders black (penguin plush)
+      if (mat.metalness > 0.5 && !mat.metalnessMap) mat.metalness = 0;
+      const map = mat.map;
       if (k.pixel && map) {
         map.magFilter = THREE.NearestFilter;
         map.minFilter = THREE.NearestFilter;

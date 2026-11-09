@@ -658,11 +658,21 @@ function renderPets() {
   for (const el of [$('pets'), $('pet-pick')]) {
     const inSheet = el.id === 'pet-pick';
     el.replaceChildren();
-    PETS.forEach((p, i) => {
+    // one scrolling row of tiles: no pet + your pets first, then the ones you can adopt
+    const order = PETS.map((_, i) => i).sort((a, b) => Number(!(a === 0 || myPets.includes(a))) - Number(!(b === 0 || myPets.includes(b))));
+    let selected: HTMLElement | null = null;
+    order.forEach((i) => {
+      const p = PETS[i];
       const owned = i === 0 || myPets.includes(i);
       const b = document.createElement('button');
-      b.textContent = `${owned ? p.emoji : '🔒'} ${p.name}`;
-      b.classList.toggle('on', i === (inSheet ? petPick : myPet));
+      b.className = 'pet-tile';
+      b.innerHTML = `<span class="e"></span><small></small>${owned ? '' : '<i>🔒</i>'}`;
+      b.querySelector('.e')!.textContent = p.emoji;
+      b.querySelector('small')!.textContent = p.name;
+      b.title = owned ? p.name : `${p.name} · tap to try on`;
+      const on = i === (inSheet ? petPick : myPet);
+      b.classList.toggle('on', on);
+      if (on) selected = b;
       b.classList.toggle('locked', !owned);
       b.addEventListener('click', () => {
         haptic(10);
@@ -674,6 +684,8 @@ function renderPets() {
       });
       el.appendChild(b);
     });
+    const sel = selected as HTMLElement | null;
+    if (sel) requestAnimationFrame(() => (el.scrollLeft = Math.max(0, sel.offsetLeft - el.clientWidth / 2 + sel.clientWidth / 2)));
   }
   const own = petPick === 0 || myPets.includes(petPick);
   $('btn-pat').classList.toggle('hidden', !own || !me.pet);
