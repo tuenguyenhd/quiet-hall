@@ -104,7 +104,7 @@ export class Pet {
     if (d > 9) {
       p.set(tx, this.heightAt(tx, tz), tz); // owner teleported (sat down far away, reconnect…)
     } else if (d > 0.12) {
-      const speed = Math.min(6, 1.2 + d * 1.6);
+      const speed = Math.min(8, 1.2 + d * 1.6); // keeps up with a jogging owner
       const step = Math.min(d, speed * dt);
       p.x += (dx / d) * step;
       p.z += (dz / d) * step;

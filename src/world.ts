@@ -3,7 +3,9 @@ import { C } from './palette';
 import { add, fbm, mat, mesh, rng, segDist, smoothstep, textTexture } from './build';
 import { addBrandBanners } from './brand';
 import { dressWorld } from './world-assets';
-import { BELL, BOUNDS, GARDEN, GROVE, HALL, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
+import { buildTeasers } from './teasers';
+import { stickerWallTexture } from './stickers';
+import { TEASERS, BELL, BOUNDS, COURT, GARDEN, GROVE, HALL, HALL_CUSHIONS, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
 import { buildPlaces, labelSprite } from './places';
 
 export interface Obstacle {
@@ -71,34 +73,44 @@ const H = HALL.h;
 // Paths: courtyard to every place (also used to keep grass and trees off them)
 export const PATHS: [number, number][][] = [
   [
-    [0, 24],
-    [0, HZ + HD + 1.4],
+    [0, COURT.z + 34],
+    [0, HZ + HD + 1.8],
   ],
   [
-    [-2, 4],
-    [-16, 11],
-    [LAKE.x + 13.5, LAKE.z - 5.6],
+    [-4, COURT.z - 4],
+    [-32, COURT.z + 8],
+    [LAKE.x + LAKE.rx + 0.5, LAKE.z - LAKE.rz * 0.55],
   ],
   [
-    [2, 5],
-    [18, 12],
-    [GARDEN.x - 7.8, GARDEN.z - 0.5],
+    [4, COURT.z - 2],
+    [36, COURT.z + 10],
+    [GARDEN.x - GARDEN.w / 2 - 1.3, GARDEN.z - 0.5],
   ],
   [
-    [-HW - 0.8, -6],
-    [-24, -16],
-    [GROVE.x + 7, GROVE.z + 3.5],
+    [-HW - 1, HZ + HD - 6],
+    [-48, -32],
+    [GROVE.x + GROVE.r * 0.64, GROVE.z + 4.5],
   ],
   [
-    [HW + 0.8, -6],
-    [24, -14],
-    [TEA.x - 3.6, TEA.z + 0.5],
+    [HW + 1, HZ + HD - 6],
+    [48, -28],
+    [TEA.x - TEA.w / 2 - 0.1, TEA.z + 0.5],
   ],
   [
-    [-HW - 0.8, -17],
-    [-13, -32],
-    [-6, -50],
-    [0, LOOKOUT.z + 9.5],
+    [-HW - 1, HZ - 6],
+    [-26, -64],
+    [-12, -100],
+    [0, LOOKOUT.z + LOOKOUT.r * 0.63],
+  ],
+  // to the coming-soon areas (they end at a rope)
+  [
+    [0, LOOKOUT.z - 2],
+    [0, LOOKOUT.z - LOOKOUT.r - 2.6],
+  ],
+  [
+    [24, COURT.z - 6],
+    [70, 4],
+    [101, 0],
   ],
 ];
 
@@ -116,11 +128,11 @@ function terrain(x: number, z: number) {
   const r = Math.hypot(x, z);
   let flat = 1;
   flat = Math.min(flat, smoothstep(2, 5, pathDist(x, z)));
-  flat = Math.min(flat, smoothstep(10, 15, Math.hypot(x, z - 2)));
+  flat = Math.min(flat, smoothstep(COURT.r * 0.9, COURT.r * 1.35, Math.hypot(x - COURT.x, z - COURT.z)));
   flat = Math.min(flat, smoothstep(1, 6, Math.hypot(Math.max(Math.abs(x) - HW, 0), Math.max(Math.abs(z - HZ) - HD, 0))));
   for (const p of PLACES) if (p.id !== 'lookout') flat = Math.min(flat, smoothstep(p.r * 0.75, p.r * 1.15, Math.hypot(x - p.x, z - p.z)));
   let h = (fbm(x * 0.07, z * 0.07) - 0.5) * 1.6 * flat;
-  h += 7 * smoothstep(RIM, RIM + 14, r);
+  h += 12 * smoothstep(RIM, RIM + 24, r);
   const dl = Math.hypot(x - LOOKOUT.x, z - LOOKOUT.z);
   h += LOOKOUT.h * smoothstep(LOOKOUT.r, 2.5, dl);
   const e = lakeE(x, z);
@@ -193,7 +205,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   const seats: Seat[] = [];
 
   scene.background = new THREE.Color('#ffd9c4');
-  scene.fog = new THREE.Fog('#ffd9c4', 60, 260);
+  scene.fog = new THREE.Fog('#ffd9c4', 110, 460);
 
   // ---------- sky dome ----------
   const skyU = {
@@ -252,8 +264,8 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   scene.add(sun, sun.target);
 
   // ---------- ground (vertex-coloured terrain) ----------
-  const G = 220;
-  const seg = lowPower ? 120 : 170;
+  const G = 440;
+  const seg = lowPower ? 150 : 220;
   const gGeo = new THREE.PlaneGeometry(G, G, seg, seg);
   gGeo.rotateX(-Math.PI / 2);
   const pos = gGeo.attributes.position as THREE.BufferAttribute;
@@ -270,7 +282,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     pos.setY(i, terrain(x, z));
     tmp.copy(grassA).lerp(grassB, fbm(x * 0.15, z * 0.15));
     tmp.lerp(dirt, 1 - smoothstep(0.9, 1.6, pathDist(x, z)));
-    tmp.lerp(sand, 1 - smoothstep(8.3, 9.5, Math.hypot(x, z - 1.5)));
+    tmp.lerp(sand, 1 - smoothstep(COURT.r * 0.82, COURT.r * 0.92, Math.hypot(x - COURT.x, z - COURT.z)));
     const e = lakeE(x, z);
     tmp.lerp(sand, smoothstep(1.35, 1.05, e) * 0.9);
     tmp.lerp(new THREE.Color('#8a9a86'), smoothstep(0.95, 0.7, e));
@@ -318,7 +330,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
 
   // ---------- path stones on the main path ----------
   const stoneMat = mat(C.stone);
-  for (let z = 22.5; z > HZ + HD + 1.2; z -= 1.15) {
+  for (let z = COURT.z + 32; z > HZ + HD + 1.2; z -= 1.15) {
     const r = 0.45 + R() * 0.17;
     const s = mesh(new THREE.CylinderGeometry(r, r * 1.05, 0.1, 9), stoneMat, (R() - 0.5) * 0.4, 0.05, z);
     s.rotation.y = R() * Math.PI;
@@ -331,37 +343,65 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   const floor = mesh(new THREE.BoxGeometry(HW * 2, H, HD * 2), mat(C.stone), 0, H / 2, HZ);
   add(floor, hall);
   groundList.push(floor);
-  const STEP_W = 6;
+  const STEP_W = 10;
   add(mesh(new THREE.BoxGeometry(STEP_W, H * 0.66, 0.8), mat(C.stone), 0, H * 0.33, HZ + HD + 0.4), hall);
   add(mesh(new THREE.BoxGeometry(STEP_W, H * 0.33, 0.8), mat(C.stone), 0, H * 0.16, HZ + HD + 1.2), hall);
   const plaster = mat(C.plaster);
   const wood = mat(C.wood);
   const pillar = mat(C.pillar);
   const roofMat = mat(C.roof, { roughness: 0.8 });
-  const COL_H = 5.6;
+  const COL_H = 8.5;
   add(mesh(new THREE.BoxGeometry(HW * 2 - 0.4, COL_H, 0.3), plaster, 0, H + COL_H / 2, HZ - HD + 0.15), hall);
   const moonMat = mat('#fff6df', { emissive: '#ffe7b0', emissiveIntensity: 0.55 });
-  add(mesh(new THREE.CircleGeometry(2.3, 56), moonMat, 0, H + 3.2, HZ - HD + 0.31), hall, false, false);
-  add(mesh(new THREE.TorusGeometry(2.33, 0.1, 8, 56), wood, 0, H + 3.2, HZ - HD + 0.32), hall);
+  add(mesh(new THREE.CircleGeometry(3.8, 64), moonMat, 0, H + 4.9, HZ - HD + 0.31), hall, false, false);
+  add(mesh(new THREE.TorusGeometry(3.84, 0.16, 8, 64), wood, 0, H + 4.9, HZ - HD + 0.32), hall);
   for (let x = -HW; x <= HW; x += 0.9) obstacles.push({ x, z: HZ - HD + 0.1, r: 0.55 });
   // the back of the hall faces the Lookout: a big sticker mural instead of a plain wall
   {
     const mw = HW * 2 - 1.6;
-    const mh = 4.2;
+    const mh = 6.6;
     const mural = new THREE.Mesh(new THREE.PlaneGeometry(mw, mh), new THREE.MeshBasicMaterial({ map: muralTexture(mw / mh), toneMapped: false }));
-    mural.position.set(0, H + 2.7, HZ - HD - 0.02);
+    mural.position.set(0, H + 4.1, HZ - HD - 0.02);
     mural.rotation.y = Math.PI;
     hall.add(mural);
+  }
+  // ---------- sticker-bombed walls: Solana + Seeker marks, our mascots, gm / wagmi / LFG ----------
+  {
+    const px = lowPower ? 768 : 1024;
+    const sticker = (w: number, h: number, seed: number) =>
+      new THREE.MeshBasicMaterial({ map: stickerWallTexture(w / h, seed, px), toneMapped: false });
+    // inner back wall, left and right of the moon window
+    const bw = HW - 1.2 - 5;
+    const bh = COL_H - 1.2;
+    for (const sx of [-1, 1]) {
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), sticker(bw, bh, sx < 0 ? 11 : 23));
+      p.position.set(sx * (5 + bw / 2), H + bh / 2 + 0.3, HZ - HD + 0.31);
+      hall.add(p);
+    }
+    // side walls along the back half, stickered inside and out
+    const sw = HD;
+    const sh = COL_H;
+    for (const sx of [-1, 1]) {
+      const z = HZ - HD / 2;
+      const wall = mesh(new THREE.BoxGeometry(0.24, sh, sw), plaster, sx * (HW - 0.2), H + sh / 2, z);
+      add(wall, hall);
+      for (const side of [-1, 1]) {
+        const p = new THREE.Mesh(new THREE.PlaneGeometry(sw - 0.4, sh - 0.6), sticker(sw - 0.4, sh - 0.6, 40 + sx * 7 + side));
+        p.position.set(sx * (HW - 0.2) + side * 0.13, H + sh / 2, z);
+        p.rotation.y = side * Math.PI / 2;
+        hall.add(p);
+      }
+    }
   }
   for (const sx of [-1, 1]) {
     add(mesh(new THREE.BoxGeometry(0.25, 1.0, HD * 2 - 1), wood, sx * (HW - 0.15), H + 0.5, HZ - 0.5), hall);
     for (let z = HZ - HD + 0.5; z <= HZ + HD - 1.2; z += 0.9) obstacles.push({ x: sx * (HW - 0.15), z, r: 0.5 });
   }
-  const colG = new THREE.CylinderGeometry(0.32, 0.38, COL_H, 14);
-  const colX = [-HW + 0.45, -HW / 2 - 0.3, -2.4, 2.4, HW / 2 + 0.3, HW - 0.45];
+  const colG = new THREE.CylinderGeometry(0.46, 0.54, COL_H, 16);
+  const colX = [-HW + 0.6, -HW * 0.56, -STEP_W / 2 - 0.9, STEP_W / 2 + 0.9, HW * 0.56, HW - 0.6];
   for (const x of colX) {
     add(mesh(colG, pillar, x, H + COL_H / 2, HZ + HD - 0.4), hall);
-    obstacles.push({ x, z: HZ + HD - 0.4, r: 0.6 });
+    obstacles.push({ x, z: HZ + HD - 0.4, r: 0.75 });
   }
   for (const x of [colX[0], colX[5]]) add(mesh(colG, pillar, x, H + COL_H / 2, HZ - HD + 0.45), hall);
   for (const x of [colX[0], colX[5]]) add(mesh(colG, pillar, x, H + COL_H / 2, HZ), hall);
@@ -389,29 +429,29 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   add(mesh(new THREE.BoxGeometry(HW * 2 + 0.6, 0.09, 0.09), neonMat, 0, beamY - 0.3, HZ + HD - 0.1), hall, false, false);
   add(mesh(new THREE.BoxGeometry(HW * 2 + 0.6, 0.09, 0.09), neonMat, 0, beamY + 0.32, HZ + HD - 0.1), hall, false, false);
   const plaqueTex = textTexture(['gm ✦ quiet hall'], 1024, 200, '#120b24', '#14f195');
-  const plaque = mesh(new THREE.BoxGeometry(5.2, 1.0, 0.12), [wood, wood, wood, wood, new THREE.MeshBasicMaterial({ map: plaqueTex }), wood] as unknown as THREE.Material, 0, beamY + 0.95, HZ + HD - 0.3);
+  const plaque = mesh(new THREE.BoxGeometry(8.5, 1.6, 0.14), [wood, wood, wood, wood, new THREE.MeshBasicMaterial({ map: plaqueTex }), wood] as unknown as THREE.Material, 0, beamY + 1.3, HZ + HD - 0.3);
   add(plaque, hall, false, false);
-  add(mesh(new THREE.BoxGeometry(5.5, 1.3, 0.06), neonMat, 0, beamY + 0.95, HZ + HD - 0.38), hall, false, false);
+  add(mesh(new THREE.BoxGeometry(8.9, 2.0, 0.06), neonMat, 0, beamY + 1.3, HZ + HD - 0.38), hall, false, false);
   // two-tier roof
-  add(mesh(new THREE.BoxGeometry(HW * 2 + 3, 0.28, HD * 2 + 3), roofMat, 0, beamY + 0.4, HZ), hall);
-  const roof = mesh(new THREE.ConeGeometry(1, 1, 4, 1), roofMat, 0, beamY + 0.55 + 1.6, HZ);
+  add(mesh(new THREE.BoxGeometry(HW * 2 + 4.5, 0.36, HD * 2 + 4.5), roofMat, 0, beamY + 0.4, HZ), hall);
+  const roof = mesh(new THREE.ConeGeometry(1, 1, 4, 1), roofMat, 0, beamY + 0.55 + 2.6, HZ);
   roof.rotation.y = Math.PI / 4;
-  roof.scale.set((HW + 2.2) * 1.414, 3.2, (HD + 2.2) * 1.414);
+  roof.scale.set((HW + 3) * 1.414, 5.2, (HD + 3) * 1.414);
   add(roof, hall);
-  const roof2 = mesh(new THREE.ConeGeometry(1, 1, 4, 1), roofMat, 0, beamY + 3.4, HZ);
+  const roof2 = mesh(new THREE.ConeGeometry(1, 1, 4, 1), roofMat, 0, beamY + 5.6, HZ);
   roof2.rotation.y = Math.PI / 4;
-  roof2.scale.set(HW * 0.75, 2.6, HD * 0.75);
+  roof2.scale.set(HW * 0.75, 4.2, HD * 0.75);
   add(roof2, hall);
   const tipG = new THREE.ConeGeometry(0.28, 1.3, 6);
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
-      const tip = mesh(tipG, roofMat, sx * (HW + 1.5), beamY + 0.7, HZ + sz * (HD + 1.5));
+      const tip = mesh(tipG, roofMat, sx * (HW + 2.2), beamY + 0.7, HZ + sz * (HD + 2.2));
       tip.rotation.z = -sx * 0.9;
       tip.rotation.x = sz * 0.9;
       add(tip, hall);
     }
-  const inner = new THREE.PointLight('#ffd7a0', lowPower ? 9 : 14, 22, 2);
-  inner.position.set(0, H + 3.6, HZ - 2);
+  const inner = new THREE.PointLight('#ffd7a0', lowPower ? 22 : 34, 44, 2);
+  inner.position.set(0, H + 5.5, HZ - 2);
   hall.add(inner);
 
   // singing bowl
@@ -442,8 +482,11 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   const zabuM = mat(C.mat);
   let ci = 0;
   const zafus: THREE.Mesh[] = [];
-  for (const z of [HZ - 2.2, HZ + 0.2, HZ + 2.6, HZ + 5])
-    for (const x of [-7.5, -4.5, -1.5, 1.5, 4.5, 7.5]) {
+  const rows = Math.ceil(HALL_CUSHIONS / 8);
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < 8; c++) {
+      const x = (c - 3.5) * 3.4;
+      const z = HZ - HD + 6 + r * 3.3;
       const g = new THREE.Group();
       g.position.set(x, H, z);
       add(mesh(zabuG, zabuM, 0, 0.03, 0), g, false, true);
@@ -527,10 +570,10 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     });
     return t;
   };
-  const bannerG = new THREE.PlaneGeometry(0.95, 2.4);
+  const bannerG = new THREE.PlaneGeometry(1.4, 3.5);
   colX.forEach((x, i) => {
     const m = new THREE.Mesh(bannerG, new THREE.MeshBasicMaterial({ map: bannerTex(i), transparent: true, toneMapped: false, side: THREE.DoubleSide }));
-    m.position.set(x, H + 3.4, HZ + HD - 0.4 + 0.42);
+    m.position.set(x, H + 4.9, HZ + HD - 0.4 + 0.58);
     m.userData.action = 'spot';
     m.userData.kind = 'banner';
     m.userData.index = i;
@@ -561,7 +604,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     scene.add(g);
     obstacles.push({ x, z, r: 0.45 });
   };
-  for (const z of [19, 14.5, 10, 5.5, 1]) for (const sx of [-1, 1]) lantern(sx * 2.4, z);
+  for (let z = COURT.z + 30; z > HZ + HD + 3; z -= 4.6) for (const sx of [-1, 1]) lantern(sx * 2.6, z);
 
   // ---------- bell pavilion ----------
   const pav = new THREE.Group();
@@ -620,37 +663,40 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     obstacles.push({ x, z, r: 0.3 });
     signAt.push({ x, z });
   };
-  sign(-4.6, 6.4, -0.5, ['← Lake']);
-  sign(4.8, 7.4, 0.5, ['Garden →']);
-  sign(-HW - 2, -3, -0.6, ['← Maple Grove', '↑ Lookout']);
-  sign(HW + 2, -3, 0.6, ['Tea House →']);
+  sign(-6.5, COURT.z - 2, -0.5, ['← Lake']);
+  sign(6.8, COURT.z - 1, 0.5, ['Garden →']);
+  sign(-HW - 2.5, HZ + HD - 3, -0.6, ['← Maple Grove', '↑ Lookout']);
+  sign(HW + 2.5, HZ + HD - 3, 0.6, ['Tea House →']);
 
   // ---------- "built on Solana" / "made for Seeker" banners flanking the hall steps ----------
   addBrandBanners(scene, obstacles, terrain, [
-    { x: -8.2, z: HZ + HD + 2.2, ry: 0 },
-    { x: 8.2, z: HZ + HD + 2.2, ry: 0 },
+    { x: -(STEP_W / 2 + 6), z: HZ + HD + 3, ry: 0 },
+    { x: STEP_W / 2 + 6, z: HZ + HD + 3, ry: 0 },
   ]);
 
   // ---------- places ----------
   const spots = buildPlaces(ctx);
+  // ---------- coming soon: Lotus Island, Sky Shrine, Night Market ----------
+  buildTeasers({ scene, terrain, obstacles, clickables, blockers });
 
   // ---------- pines + rocks outside the places ----------
   const blocked = (x: number, z: number, pad = 0) =>
     pathDist(x, z) < 4.2 + pad ||
     inHall(x, z, 3 + pad) ||
     Math.hypot(x - BELL.x, z - BELL.z) < 4.5 + pad ||
-    Math.hypot(x, z - 1.5) < 10.5 + pad ||
+    Math.hypot(x - COURT.x, z - COURT.z) < COURT.r + pad ||
     lakeE(x, z) < 1.35 ||
     PLACES.some((p) => p.id !== 'court' && p.id !== 'hall' && Math.hypot(x - p.x, z - p.z) < p.r + 4 + pad) ||
     PLACES.some((p) => Math.hypot(x - p.view[0], z - p.view[1]) < 9) ||
     signAt.some((p) => Math.hypot(x - p.x, z - p.z) < 2.6 + Math.max(0, pad)) ||
-    (segDist(x, z, LOOKOUT.x, LOOKOUT.z, 0, -22) < 10 && z < -23); // keep the lookout's view of the hall open
+    TEASERS.some((t) => Math.hypot(x - t.x, z - t.z) < t.r + 5 + pad) ||
+    (segDist(x, z, LOOKOUT.x, LOOKOUT.z, 0, HZ - HD) < 16 && z < HZ - HD); // keep the lookout's view of the hall open
 
-  const treeN = lowPower ? 170 : 280;
+  const treeN = lowPower ? 300 : 520;
   const trees: { x: number; z: number; s: number; c: number }[] = [];
   for (let i = 0; i < treeN * 5 && trees.length < treeN; i++) {
     const a = R() * Math.PI * 2;
-    const r = 16 + R() * 82;
+    const r = 34 + R() * 160;
     const x = Math.sin(a) * r;
     const z = Math.cos(a) * r;
     if (blocked(x, z)) continue;
@@ -683,7 +729,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   const rocks: { x: number; z: number; s: number }[] = [];
   for (let i = 0; i < 700 && rocks.length < 90; i++) {
     const a = R() * Math.PI * 2;
-    const r = 10 + R() * 74;
+    const r = 22 + R() * 146;
     const x = Math.sin(a) * r;
     const z = Math.cos(a) * r;
     if (blocked(x, z, -1.2)) continue;
@@ -715,7 +761,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   });
 
   // ---------- grass tufts (instanced, wind sway in the shader) ----------
-  const grassN = lowPower ? 2200 : 6500;
+  const grassN = lowPower ? 3200 : 9000;
   const blade = new THREE.BufferGeometry();
   {
     const v: number[] = [];
@@ -757,10 +803,10 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   const gcol = new THREE.Color();
   for (let i = 0; i < grassN * 6 && gi < grassN; i++) {
     const a = R() * Math.PI * 2;
-    const r = 3 + Math.sqrt(R()) * 80;
+    const r = 6 + Math.sqrt(R()) * 160;
     const x = Math.sin(a) * r;
     const z = Math.cos(a) * r;
-    if (pathDist(x, z) < 1.4 || inHall(x, z, 1) || Math.hypot(x, z - 1.5) < 9.6 || lakeE(x, z) < 1.12) continue;
+    if (pathDist(x, z) < 1.4 || inHall(x, z, 1) || Math.hypot(x - COURT.x, z - COURT.z) < COURT.r * 0.9 || lakeE(x, z) < 1.12) continue;
     if (Math.abs(x - GARDEN.x) < GARDEN.w / 2 + 0.6 && Math.abs(z - GARDEN.z) < GARDEN.d / 2 + 0.6) continue;
     if (Math.abs(x - TEA.x) < TEA.w / 2 + 0.5 && Math.abs(z - TEA.z) < TEA.d / 2 + 0.5) continue;
     if (Math.hypot(x - BELL.x, z - BELL.z) < 2.6) continue;
@@ -776,17 +822,17 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   scene.add(grass);
 
   // little wild flowers near paths
-  const flowerN = lowPower ? 240 : 540;
+  const flowerN = lowPower ? 400 : 900;
   const flowers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.07, 0), mat('#ffffff', { emissive: '#222', emissiveIntensity: 0.15 }), flowerN);
   const fCols = ['#f7f3e8', '#f2c6cf', '#f4dd7c', '#c9b8ef'].map((c) => new THREE.Color(c));
   let fi = 0;
   for (let i = 0; i < flowerN * 8 && fi < flowerN; i++) {
     const a = R() * Math.PI * 2;
-    const r = 6 + R() * 74;
+    const r = 12 + R() * 148;
     const x = Math.sin(a) * r;
     const z = Math.cos(a) * r;
     const pd = pathDist(x, z);
-    if (pd < 1.5 || pd > 5 || inHall(x, z, 1) || lakeE(x, z) < 1.2 || Math.hypot(x, z - 1.5) < 9.6) continue;
+    if (pd < 1.5 || pd > 5 || inHall(x, z, 1) || lakeE(x, z) < 1.2 || Math.hypot(x - COURT.x, z - COURT.z) < COURT.r * 0.9) continue;
     flowers.setMatrixAt(fi, m4.compose(new THREE.Vector3(x, terrain(x, z) + 0.28, z), q.identity(), new THREE.Vector3(1, 0.7, 1)));
     flowers.setColorAt(fi, fCols[Math.floor(R() * fCols.length)]);
     fi++;
@@ -798,9 +844,9 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   const mtnM = mat(C.mountain, { flatShading: true });
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2 + R() * 0.3;
-    const r = 170 + R() * 40;
-    const h = 50 + R() * 55;
-    const m = mesh(new THREE.ConeGeometry(40 + R() * 25, h, 6), mtnM, Math.sin(a) * r, h / 2 - 2, Math.cos(a) * r);
+    const r = 330 + R() * 70;
+    const h = 80 + R() * 90;
+    const m = mesh(new THREE.ConeGeometry(70 + R() * 40, h, 6), mtnM, Math.sin(a) * r, h / 2 - 2, Math.cos(a) * r);
     m.rotation.y = R() * 3;
     scene.add(m);
   }
@@ -863,7 +909,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     obstacles,
     seats,
     places: PLACES,
-    spawn: new THREE.Vector3(0, 0, 20),
+    spawn: new THREE.Vector3(0, 0, COURT.z + 12),
     bellPos: new THREE.Vector3(BELL.x, 0, BELL.z),
     bowlPos: new THREE.Vector3(0, H, HZ - HD + 2.4),
     bounds: BOUNDS,
@@ -889,8 +935,8 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
       (scene.background as THREE.Color).set(horizon);
       const fog = scene.fog as THREE.Fog;
       fog.color.set(horizon);
-      fog.near = night ? 35 : 60;
-      fog.far = night ? 180 : 260;
+      fog.near = night ? 70 : 110;
+      fog.far = night ? 330 : 460;
       hemi.color.set(night ? '#a99fe0' : '#fff0f0');
       hemi.groundColor.set(night ? '#2a3326' : '#8b9b7a');
       hemi.intensity = night ? 0.8 : 1.25;

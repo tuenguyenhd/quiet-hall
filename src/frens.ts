@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { Avatar } from './avatar';
 import { popEmoji } from './effects';
-import { GARDEN, GROVE, LAKE, LIGHT_COUNT, LOOKOUT, TEA } from './layout';
+import { COURT, GARDEN, GROVE, LAKE, LIGHT_COUNT, LOOKOUT, TEA } from './layout';
 
 interface Fren {
   name: string;
@@ -17,12 +17,12 @@ interface Fren {
 }
 
 const FRENS: Fren[] = [
-  { name: 'Shibu', sp: 1, light: 6, x: 6.5, z: 12, face: [0, 12], lines: ['much calm. very breathe.', 'wow. such peace.', 'gm fren. sit a while?', 'no charts. only sky.'] },
+  { name: 'Shibu', sp: 1, light: 6, x: COURT.x + 9, z: COURT.z + 6, face: [COURT.x, COURT.z + 6], lines: ['much calm. very breathe.', 'wow. such peace.', 'gm fren. sit a while?', 'no charts. only sky.'] },
   { name: 'Froggo', sp: 2, light: 1, x: LAKE.x - 4, z: LAKE.z + 2.5, y: -0.12, pad: true, face: [LAKE.x + 10, LAKE.z - 4], lines: ['gm 🐸', 'ribbit. breathe in. ribbit. breathe out.', 'the pond is always green, ser.', 'feels good man... to sit.'] },
   { name: 'Capy', sp: 4, light: 7, x: LAKE.x - LAKE.rx * 1.2, z: LAKE.z - 3, face: [LAKE.x, LAKE.z], lines: ['no thoughts. just vibes.', 'i sit. the orange sits. we are one.', 'everyone is my fren here.'] },
   { name: 'Kitty', sp: 3, light: 5, x: TEA.x - 2.4, z: TEA.z + 2.2, face: [TEA.x - 9, TEA.z + 1], lines: ['nap is also meditation.', 'touch grass? i am the grass.', 'tea is warm. vibes are warmer.'] },
   { name: 'Shibu jr', sp: 1, light: 3, x: GARDEN.x - GARDEN.w / 2 - 4, z: GARDEN.z + 3, face: [GARDEN.x, GARDEN.z], lines: ['each stone is a fren. 108 frens.', 'raked lines go brrr (slowly).'] },
-  { name: 'Old Monk', sp: 0, light: 0, x: LOOKOUT.x + 2.6, z: LOOKOUT.z + 1.2, face: [0, -16], lines: ['wagmi. slowly.', 'from here, every hall looks small.', 'the view is free. so is breathing.'] },
+  { name: 'Old Monk', sp: 0, light: 0, x: LOOKOUT.x + 2.6, z: LOOKOUT.z + 1.2, face: [0, -30], lines: ['wagmi. slowly.', 'from here, every hall looks small.', 'the view is free. so is breathing.'] },
   { name: 'Froggo II', sp: 2, light: 3, x: GROVE.x + 2.5, z: GROVE.z - 2.4, face: [GROVE.x + 8, GROVE.z + 3], lines: ['leaves fall. i stay comfy.', 'gm from the grove 🍁'] },
 ];
 

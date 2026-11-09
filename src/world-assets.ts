@@ -126,7 +126,7 @@ export function dressWorld(c: DressCtx) {
     const out: Placement[] = [];
     for (let i = 0; i < n * 12 && out.length < n; i++) {
       const a = R() * Math.PI * 2;
-      const r = 8 + R() * 70;
+      const r = 16 + R() * 140;
       const x = Math.sin(a) * r;
       const z = Math.cos(a) * r;
       const pd = c.pathDist(x, z);
@@ -135,11 +135,11 @@ export function dressWorld(c: DressCtx) {
     }
     return out;
   };
-  const bushN = c.lowPower ? 18 : 40;
+  const bushN = c.lowPower ? 32 : 70;
   const bushes = scatter(bushN, 2.6, 9, -3.2);
   instanceModel(c.scene, '/models/bush-red.glb', 0.9, bushes.filter((_, i) => i % 3 === 0), { shadows: false }).catch(ok);
   instanceModel(c.scene, '/models/bush-flower.glb', 0.85, bushes.filter((_, i) => i % 3 !== 0), { shadows: false }).catch(ok);
-  instanceModel(c.scene, '/models/flowers.glb', 0.35, scatter(c.lowPower ? 10 : 26, 1.6, 5, -3.6), { shadows: false }).catch(ok);
+  instanceModel(c.scene, '/models/flowers.glb', 0.35, scatter(c.lowPower ? 18 : 44, 1.6, 5, -3.6), { shadows: false }).catch(ok);
 
   // bamboo stand behind the tea house
   const bamboo: Placement[] = [];

@@ -1,16 +1,19 @@
 // Shared world layout (pure data, no three.js) so the client, tests and the server agree on spots.
 
-export const LAKE = { x: -45, z: 25, rx: 13, rz: 9.5 };
-export const GARDEN = { x: 40, z: 22, w: 13, d: 8 }; // raked bed centre + size
-export const GROVE = { x: -45, z: -28, r: 11 };
-export const TEA = { x: 40, z: -22, w: 7, d: 6, h: 0.45 };
-export const LOOKOUT = { x: 0, z: -70, r: 15, h: 6 };
-/** Main hall: centre z, half width, half depth, floor height. Front edge at z = -5. */
-export const HALL = { z: -13, hw: 11, hd: 8, h: 0.7 };
-export const BELL = { x: 15, z: 2 };
-export const BOUNDS = 82;
+// The world was doubled in width (4x the area) on 2026-11-09: places sit twice as far out and are ~1.35x bigger.
+export const LAKE = { x: -90, z: 50, rx: 18, rz: 13 };
+export const GARDEN = { x: 80, z: 44, w: 18, d: 11 }; // raked bed centre + size
+export const GROVE = { x: -90, z: -56, r: 15 };
+export const TEA = { x: 80, z: -44, w: 7, d: 6, h: 0.45 };
+export const LOOKOUT = { x: 0, z: -140, r: 22, h: 9 };
+/** Main hall: centre z, half width, half depth, floor height. Front edge at z = -10. */
+export const HALL = { z: -26, hw: 22, hd: 16, h: 0.9 };
+/** Courtyard in front of the hall (where you arrive). */
+export const COURT = { x: 0, z: 14, r: 22 };
+export const BELL = { x: 30, z: 4 };
+export const BOUNDS = 164;
 /** Far rim where the ground rises into hills. */
-export const RIM = 88;
+export const RIM = 176;
 
 /** Characters you can walk as (free pick; original designs). Network colour index = species * 8 + light. */
 export const SPECIES = [
@@ -29,6 +32,8 @@ export const LIGHT_COUNT = 8;
 
 export const STONE_COUNT = 108;
 export const TREE_COUNT = 64;
+/** Cushions in the Main Hall (the first 24, nearest the altar, are the Founder Cushions). */
+export const HALL_CUSHIONS = 48;
 
 export interface PlaceInfo {
   id: string;
@@ -44,13 +49,13 @@ export interface PlaceInfo {
 
 const view = (x: number, z: number, dx: number, dz: number) => [x + dx, z + dz] as [number, number];
 export const PLACES: PlaceInfo[] = [
-  { id: 'hall', name: 'Main Hall', x: 0, z: HALL.z, r: 13, hint: 'Tap a cushion to sit with others.', view: [0, -3], look: [0, HALL.z] },
-  { id: 'court', name: 'Courtyard', x: 0, z: 6, r: 11, hint: 'Paths lead to the lake, the garden, the grove and the tea house.', view: [0, 22], look: [0, -2] },
-  { id: 'lake', name: 'Lake', x: LAKE.x, z: LAKE.z, r: 17, hint: 'Sit at the end of the dock and listen to the water.', view: view(LAKE.x, LAKE.z, 14.5, -6), look: [LAKE.x, LAKE.z] },
-  { id: 'garden', name: 'Stone Garden', x: GARDEN.x, z: GARDEN.z, r: 12, hint: 'Sit on a bench and follow the raked lines.', view: view(GARDEN.x, GARDEN.z, 0, 10.5), look: [GARDEN.x, GARDEN.z] },
-  { id: 'grove', name: 'Maple Grove', x: GROVE.x, z: GROVE.z, r: 12, hint: 'Rest on the bench or the swing under the maples.', view: view(GROVE.x, GROVE.z, -2.6, 0.6), look: [GROVE.x - 12, GROVE.z + 2] },
-  { id: 'tea', name: 'Tea House', x: TEA.x, z: TEA.z, r: 7, hint: 'Sit by the low table. The kettle is warm.', view: view(TEA.x, TEA.z, -6.2, 0.8), look: [TEA.x, TEA.z] },
-  { id: 'lookout', name: 'Lookout', x: LOOKOUT.x, z: LOOKOUT.z, r: 11, hint: 'One rock above the whole valley. Sit and watch the trees and the sky.', view: [0, LOOKOUT.z - 5], look: [0, -16] },
+  { id: 'hall', name: 'Main Hall', x: 0, z: HALL.z, r: 24, hint: 'Tap a cushion to sit with others.', view: [0, HALL.z + HALL.hd - 4], look: [0, HALL.z] },
+  { id: 'court', name: 'Courtyard', x: COURT.x, z: COURT.z, r: COURT.r, hint: 'Paths lead to the lake, the garden, the grove and the tea house.', view: [0, COURT.z + 26], look: [0, COURT.z - 10] },
+  { id: 'lake', name: 'Lake', x: LAKE.x, z: LAKE.z, r: 23, hint: 'Sit at the end of the dock and listen to the water.', view: view(LAKE.x, LAKE.z, 20, -8), look: [LAKE.x, LAKE.z] },
+  { id: 'garden', name: 'Stone Garden', x: GARDEN.x, z: GARDEN.z, r: 16, hint: 'Sit on a bench and follow the raked lines.', view: view(GARDEN.x, GARDEN.z, 0, 13.5), look: [GARDEN.x, GARDEN.z] },
+  { id: 'grove', name: 'Maple Grove', x: GROVE.x, z: GROVE.z, r: 16, hint: 'Rest on the bench or the swing under the maples.', view: view(GROVE.x, GROVE.z, -3.4, 0.8), look: [GROVE.x - 14, GROVE.z + 2] },
+  { id: 'tea', name: 'Tea House', x: TEA.x, z: TEA.z, r: 8, hint: 'Sit by the low table. The kettle is warm.', view: view(TEA.x, TEA.z, -7, 0.8), look: [TEA.x, TEA.z] },
+  { id: 'lookout', name: 'Lookout', x: LOOKOUT.x, z: LOOKOUT.z, r: 15, hint: 'One rock above the whole valley. Sit and watch the trees and the sky.', view: [0, LOOKOUT.z - 6], look: [0, -30] },
 ];
 
 export function placeAt(x: number, z: number): PlaceInfo | null {
@@ -94,7 +99,7 @@ export function stoneSpots(): { x: number; z: number }[] {
 export function treeSpots(): { x: number; z: number }[] {
   const out: { x: number; z: number }[] = [];
   for (let i = 0; i < TREE_COUNT; i++) {
-    const r = 4.4 + 6.4 * Math.sqrt(i / (TREE_COUNT - 1));
+    const r = GROVE.r * (0.4 + 0.58 * Math.sqrt(i / (TREE_COUNT - 1)));
     const a = i * 2.39996323;
     out.push({ x: GROVE.x + Math.cos(a) * r, z: GROVE.z + Math.sin(a) * r });
   }
@@ -184,3 +189,34 @@ export const SPOTS = {
 export type SpotKind = keyof typeof SPOTS;
 /** Patron banners are rented: this many days per payment. */
 export const BANNER_DAYS = 30;
+
+/** "Coming soon" areas at the edge of the world (fenced off, with a sign). Shared so scenery stays clear of them. */
+export const TEASERS = [
+  {
+    id: 'island',
+    emoji: '🏝',
+    name: 'Lotus Island',
+    x: LAKE.x - LAKE.rx * 0.5,
+    z: LAKE.z - LAKE.rz * 0.25,
+    r: 4,
+    text: 'Lotus Island opens in Season 2: lotus lanterns, a floating tea deck and 108 lotus spots. Founders and Patrons hear first.',
+  },
+  {
+    id: 'shrine',
+    emoji: '⛩',
+    name: 'Sky Shrine',
+    x: LOOKOUT.x,
+    z: LOOKOUT.z - LOOKOUT.r - 6,
+    r: 6,
+    text: 'The Sky Shrine stairway is being built: a sunrise sit above the clouds for the whole hall. Coming soon.',
+  },
+  {
+    id: 'market',
+    emoji: '🏮',
+    name: 'Night Market',
+    x: 112,
+    z: 0,
+    r: 10,
+    text: 'The Night Market is being set up: stalls for pets, lanterns and frens from other Solana projects. Coming soon.',
+  },
+] as const;

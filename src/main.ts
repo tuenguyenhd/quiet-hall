@@ -10,7 +10,7 @@ import { audio, haptic } from './audio';
 import { Net, type Msg } from './net';
 import { Meditation } from './meditation';
 import { LIGHTS } from './palette';
-import { BLESS, LIGHT_COUNT, PETS, SPECIES, SPECIES_ORDER, type SpotKind } from './layout';
+import { BLESS, LIGHT_COUNT, PETS, SPECIES, SPECIES_ORDER, TEASERS, type SpotKind } from './layout';
 import { updateEffects } from './effects';
 import { Pet } from './pets';
 import { setupFrens } from './frens';
@@ -66,7 +66,7 @@ renderer.shadowMap.enabled = !params.has('noshadow') && !lowPower;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400);
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 800);
 const world = buildWorld(scene, renderer.shadowMap.enabled, lowPower);
 Avatar.heightAt = world.heightAt;
 Avatar.cushionAt = (x, z) => {
@@ -421,6 +421,12 @@ controls.onTap = (x, y) => {
         const i = frens.tap(o);
         haptic(15);
         if (i >= 0) openFren(i);
+        return;
+      }
+      if (action === 'teaser') {
+        const t = TEASERS.find((x) => x.id === o.userData.teaser);
+        if (t) toast(`${t.emoji} ${t.text}`, 6500);
+        haptic(10);
         return;
       }
       if (action === 'spot') {
@@ -970,6 +976,8 @@ function placeTick() {
 
 // ---------- movement ----------
 const SPEED = 3.2;
+/** long taps: jog (the world is 2x wider since 2026-11-09) */
+const JOG = 6.2;
 const dir = new THREE.Vector2();
 function stepMe(dt: number) {
   if (me.state === 'sit') {
@@ -996,7 +1004,8 @@ function stepMe(dt: number) {
   me.moving = moving;
   if (!moving) return;
   const before = moveTarget ? Math.hypot(moveTarget.x - p.x, moveTarget.z - p.z) : Infinity;
-  const step = Math.min(SPEED * dt, before);
+  // jog while the target is far away, walk for the last stretch
+  const step = Math.min((before > 14 ? JOG : SPEED) * dt, before);
   const ox = p.x;
   const oz = p.z;
   p.x += dir.x * step;

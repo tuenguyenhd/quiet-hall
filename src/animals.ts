@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { GARDEN, LAKE } from './layout';
+import { COURT, GARDEN, LAKE } from './layout';
 import { cullable } from './bake';
 
 export interface Kind {
@@ -44,8 +44,8 @@ interface Spawn {
   roam: number;
 }
 const SPAWNS: Spawn[] = [
-  { kind: 'shiba', home: [-5, 12], roam: 6 },
-  { kind: 'husky', home: [7, 14], roam: 6 },
+  { kind: 'shiba', home: [COURT.x - 12, COURT.z + 4], roam: 9 },
+  { kind: 'husky', home: [COURT.x + 14, COURT.z + 10], roam: 9 },
   { kind: 'shiba', home: [GARDEN.x - 2, GARDEN.z + 8], roam: 6 },
   { kind: 'frog', home: [LAKE.x + LAKE.rx * 1.15, LAKE.z + 3], roam: 3 },
   { kind: 'frog', home: [LAKE.x - 2, LAKE.z - LAKE.rz * 1.15], roam: 3 },
