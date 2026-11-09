@@ -1,5 +1,6 @@
 // Devnet chain checks (spec 006 T214/T220): royalties on both collections, and the hall follows NFT transfers.
-// Transfers one stone the test wallet (DEV_NET_SOL) owns to a fresh address, then expects /api/spots to show the new owner.
+// Round trip, non-destructive: moves one stone the test wallet (DEV_NET_SOL) owns to a temporary key it keeps,
+// expects /api/spots to show that owner, then moves it back (the test wallet pays both fees).
 // Usage: node scripts/chain-e2e.mjs [baseUrl]   (needs a stone owned by the test wallet: run items-e2e first)
 import { readFileSync } from 'node:fs';
 import { address, createSolanaRpc, generateKeyPairSigner, getAddressEncoder } from '@solana/kit';
@@ -31,15 +32,28 @@ if (mine) {
   const [n, s] = mine;
   const owners = await assetOwners(RPC, [s.asset]);
   t('reads owner from the asset account', owners.get(s.asset) === me.address);
-  const to = (await generateKeyPairSigner()).address;
-  const sig = await sendAndConfirm(RPC, me, [transferAssetIx(address(s.asset), address(v('STONE_COLLECTION')), me, to)]);
-  t('NFT transferred on chain', (await assetOwners(RPC, [s.asset])).get(s.asset) === to, sig.slice(0, 12) + '…');
-  let seen = '';
-  for (let i = 0; i < 8 && seen !== to; i++) {
-    await wait(i ? 22000 : 2000);
-    seen = (await (await fetch(`${BASE}/api/spots?refresh=1`)).json()).stone[n]?.owner;
+  const col = address(v('STONE_COLLECTION'));
+  const temp = await generateKeyPairSigner(); // kept until the NFT is back
+  const ownerSeen = async (want) => {
+    let seen = '';
+    for (let i = 0; i < 8 && seen !== want; i++) {
+      await wait(i ? 22000 : 2000);
+      seen = (await (await fetch(`${BASE}/api/spots?refresh=1`)).json()).stone[n]?.owner;
+    }
+    return seen === want;
+  };
+  try {
+    const sig = await sendAndConfirm(RPC, me, [transferAssetIx(address(s.asset), col, me, temp.address)]);
+    t('NFT transferred on chain', (await assetOwners(RPC, [s.asset])).get(s.asset) === temp.address, sig.slice(0, 12) + '…');
+    t('hall shows the new owner', await ownerSeen(temp.address), `${temp.address.slice(0, 6)}…`);
+  } finally {
+    // always move it back (temp signs as owner, the test wallet pays)
+    if ((await assetOwners(RPC, [s.asset])).get(s.asset) === temp.address) {
+      await sendAndConfirm(RPC, me, [transferAssetIx(address(s.asset), col, temp, me.address, me)]);
+    }
   }
-  t('hall shows the new owner', seen === to, `${to.slice(0, 6)}…`);
+  t('NFT moved back to the test wallet', (await assetOwners(RPC, [s.asset])).get(s.asset) === me.address);
+  t('hall shows the test wallet again', await ownerSeen(me.address));
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

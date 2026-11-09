@@ -123,14 +123,14 @@ export async function mintSpotAsset(opts: {
   return { asset: asset.address as string, sig };
 }
 
-/** TransferV1: move an asset to `newOwner` (the current owner signs as authority). */
-export function transferAssetIx(asset: Address, collection: Address, owner: KeyPairSigner, newOwner: Address): Instruction {
+/** TransferV1: move an asset to `newOwner`. The current owner signs as authority; `payer` (default: owner) pays the fee. */
+export function transferAssetIx(asset: Address, collection: Address, owner: KeyPairSigner, newOwner: Address, payer: KeyPairSigner = owner): Instruction {
   return {
     programAddress: MPL_CORE,
     accounts: [
       { address: asset, role: AccountRole.WRITABLE },
       { address: collection, role: AccountRole.READONLY },
-      { address: owner.address, role: AccountRole.WRITABLE_SIGNER, signer: owner }, // payer
+      { address: payer.address, role: AccountRole.WRITABLE_SIGNER, signer: payer }, // payer
       { address: owner.address, role: AccountRole.READONLY_SIGNER, signer: owner }, // authority
       { address: newOwner, role: AccountRole.READONLY },
       { address: MPL_CORE, role: AccountRole.READONLY }, // systemProgram: none
