@@ -11,6 +11,10 @@ import { LOOKOUT, COURT, PLACES, TEASERS } from '../layout';
 import { BADGES } from '../badges';
 import { PREVIEWS } from './previews';
 import { finishPendingLogin, loadWallets } from './login';
+import { NEAR_MARK } from '../near-mark';
+
+/** the NEAR mark for login buttons (white on black, unaltered) */
+const nearIcon = (size: number) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="${NEAR_MARK}"/></svg>`;
 
 export const NEAR = import.meta.env.VITE_EDITION === 'near';
 
@@ -118,7 +122,7 @@ export function setupNear(h: NearHost) {
     <button class="pill" id="near-bag" title="Your bag">🎒</button>
     <button class="pill" id="near-book" title="Rescue Book">📖</button>
     <button class="pill" id="near-market" title="Market and Market Cup">🛒</button>
-    <button class="pill" id="near-login" title="Log in with a NEAR wallet">👤</button>`;
+    <button class="near-login-btn small-btn" id="near-login" title="Log in with NEAR">${nearIcon(16)}<span>Log in</span></button>`;
   $('hud').appendChild(bar);
 
   const overlay = document.createElement('section');
@@ -139,9 +143,13 @@ export function setupNear(h: NearHost) {
   function renderBar() {
     $('near-leaves').querySelector('b')!.textContent = String(econ.leaves);
     const lg = $('near-login');
-    lg.textContent = econ.near ? '✓' : '👤';
-    lg.title = econ.near ? `Logged in as ${econ.near}` : 'Log in with a NEAR wallet';
+    const who = econ.near ? (/^[0-9a-f]{64}$/.test(econ.near) ? short(econ.near) : econ.near.replace(/\.(testnet|near)$/, '')) : '';
+    lg.querySelector('span')!.textContent = econ.near ? `✓ ${who}` : 'Log in';
+    lg.title = econ.near ? `Logged in as ${econ.near}` : 'Log in with NEAR';
     lg.classList.toggle('on', !!econ.near);
+    // the welcome card's login button hides once logged in
+    document.getElementById('near-login-welcome')?.classList.toggle('hidden', !!econ.near);
+    document.querySelector('.near-login-note')?.classList.toggle('hidden', !!econ.near);
   }
 
   // ---------- 3D: the valley ----------
@@ -449,7 +457,7 @@ export function setupNear(h: NearHost) {
       body().dataset.kind = 'login';
       return;
     }
-    show(`<h2>👤 Log in with NEAR</h2><p class="small">Optional. Your progress is saved either way; logging in lets you keep it on any device and records your rescues to <b>your own</b> NEAR account.</p><div id="near-wallets"><p class="small">Loading wallets…</p></div><p class="small" id="near-login-status"></p>
+    show(`<h2>Log in with NEAR</h2><p class="small">Optional. Your progress is saved either way; logging in lets you keep it on any device and records your rescues to <b>your own</b> NEAR account.</p><div id="near-wallets"><p class="small">Loading wallets…</p></div><p class="small" id="near-login-status"></p>
       <p class="near-foot">You sign a short message: no transaction, no fee. NEAR testnet.</p>`);
     body().dataset.kind = 'login';
     try {
@@ -476,6 +484,20 @@ export function setupNear(h: NearHost) {
     }
   }
   $('near-login').addEventListener('click', () => void openLogin());
+  {
+    const legal = document.querySelector('#welcome .card .legal');
+    if (legal) {
+      const b = document.createElement('button');
+      b.id = 'near-login-welcome';
+      b.className = 'near-login-btn';
+      b.innerHTML = `${nearIcon(20)}<span>Log in with NEAR</span>`;
+      const note = document.createElement('p');
+      note.className = 'small near-login-note';
+      note.textContent = 'Optional: keep your progress on any device and get your rescues on your own NEAR account.';
+      legal.before(b, note);
+      b.addEventListener('click', () => void openLogin());
+    }
+  }
   void finishPendingLogin().then((msg) => msg && h.toast(msg, 5000));
 
   $('near-bag').addEventListener('click', openBag);
