@@ -14,12 +14,7 @@
     "deploy": "vite build && wrangler deploy"
   },
   "dependencies": {
-    "@near-wallet-selector/core": "^10.1.4",
-    "@near-wallet-selector/here-wallet": "^10.1.4",
-    "@near-wallet-selector/hot-wallet": "^10.1.4",
-    "@near-wallet-selector/intear-wallet": "^10.1.4",
-    "@near-wallet-selector/meteor-wallet": "^10.1.4",
-    "@near-wallet-selector/my-near-wallet": "^10.1.4",
+    "@hot-labs/near-connect": "^0.12.0",
     "@solana-mobile/seeker-connect-wallet-standard": "^0.2.0",
     "@solana-mobile/skr-genesis-token": "^1.0.1",
     "@solana-mobile/wallet-standard-mobile": "^0.7.0",

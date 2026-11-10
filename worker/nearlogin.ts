@@ -110,8 +110,11 @@ async function isFullAccessKey(rpcs: string[], accountId: string, publicKey: str
   return false;
 }
 
+export type LoginNetwork = 'mainnet' | 'testnet';
+
 export interface LoginInput {
   pid: string;
+  network: LoginNetwork;
   nonce: string;
   accountId: string;
   publicKey: string;
@@ -120,9 +123,11 @@ export interface LoginInput {
 }
 
 /** Verifies a NEP-413 login. Returns the account id, or a reason it failed. */
-export async function verifyLogin(secret: string, rpcs: string[], i: LoginInput): Promise<{ ok: true; accountId: string } | { ok: false; why: string }> {
+export async function verifyLogin(secret: string, rpcsFor: Record<LoginNetwork, string[]>, i: LoginInput): Promise<{ ok: true; accountId: string } | { ok: false; why: string }> {
   if (!ACCOUNT_RE.test(i.accountId) || i.accountId.length < 2 || i.accountId.length > 64) return { ok: false, why: 'bad account id' };
   if (!/^ed25519:[1-9A-HJ-NP-Za-km-z]{32,50}$/.test(i.publicKey)) return { ok: false, why: 'only ed25519 keys are supported' };
+  if (i.network !== 'mainnet' && i.network !== 'testnet') return { ok: false, why: 'bad network' };
+  if (i.accountId.endsWith('.testnet') !== (i.network === 'testnet') && !/^[0-9a-f]{64}$/.test(i.accountId)) return { ok: false, why: 'account and network do not match' };
   const nonce = await checkNonce(secret, i.pid, i.nonce);
   if (!nonce) return { ok: false, why: 'login expired, try again' };
   let sig: Uint8Array;
@@ -144,6 +149,6 @@ export async function verifyLogin(secret: string, rpcs: string[], i: LoginInput)
     }
   });
   if (!good) return { ok: false, why: 'signature does not match' };
-  if (!(await isFullAccessKey(rpcs, i.accountId, i.publicKey))) return { ok: false, why: 'that key is not a full-access key of the account' };
+  if (!(await isFullAccessKey(rpcsFor[i.network], i.accountId, i.publicKey))) return { ok: false, why: 'that key is not a full-access key of the account' };
   return { ok: true, accountId: i.accountId };
 }

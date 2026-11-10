@@ -64,6 +64,8 @@ export interface Env {
   NEAR_RPC_FALLBACKS?: string;
   NEAR_PRIVATE_KEY?: string;
   NEAR_MIRROR_MODE?: string;
+  /** mainnet RPCs for checking NEAR logins (comma-separated; default FastNEAR + near.org) */
+  NEAR_MAINNET_RPCS?: string;
 }
 
 type SitState = 'idle' | 'sit';
@@ -368,9 +370,14 @@ async function nearApi(req: Request, env: Env, path: string): Promise<Response> 
     const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const p = String(b.pid ?? '');
     if (!PID_RE.test(p)) return json({ error: 'Bad pid' }, 400);
-    const rpcs = [env.NEAR_RPC || 'https://test.rpc.fastnear.com', ...(env.NEAR_RPC_FALLBACKS || '').split(',').map((x) => x.trim()).filter(Boolean)];
-    const v = await verifyLogin(env.SESSION_SECRET || 'dev-only-session-secret', rpcs, {
+    const list = (v: string | undefined) => (v || '').split(',').map((x) => x.trim()).filter(Boolean);
+    const rpcsFor = {
+      testnet: [env.NEAR_RPC || 'https://test.rpc.fastnear.com', ...list(env.NEAR_RPC_FALLBACKS)],
+      mainnet: list(env.NEAR_MAINNET_RPCS).length ? list(env.NEAR_MAINNET_RPCS) : ['https://rpc.mainnet.fastnear.com', 'https://free.rpc.fastnear.com', 'https://rpc.mainnet.near.org'],
+    };
+    const v = await verifyLogin(env.SESSION_SECRET || 'dev-only-session-secret', rpcsFor, {
       pid: p,
+      network: b.network === 'testnet' ? 'testnet' : 'mainnet',
       nonce: String(b.nonce ?? ''),
       accountId: String(b.accountId ?? ''),
       publicKey: String(b.publicKey ?? ''),
@@ -594,6 +601,11 @@ export class Hall extends DurableObject<Env> {
         return send(ws, { t: 'book', owner, ...(await E.book(a.pid)), receipts: this.env.MIRROR ? await mirror(this.env).receipts(owner) : [] });
       }
     }
+  }
+
+  /** NEAR edition: has this visitor logged in with a NEAR wallet? */
+  private async nearLoggedIn(a: Att): Promise<boolean> {
+    return !!(a.pid && this.env.ECONOMY && (await economy(this.env).linkedAccount(a.pid)));
   }
 
   /** pets this visitor owns: bought ones, plus (NEAR edition) the frens they rescued */
@@ -1200,12 +1212,14 @@ export class Hall extends DurableObject<Env> {
       }
       case 'duel_ask': {
         if (!a.hello) return;
+        if (isNear(this.env) && !(await this.nearLoggedIn(a))) return send(ws, { t: 'duel_no', why: 'Log in with NEAR to duel.' });
         await this.duelAsk(ws, a, m);
         ws.serializeAttachment(a); // keep the invite counter
         return;
       }
       case 'duel_ans': {
         if (!a.hello) return;
+        if (isNear(this.env) && !(await this.nearLoggedIn(a))) return send(ws, { t: 'duel_no', why: 'Log in with NEAR to duel.' });
         await this.duelAns(ws, a, m);
         return;
       }

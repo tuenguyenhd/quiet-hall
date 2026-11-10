@@ -10,7 +10,7 @@ import { CUP, KETTLE, MARKET, TRADE_ZONE } from '../market';
 import { LOOKOUT, COURT, PLACES, TEASERS } from '../layout';
 import { BADGES } from '../badges';
 import { PREVIEWS } from './previews';
-import { finishPendingLogin, loadWallets } from './login';
+import { loginWithNear, type LoginNetwork } from './login';
 import { NEAR_MARK } from '../near-mark';
 
 /** the NEAR mark for login buttons (white on black, unaltered) */
@@ -70,7 +70,7 @@ const mmss = (ms: number) => {
 };
 
 export function setupNear(h: NearHost) {
-  document.body.classList.add('edition-near');
+  document.body.classList.add('edition-near', 'near-guest');
   // PumpHall plays Bitcoin and NEAR in this edition, and holds the Market stall; the valley is a place.
   for (const p of PLACES) {
     if (p.id === 'pump') p.hint = 'Guess Bitcoin or NEAR up or down on the big board (points, no money). The Market stall is inside.';
@@ -148,8 +148,9 @@ export function setupNear(h: NearHost) {
     lg.title = econ.near ? `Logged in as ${econ.near}` : 'Log in with NEAR';
     lg.classList.toggle('on', !!econ.near);
     // the welcome card's login button hides once logged in
-    document.getElementById('near-login-welcome')?.classList.toggle('hidden', !!econ.near);
-    document.querySelector('.near-login-note')?.classList.toggle('hidden', !!econ.near);
+    document.getElementById('near-login-welcome-box')?.classList.toggle('hidden', !!econ.near);
+    // guests can explore, rescue and trade; PumpHall up/down needs a NEAR login
+    document.body.classList.toggle('near-guest', !econ.near);
   }
 
   // ---------- 3D: the valley ----------
@@ -369,7 +370,7 @@ export function setupNear(h: NearHost) {
       return `<li class="${got ? 'have' : 'miss'}">${f.pet === 1 ? '🐕' : '🐸'} <b>${esc(f.name)}</b> ${got ? `#${got.serial} · rescued ${got.rescues}× ${rec(`fren-${f.id}-${got.serial}`)}` : '<span class="small">not yet</span>'}</li>`;
     }).join('');
     const dl = drips.map((d) => `<li class="have">${itemLabel(d.kind)} #${d.serial} ${rec(`drip-${d.kind}-${d.serial}`)}</li>`).join('');
-    setTimeout(() => document.getElementById('near-book-login')?.addEventListener('click', (e) => (e.preventDefault(), void openLogin())), 0);
+    setTimeout(() => document.getElementById('near-book-login')?.addEventListener('click', (e) => (e.preventDefault(), void startLogin())), 0);
     body().innerHTML = `<h2>📖 Rescue Book</h2><ul class="near-needs">${tiles}</ul>${dl ? `<div class="label">Drip</div><ul class="near-needs">${dl}</ul>` : ''}
       <p class="small">${
         econ.near
@@ -449,56 +450,53 @@ export function setupNear(h: NearHost) {
       );
   }
 
-  async function openLogin() {
-    if (econ.near) {
-      show(`<h2>✓ Logged in</h2><p class="small">You are <b>${esc(econ.near)}</b> on NEAR testnet.</p>
-        <ul class="near-needs"><li class="have">Your rescues, crafts and Cup trophies are recorded to this account.</li><li class="have">Log in on another phone with the same wallet and your Leaves, bag and frens come with you.</li><li class="have">Your name in the hall and on the boards is your account name.</li></ul>
-        <p class="near-foot">Logging in signed a message only: no transaction, no fee, nothing moved.</p>`);
-      body().dataset.kind = 'login';
-      return;
-    }
-    show(`<h2>Log in with NEAR</h2><p class="small">Optional. Your progress is saved either way; logging in lets you keep it on any device and records your rescues to <b>your own</b> NEAR account.</p><div id="near-wallets"><p class="small">Loading wallets…</p></div><p class="small" id="near-login-status"></p>
-      <p class="near-foot">You sign a short message: no transaction, no fee. NEAR testnet.</p>`);
+  function showLoggedIn() {
+    show(`<h2>✓ Logged in</h2><p class="small">You are <b>${esc(econ.near ?? '')}</b>.</p>
+      <ul class="near-needs"><li class="have">Your rescues, crafts and Cup trophies are recorded to this account (NEAR testnet receipts).</li><li class="have">Log in on another phone with the same wallet and your Leaves, bag and frens come with you.</li><li class="have">Your name in the hall and on the boards is your account name.</li></ul>
+      <p class="near-foot">Logging in signed a message only: no transaction, no fee, nothing moved.</p>`);
     body().dataset.kind = 'login';
+  }
+  /** "Log in with NEAR": NEAR Connect's standard wallet picker, one free signature (mainnet accounts by default) */
+  let loggingIn = false;
+  async function startLogin(network: LoginNetwork = 'mainnet') {
+    if (econ.near) return showLoggedIn();
+    if (loggingIn) return;
+    loggingIn = true;
+    h.toast('Pick your wallet, then approve one free signature…', 4000);
     try {
-      const w = await loadWallets();
-      const list = $('near-wallets');
-      list.innerHTML = w.wallets
-        .map((x) => `<button class="near-wallet" data-id="${esc(x.id)}" ${x.available ? '' : 'disabled'}><img src="${esc(x.icon)}" alt="" width="28" height="28"><span>${esc(x.name)}</span>${x.available ? '' : '<small>not available here</small>'}</button>`)
-        .join('');
-      list.querySelectorAll<HTMLButtonElement>('button[data-id]').forEach((b) =>
-        b.addEventListener('click', async () => {
-          const st = $('near-login-status');
-          st.textContent = 'Check your wallet to sign…';
-          try {
-            const r = await w.login(b.dataset.id!, h.pid);
-            if (r.ok) st.textContent = `Logged in as ${r.name}. Reloading…`;
-            else if (r.why !== 'redirecting') st.textContent = `Not logged in: ${r.why}`;
-          } catch (e) {
-            st.textContent = `Not logged in: ${String((e as Error)?.message ?? e).slice(0, 120)}`;
-          }
-        }),
-      );
+      const r = await loginWithNear(h.pid, network);
+      if (r.ok) h.toast(`Logged in as ${r.name} ✓`, 3000);
+      else if (!/cancel|closed|reject|user/i.test(r.why ?? '')) h.toast(`Not logged in: ${r.why}`, 6000);
     } catch (e) {
-      $('near-wallets').innerHTML = `<p class="small">Couldn't load the wallets: ${esc(String((e as Error)?.message ?? e).slice(0, 120))}</p>`;
+      h.toast(`Not logged in: ${String((e as Error)?.message ?? e).slice(0, 120)}`, 6000);
+    } finally {
+      loggingIn = false;
     }
   }
-  $('near-login').addEventListener('click', () => void openLogin());
+  $('near-login').addEventListener('click', () => void startLogin());
   {
-    const legal = document.querySelector('#welcome .card .legal');
-    if (legal) {
-      const b = document.createElement('button');
-      b.id = 'near-login-welcome';
-      b.className = 'near-login-btn';
-      b.innerHTML = `${nearIcon(20)}<span>Log in with NEAR</span>`;
-      const note = document.createElement('p');
-      note.className = 'small near-login-note';
-      note.textContent = 'Optional: keep your progress on any device and get your rescues on your own NEAR account.';
-      legal.before(b, note);
-      b.addEventListener('click', () => void openLogin());
+    // welcome card: right under the title, before picking a fren
+    const lead = document.querySelector('#welcome .card .lead');
+    if (lead) {
+      const box = document.createElement('div');
+      box.id = 'near-login-welcome-box';
+      box.innerHTML = `<button id="near-login-welcome" class="near-login-btn">${nearIcon(20)}<span>Log in with NEAR</span></button>
+        <p class="small near-login-note">Optional · keep your progress on any device · play PumpHall · <a href="#" id="near-login-testnet">testnet account?</a></p>`;
+      lead.after(box);
+      $('near-login-welcome').addEventListener('click', () => void startLogin());
+      $('near-login-testnet').addEventListener('click', (e) => (e.preventDefault(), void startLogin('testnet')));
+    }
+    // PumpHall: up/down needs a NEAR login (the server refuses guests' picks too)
+    const pick = document.querySelector('#pumpsheet .pump-pick');
+    if (pick) {
+      const cta = document.createElement('button');
+      cta.id = 'pump-login-cta';
+      cta.className = 'near-login-btn';
+      cta.innerHTML = `${nearIcon(20)}<span>Log in with NEAR to play</span>`;
+      pick.before(cta);
+      cta.addEventListener('click', () => void startLogin());
     }
   }
-  void finishPendingLogin().then((msg) => msg && h.toast(msg, 5000));
 
   $('near-bag').addEventListener('click', openBag);
   $('near-book').addEventListener('click', openBook);
@@ -668,7 +666,7 @@ export function setupNear(h: NearHost) {
     if (kind === 'book') return void openBook();
     if (kind === 'market') return void openMarket();
     if (kind === 'previews') return openPreviews();
-    if (kind === 'login') return void openLogin();
+    if (kind === 'login') return void startLogin();
   }
 
   return { onMessage, tap: tapObj, update, open, isNear: true };

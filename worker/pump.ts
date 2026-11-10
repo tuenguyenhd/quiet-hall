@@ -387,6 +387,7 @@ export class Pump extends DurableObject {
     // a player who logged in with NEAR shows as their account on the boards (looked up here, never trusted from the client)
     const econ = (this.env as unknown as { ECONOMY?: DurableObjectNamespace<import('./economy').Economy> }).ECONOMY;
     const linked = econ ? await econ.get(econ.idFromName('main')).linkedAccount(pid) : null;
+    if (!linked && edition((this.env as unknown as { EDITION?: string }).EDITION) === 'near') return { error: 'Log in with NEAR to play up/down.' };
     const name = linked ? (/^[0-9a-f]{64}$/.test(linked) ? `${linked.slice(0, 6)}…${linked.slice(-4)}` : linked.slice(0, 32)) : cleanPlayerName(nameIn) || defaultName(seed);
     const tag = await tagOf(pid);
     this.ctx.storage.transactionSync(() => {

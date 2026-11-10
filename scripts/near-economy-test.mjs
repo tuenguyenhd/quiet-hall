@@ -111,6 +111,9 @@ check(!A.msgs.some((m) => /^lantern/.test(m.t)), 'paid lantern messages are igno
 // PumpHall plays Bitcoin and NEAR in this edition
 const ps = await (await fetch(BASE + '/api/pump/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pid: 'pumpcheck01', room: 'main' }) })).json();
 check(JSON.stringify(Object.keys(ps.markets ?? {}).sort()) === '["BTC","NEAR"]', 'PumpHall markets are Bitcoin and NEAR', JSON.stringify(Object.keys(ps.markets ?? {})));
+const gk = ps.markets?.BTC?.next?.k;
+const guestPick = await (await fetch(BASE + '/api/pump/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pid: 'pumpguest01', seed: 1, name: 'guest', m: 'BTC', k: gk, dir: 'up', room: 'main' }) })).json();
+check(/Log in with NEAR/.test(guestPick.error ?? ''), 'a guest cannot play up/down (login required)', JSON.stringify(guestPick));
 
 // --- /api/near/me and the mirror queue
 const pidM = pid('nm');
