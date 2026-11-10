@@ -317,3 +317,52 @@ body.edition-near:not(.near-guest) #near-name-row { display: block; }
 body.edition-near.near-guest #near-look { margin-top: 4px; }
 #near-logout-welcome { border: 0; background: none; padding: 4px; font: 600 13px var(--sans); text-decoration: underline; color: inherit; opacity: 0.7; cursor: pointer; }
 #near-logout { display: block; width: 100%; margin: 10px 0 0; }
+
+/* ---------- the pet quest (quest.ts): a small chip top-left, and its sheet ---------- */
+#near-quest-chip {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 112px);
+  left: 14px;
+  z-index: 5;
+  max-width: calc(100vw - 110px);
+  gap: 6px;
+  font-size: 13px;
+  background: #fff4c9;
+}
+#near-quest-chip .q-txt { overflow: hidden; text-overflow: ellipsis; }
+#near-quest-chip.done { background: var(--paper); opacity: 0.85; }
+body:not(.edition-near) #near-quest-chip { display: none; }
+.q-lead { text-align: center; margin: 2px 0 8px; }
+.q-next { margin: 8px 0; padding: 10px 12px; border-radius: 12px; background: #fff4c9; font-size: 14px; line-height: 1.35; }
+#q-go { width: 100%; margin: 2px 0 6px; }
+.q-steps { list-style: none; padding: 0; margin: 10px 0; }
+.q-step { display: flex; gap: 10px; align-items: flex-start; padding: 6px 2px; }
+.q-step .small { margin: 1px 0 0; }
+.q-tick { flex: none; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; border: 2px solid #111; background: #fff; }
+.q-step.done .q-tick { background: #14c38e; color: #fff; border-color: #14c38e; }
+.q-step.now .q-tick { background: #9945ff; color: #fff; border-color: #9945ff; }
+.q-step.done b { text-decoration: line-through; text-decoration-thickness: 1px; opacity: 0.6; }
+.q-step.todo { opacity: 0.6; }
+.q-fren { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 14px; border: 2px solid #111; background: #fff; margin: 8px 0; }
+.q-fren.done { border-color: #14c38e; }
+.q-face { flex: none; font-size: 30px; line-height: 1; }
+.q-fren-txt { flex: 1; min-width: 0; }
+.q-fren-txt .small { margin: 2px 0; }
+.q-badge { font-size: 11px; padding: 1px 7px; border-radius: 8px; background: #d8f7ea; color: #0b6b4c; white-space: nowrap; }
+.q-badge.lost { background: #ffe0e0; color: #8a1f1f; }
+.q-badge.soon { background: #eee; color: #555; }
+.q-needs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.q-need { font-size: 12px; padding: 2px 7px; border-radius: 8px; background: rgba(120, 100, 160, 0.12); }
+.q-need.have { background: #d8f7ea; }
+.q-mini { flex: none; min-height: 40px; padding: 6px 10px; border-radius: 12px; border: 2px solid #111; background: #fff4c9; font: 600 13px var(--sans); cursor: pointer; }
+.q-chain { text-align: center; }
+.q-s2 { margin-top: 14px; padding-top: 10px; border-top: 2px dashed var(--line, #ccc); }
+.q-s2 .near-banner { margin-right: 0 !important; }
+.q-soon { border-style: dashed; border-color: #999; background: #fafafa; opacity: 0.8; }
+.q-link { white-space: nowrap; font-size: 13px; font-weight: 600; margin-left: 4px; }
+.q-welcome-note { margin: 6px 0 4px; }
+#near-pet-quest { width: 100%; margin: 6px 0; }
+#pet-note.hidden + #near-pet-quest { display: none; }
+body.edition-near .hint { white-space: normal; width: max-content; max-width: calc(100vw - 40px); text-align: center; }
+/* the pet sheet while trying on a locked pet: keep the one line that says how to get it */
+body.edition-near #petsheet.peek .card > #pet-note:not(.hidden) { display: block; margin: 8px 0 2px; font-weight: 600; }
