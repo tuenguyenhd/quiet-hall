@@ -1,0 +1,49 @@
+  shot 01-welcome-pets-note.jpg
+pet sheet visible: true | note: Rescue Shibby in Meme Valley (north-east, past the Tea House) and Shibby follows you.
+  shot 02-locked-pet-sheet.jpg
+toast: Pick a name and enter: the quest opens in the hall 🐾
+quest opened after enter: quest | chip: 🐾
+Rescue a fren
+  shot 03-quest-sheet-start.jpg
+  shot 04-quest-sheet-season2.jpg
+hint: Tap to walk · drag to look · 🐾 top-left: rescue a lost fren to get a pet | hidden? true
+  shot 05-hud-chip-hint.jpg
+  shot 06-bag-empty.jpg
+bag link → quest: quest
+  shot 07-book-not-yet.jpg
+book link → quest: quest
+start at { x: -1, z: 27 }
+trail visible: true
+  shot 08-walking-lanterns.jpg
+after 25 s of guided walking: { x: 10, z: 6 } | waypoints left: 14
+at the valley: { x: 78, z: -64 } | chip: 🐾
+Find 🪨 0/2 · 0/2
+  shot 09-arrived-valley.jpg
+  round 1: next = Walk to the Moon Rocks → | chip = 🐾 Find 🪨 0/2 · 0/2
+  shot 10-quest-in-valley.jpg
+  round 1: next = Walk to the Moon Rocks → | chip = 🐾 Find 🪨 1/2 · 0/2
+  round 1: next = Walk to Shibby → | chip = 🐾 Help Shibby · 0/2
+  shot 11-wish-sheet.jpg
+  sitting, chip: 🐾Sit with Shibby… · 0/2
+  shot 12-sitting-wish.jpg
+  toast: Shibby #5 follows you home ✨ +10 🍃 · recorded on NEAR
+  shot 13-rescued.jpg
+after round 1: chip = 🐾 Find 🍄 0/1 · 1/2
+  round 2: next = Walk to the Copium Shrooms → | chip = 🐾 Find 🍄 0/1 · 1/2
+  shot 14-quest-one-done.jpg
+  round 2: next = Walk to the Copium Shrooms → | chip = 🐾 Find 🍄 0/1 · 1/2
+  round 2: next = Walk to the Copium Shrooms → | chip = 🐾 Find 🍄 0/1 · 1/2
+  round 2: next = Walk to the Copium Shrooms → | chip = 🐾 Find 🍄 0/1 · 1/2
+  round 2: next = Walk to Froggo → | chip = 🐾 Help Froggo · 1/2
+  sitting, chip: 🐾Sit with Froggo… · 1/2
+  toast: Froggo #2 follows you home ✨ +10 🍃 · recorded on NEAR
+after round 2: chip = 🐾 ✓
+  shot 15-hud-all-done.jpg
+sheet: 🐾 Lost frens of Meme Valley | Pets aren't sold here. Two frens are lost in Meme Valley: help one home and it follows you as your pet. +10 🍃 each. | 2/2 frens rescued | ✓ | Go to Meme Valley | You found the valley. | ✓ | Gather what a fren wants | You found everything they wished for. | ✓ | Grant t
+  shot 16-quest-all-done.jpg
+  shot 17-book-after.jpg
+  shot 18-pet-sheet-owned.jpg
+link: {"acct":"txmzsg4afz","account":"questmwb1lwwd.testnet","switched":false,"bonus":50}
+logged-in line: Rescues are recorded on NEAR testnet to questmwb1lwwd.testnet.
+  shot 19-quest-logged-in.jpg
+no page errors

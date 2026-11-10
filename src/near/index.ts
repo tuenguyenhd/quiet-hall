@@ -14,6 +14,7 @@ import { loginWithNear, type LoginNetwork, type LoginUi } from './login';
 import { NEAR_MARK } from '../near-mark';
 import { degenName } from './names';
 import { setupMocks } from './mocks';
+import { setupQuest } from './quest';
 
 /** the NEAR mark for login buttons (white on black, unaltered) */
 const nearIcon = (size: number) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="${NEAR_MARK}"/></svg>`;
@@ -294,6 +295,9 @@ export function setupNear(h: NearHost) {
   }
   trail.visible = false;
   root.add(trail);
+  /** the quest's "Show me the way" also lights the trail */
+  let questTrail = false;
+  const syncTrail = () => (trail.visible = questTrail || (firstSitDone && econ.frens.length === 0));
 
   // ---------- taps ----------
   function act(kind: string, id: string) {
@@ -306,6 +310,11 @@ export function setupNear(h: NearHost) {
     const d = o.userData.near as { kind: string; id: string };
     if (d.kind === 'scope') return openPreviews();
     if (d.kind === 'mock') return mocks.open(d.id);
+    approach(d.kind, d.id);
+  }
+  /** walk up to a valley thing (node, fren, bench, kettle), then act on arrival */
+  function approach(kind: string, id: string) {
+    const d = { kind, id };
     const target =
       d.kind === 'node' ? NODES.find((n) => n.id === d.id)! : d.kind === 'fren' ? FRENS.find((f) => f.id === d.id)! : d.kind === 'bench' ? WORKBENCH : KETTLE;
     const reach = d.kind === 'kettle' ? TRADE_ZONE.r - 2 : d.kind === 'bench' ? GATHER.reach + 1.5 : GATHER.reach;
@@ -354,10 +363,11 @@ export function setupNear(h: NearHost) {
   }
   function openBag() {
     const items = Object.entries(econ.bag).filter(([, n]) => n > 0);
-    show(`<h2>🎒 Bag</h2>${items.length ? `<ul class="near-needs">${items.map(([k, n]) => `<li class="have">${itemLabel(k)} <b>${n}</b></li>`).join('')}</ul>` : '<p class="small">Empty. Tap rocks, yarn and shrooms in Meme Valley (north-east, past the Tea House).</p>'}
+    show(`<h2>🎒 Bag</h2>${items.length ? `<ul class="near-needs">${items.map(([k, n]) => `<li class="have">${itemLabel(k)} <b>${n}</b></li>`).join('')}</ul>` : `<p class="small">Empty. Tap rocks, yarn and shrooms in Meme Valley (north-east, past the Tea House). Lost frens there want them, and a rescued fren becomes your pet.</p><button class="ghost" data-quest>🐾 How to get a pet: the Meme Valley quest</button>`}
       <p class="small">🍃 ${econ.leaves} Leaves · today: ${econ.today.sit ?? 0} from sitting, ${econ.today.market_sell ?? 0} from the Market, ${econ.today.wish ?? 0} from wishes</p>
       <p class="near-foot">Leaves are play money. No cash value.</p>`);
     body().dataset.kind = 'bag';
+    quest.wire(body());
   }
   async function openBook() {
     show(`<h2>📖 Rescue Book</h2><p class="small">Loading…</p>`);
@@ -377,7 +387,7 @@ export function setupNear(h: NearHost) {
     const drips = (m.drips as Econ['drips']) ?? [];
     const tiles = FRENS.map((f) => {
       const got = frens.find((x) => x.fren === f.id);
-      return `<li class="${got ? 'have' : 'miss'}">${f.pet === 1 ? '🐕' : '🐸'} <b>${esc(f.name)}</b> ${got ? `#${got.serial} · rescued ${got.rescues}× ${rec(`fren-${f.id}-${got.serial}`)}` : '<span class="small">not yet</span>'}</li>`;
+      return `<li class="${got ? 'have' : 'miss'}">${f.pet === 1 ? '🐕' : '🐸'} <b>${esc(f.name)}</b> ${got ? `#${got.serial} · rescued ${got.rescues}× ${rec(`fren-${f.id}-${got.serial}`)}` : `<span class="small">not yet</span> ${quest.link()}`}</li>`;
     }).join('');
     const dl = drips.map((d) => `<li class="have">${itemLabel(d.kind)} #${d.serial} ${rec(`drip-${d.kind}-${d.serial}`)}</li>`).join('');
     setTimeout(() => document.getElementById('near-book-login')?.addEventListener('click', (e) => (e.preventDefault(), void startLogin())), 0);
@@ -388,6 +398,7 @@ export function setupNear(h: NearHost) {
           : `Your frens and drip are recorded on NEAR testnet under an account made for you: <code>${esc(short(String(m.owner)))}</code>. You never need a wallet; <a href="#" id="near-book-login">log in</a> to use your own.`
       }</p>
       <p class="near-foot">Receipts are bound to you and cannot be sold.</p>`;
+    quest.wire(body());
   }
 
   async function loadMarket() {
@@ -667,6 +678,25 @@ export function setupNear(h: NearHost) {
     }
   }
 
+  // the pet quest: HUD chip + sheet, and its pointers from the welcome card, pet sheet, bag and book (quest.ts)
+  const quest = setupQuest({
+    econ: () => econ,
+    me: () => h.me().position,
+    walkTo: (p) => h.walkTo(new THREE.Vector3(p.x, 0, p.z)),
+    approach,
+    trail: () => trail.children.map((c) => ({ x: c.position.x, z: c.position.z })),
+    showTrail: (on) => ((questTrail = on), syncTrail()),
+    wishFren: () => wish?.fren ?? null,
+    setPet: h.setPet,
+    show: (html, kind) => (show(html), (body().dataset.kind = kind)),
+    body,
+    isOpen,
+    close,
+    toast: h.toast,
+    entered: () => $('welcome').classList.contains('hidden'),
+    login: () => void startLogin(),
+  });
+
   renderBar();
   // the hall connection only starts on Enter, so ask now whether this visitor is logged in: the welcome card
   // then shows the account instead of the login button (and after a login, we go straight into the hall)
@@ -711,7 +741,7 @@ export function setupNear(h: NearHost) {
           h.setVerifiedName(econ.nick || (/^[0-9a-f]{64}$/.test(econ.near) ? short(econ.near) : econ.near.slice(0, 32)));
         }
         firstSitDone = econ.frens.length > 0 || (econ.today.sit ?? 0) > 0;
-        trail.visible = firstSitDone && econ.frens.length === 0;
+        syncTrail();
         renderBar();
         return;
       case 'leaves': {
@@ -720,7 +750,7 @@ export function setupNear(h: NearHost) {
         if (Number(m.paid) > 0) h.toast(`+${m.paid} 🍃 Leaves for sitting`, 3000);
         if (!firstSitDone && econ.frens.length === 0) {
           firstSitDone = true;
-          trail.visible = true;
+          syncTrail();
           setTimeout(() => h.toast('Someone is lost in the valley. Follow the lanterns past the Tea House 🏮', 7000), 3200);
         }
         return;
@@ -765,7 +795,7 @@ export function setupNear(h: NearHost) {
         renderBar();
         if (m.first) {
           econ.frens.push({ fren: f.id, serial: Number(m.serial), rescues: 1 });
-          trail.visible = false;
+          syncTrail();
           h.setPet(f.pet);
           h.toast(`${f.name} #${m.serial} ${m.co ? 'was rescued with you' : 'follows you home'} ✨ +${m.paid} 🍃 · recorded on NEAR`, 6000);
         } else h.toast(`${f.name} is happy to see you again ❤️ +${m.paid} 🍃`, 4000);
@@ -843,6 +873,7 @@ export function setupNear(h: NearHost) {
       (fp.ring.material as THREE.MeshBasicMaterial).opacity = 0.35 + 0.25 * Math.sin(t * 2);
     }
     glow.rotation.y += dt;
+    quest.update(dt);
     if (trail.visible) trail.children.forEach((c, i) => ((c as THREE.Mesh).position.y += Math.sin(t * 2 + i) * 0.002));
     if (pending) {
       const me = h.me().position;
@@ -858,7 +889,7 @@ export function setupNear(h: NearHost) {
     }
   }
 
-  /** open a sheet directly (screenshots and tests): wish:<fren>, bench, bag, book, market, previews */
+  /** open a sheet directly (screenshots and tests): wish:<fren>, bench, bag, book, market, previews, quest */
   function open(kind: string) {
     if (kind.startsWith('wish:')) return openWish(kind.slice(5));
     if (kind === 'bench') return openBench();
@@ -868,6 +899,7 @@ export function setupNear(h: NearHost) {
     if (kind === 'previews') return openPreviews();
     if (kind.startsWith('mock:')) return mocks.open(kind.slice(5));
     if (kind === 'login') return void startLogin();
+    if (kind === 'quest') return quest.open();
   }
 
   return { onMessage, tap: tapObj, update, open, isNear: true };
