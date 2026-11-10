@@ -1285,6 +1285,8 @@ function perfGuard(ms: number) {
     store.set('lowgfx', '1');
   }
 }
+/** set after the first rendered frame; the boot splash in index.html stays until then */
+let booted = false;
 function frame(now: number) {
   requestAnimationFrame(frame);
   // never negative: the first rAF timestamp can be older than `last` (a negative dt blew sit blends up)
@@ -1327,6 +1329,14 @@ function frame(now: number) {
   worldTick();
   // while the meditation overlay fully covers the screen, skip 3D rendering to save battery
   if (!med.covered) renderer.render(scene, camera);
+  if (!booted) {
+    // first frame is on screen: fade the boot splash (index.html) out and reveal the app
+    booted = true;
+    requestAnimationFrame(() => {
+      document.documentElement.classList.add('ready');
+      setTimeout(() => document.getElementById('boot')?.remove(), 600);
+    });
+  }
 }
 requestAnimationFrame(frame);
 
