@@ -32,7 +32,9 @@ export function registerWallets() {
     registerMwa({
       appIdentity: identity,
       authorizationCache: createDefaultAuthorizationCache(),
-      chains: ['solana:devnet', 'solana:mainnet'],
+      // only the cluster we run on: the default selector picks mainnet whenever it's listed,
+      // which made devnet builds authorize (and send payments) on mainnet
+      chains: [CHAIN],
       chainSelector: createDefaultChainSelector(),
       onWalletNotFound: createDefaultWalletNotFoundHandler(),
     });
