@@ -5,7 +5,7 @@ import { Pump } from './pump';
 import { Economy, minuteMs } from './economy';
 import { Mirror, ownerId } from './mirror';
 import { edition, ECONOMY } from '../src/economy';
-import { GATHER, WORKBENCH, dist, frenById, nodeById } from '../src/valley';
+import { FRENS, GATHER, WORKBENCH, dist, frenById, nodeById } from '../src/valley';
 import { CUP, TRADE_ZONE } from '../src/market';
 import { serverRpc } from './solana';
 import { DUEL, DUEL_MAX_D, PUMP_MARKETS, cleanChat, cleanPlayerName, defaultName, inDuelZone, type PumpMarket } from '../src/layout';
@@ -518,7 +518,15 @@ export class Hall extends DurableObject<Env> {
         const jobs = [];
         for (const r of results) {
           const sockets = r.acct === a.pid ? [ws] : co.filter((c) => c.pid === r.acct).map((c) => c.ws);
-          for (const w of sockets) send(w, { t: 'rescued', fren: f.id, first: r.first, serial: r.serial, paid: r.paid, co: r.co, helped: r.co ? undefined : helped });
+          for (const w of sockets) {
+            send(w, { t: 'rescued', fren: f.id, first: r.first, serial: r.serial, paid: r.paid, co: r.co, helped: r.co ? undefined : helped, pet: f.pet });
+            const b = att(w);
+            if (b && r.first && !b.po.includes(f.pet)) {
+              b.po = [...b.po, f.pet];
+              w.serializeAttachment(b);
+              send(w, { t: 'pets', pets: b.po, pt: b.pt });
+            }
+          }
           if (r.first && this.env.MIRROR) {
             jobs.push({ job: `fren-${f.id}-${r.serial}`, method: 'mint_fren' as const, args: { owner: await ownerOf(this.env, r.acct), species: f.id, serial: r.serial } });
           }
@@ -556,6 +564,14 @@ export class Hall extends DurableObject<Env> {
         return send(ws, { t: 'book', owner, ...(await E.book(a.pid)), receipts: this.env.MIRROR ? await mirror(this.env).receipts(owner) : [] });
       }
     }
+  }
+
+  /** pets this visitor owns: bought ones, plus (NEAR edition) the frens they rescued */
+  private async ownedPets(a: Att): Promise<number[]> {
+    const bought = await ledger(this.env).ownedPets(a.pid, a.addr);
+    if (!isNear(this.env) || !this.env.ECONOMY || !a.pid) return bought;
+    const rescued = (await economy(this.env).book(a.pid)).frens.map((f) => frenById(f.fren)?.pet ?? 0).filter((k) => k > 0);
+    return [...new Set([...bought, ...rescued])];
   }
 
   /** the granter stood up, walked away or left before the wish sit finished: materials go back */
@@ -965,7 +981,7 @@ export class Hall extends DurableObject<Env> {
           a.sp = p.supporter;
         }
         // pets are bought: only show one this visitor owns
-        a.po = await ledger(this.env).ownedPets(a.pid, a.addr);
+        a.po = await this.ownedPets(a);
         const want = petIdx(m.pet);
         a.pt = a.po.includes(want) ? want : 0;
         const room = (await this.ctx.storage.get<string>('room')) ?? this.room;
@@ -1077,7 +1093,7 @@ export class Hall extends DurableObject<Env> {
         const k = petIdx(m.k);
         if (k === a.pt) return;
         if (k && !a.po.includes(k)) {
-          a.po = await ledger(this.env).ownedPets(a.pid, a.addr); // maybe just bought it
+          a.po = await this.ownedPets(a); // maybe just bought (or rescued) it
           if (!a.po.includes(k)) return send(ws, { t: 'petNo', k, reason: 'Adopt this pet first.' });
         }
         a.pt = k;

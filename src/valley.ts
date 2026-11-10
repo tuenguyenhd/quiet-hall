@@ -51,11 +51,13 @@ export interface FrenInfo {
   wish: Partial<Record<Item, number>>;
   sitMin: number;
   line: string;
+  /** index into PETS: the model a rescued fren uses when it follows you */
+  pet: number;
 }
 /** NEAR build: both frens are always present (edition-near.md, FRENS_PRESENT) */
 export const FRENS: FrenInfo[] = [
-  { id: 'shibby', name: 'Shibby', x: 90, z: -80, wish: { moon_rock: 2 }, sitMin: 1, line: 'wen home? I lost my map... bring me 2 Moon Rocks and sit with me a while?' },
-  { id: 'froggo', name: 'Froggo', x: 106, z: -90, wish: { copium_shroom: 1 }, sitMin: 1, line: 'it is so loud out here. one Copium Shroom and a quiet minute, please.' },
+  { id: 'shibby', name: 'Shibby', x: 90, z: -80, wish: { moon_rock: 2 }, sitMin: 1, line: 'wen home? I lost my map... bring me 2 Moon Rocks and sit with me a while?', pet: 1 },
+  { id: 'froggo', name: 'Froggo', x: 106, z: -90, wish: { copium_shroom: 1 }, sitMin: 1, line: 'it is so loud out here. one Copium Shroom and a quiet minute, please.', pet: 3 },
 ];
 export const frenById = (id: unknown) => FRENS.find((f) => f.id === id);
 

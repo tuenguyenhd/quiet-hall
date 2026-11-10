@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "mkdir -p dist && concurrently -k -n web,hall -c green,blue \"vite\" \"wrangler dev --port 8787 --ip 127.0.0.1\"",
+    "dev:near": "mkdir -p dist && concurrently -k -n web,near -c green,magenta \"VITE_EDITION=near HALL_DEV=http://127.0.0.1:8788 PORT=5174 vite\" \"wrangler dev -c wrangler.near.toml --env-file .dev.vars.near --port 8788 --ip 127.0.0.1\"",
     "build": "vite build",
+    "build:near": "VITE_EDITION=near vite build",
+    "deploy:near": "VITE_EDITION=near vite build && wrangler deploy -c wrangler.near.toml",
     "check": "tsc --noEmit -p . && tsc --noEmit -p worker",
     "prod-local": "vite build && wrangler dev --port 8787 --ip 0.0.0.0",
     "deploy": "vite build && wrangler deploy"

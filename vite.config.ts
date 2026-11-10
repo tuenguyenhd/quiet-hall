@@ -1,5 +1,8 @@
 import { defineConfig, type ProxyOptions } from 'vite';
 
+// the project has no @types/node; Vite runs this file in Node, where process exists
+declare const process: { env: Record<string, string | undefined> };
+
 const rpcProxy = (target: string): ProxyOptions => ({
   target,
   changeOrigin: true,
@@ -12,13 +15,15 @@ const rpcProxy = (target: string): ProxyOptions => ({
 
 // Dev: Vite serves the app on :5173 (also on your Wi-Fi IP for phone testing)
 // and proxies the live-hall WebSocket + API to `wrangler dev` on :8787.
+// NEAR edition: `npm run dev:near` (HALL_DEV points at the NEAR Worker on :8788, the app on :5174).
+const HALL = process.env.HALL_DEV ?? 'http://127.0.0.1:8787';
 export default defineConfig({
   server: {
     host: true,
-    port: 5173,
+    port: Number(process.env.PORT ?? 5173),
     proxy: {
-      '/ws': { target: 'http://127.0.0.1:8787', ws: true },
-      '/api': 'http://127.0.0.1:8787',
+      '/ws': { target: HALL, ws: true },
+      '/api': HALL,
       // Local only: the Worker reaches Solana's public RPC through here, because the public RPC
       // refuses requests from Cloudflare Workers (they always carry a "cf-worker" header).
       '/rpc/devnet': rpcProxy('https://api.devnet.solana.com'),

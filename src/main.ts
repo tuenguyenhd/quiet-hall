@@ -22,6 +22,7 @@ import { setupPwa } from './pwa';
 import { setupChat } from './chat';
 import { setupPump } from './pump';
 import { setupDuel } from './duel';
+import { NEAR, setupNear } from './near';
 
 const $ = (id: string) => document.getElementById(id)!;
 const params = new URLSearchParams(location.search);
@@ -210,6 +211,7 @@ net.hello = () => ({
 });
 net.onStatus = () => renderStats();
 net.onMessage = (m: Msg) => {
+  near?.onMessage(m as Msg & { t: string });
   items.onMessage(m);
   chat.onMessage(m);
   duel.onMessage(m);
@@ -448,6 +450,15 @@ controls.onTap = (x, y) => {
         walkTo(seat.pos);
         return;
       }
+      if (action === 'near') {
+        near?.tap(o);
+        haptic(10);
+        return;
+      }
+      if (action === 'spot' && NEAR) {
+        toast('Owned stones and trees are part of the Seeker edition.', 3500);
+        return;
+      }
       if (action === 'npc') {
         const i = frens.tap(o);
         haptic(15);
@@ -675,6 +686,32 @@ const pump = setupPump({
   near: () => entered && Math.hypot(me.root.position.x - world.pumpPos.x, me.root.position.z - world.pumpPos.z) < 60,
 });
 let sitInWorld = false;
+
+// NEAR edition (VITE_EDITION=near): Meme Valley, Leaves, Kettle's market, the Market Cup. design/gdd/edition-near.md
+const near = NEAR
+  ? setupNear({
+      scene,
+      heightAt: world.heightAt,
+      clickables: world.clickables,
+      send: (m) => net.send(m),
+      toast,
+      pid,
+      me: () => me.root,
+      walkTo,
+      sitHere() {
+        if (med.active) return;
+        moveTarget = null;
+        pending = null;
+        med.openSheet(0);
+        med.start();
+      },
+      sitting: () => me.state === 'sit',
+      setPet(k: number) {
+        me.setPet(k);
+        net.send({ t: 'pet', k });
+      },
+    })
+  : null;
 
 // ---------- welcome ----------
 const colorsEl = $('colors');
@@ -1312,6 +1349,7 @@ function frame(now: number) {
   world.update(t, dt, me.root.position);
   frens.update(t, dt, me.root.position);
   animals.update(dt, me.root.position);
+  near?.update(dt);
   placeTick();
   items.update(t);
   updateEffects(dt);
@@ -1397,4 +1435,4 @@ if (import.meta.env.DEV && params.has('lineup')) {
 }
 
 // tiny debug hook for automated checks
-(window as unknown as { __qh: unknown }).__qh = { lineup: () => lineup, scene, animals, controls, frens, items, openFren, openPlayer, pump, chat, world, camera, others, stats, net, me: () => me, renderer };
+(window as unknown as { __qh: unknown }).__qh = { lineup: () => lineup, near, scene, animals, controls, frens, items, openFren, openPlayer, pump, chat, world, camera, others, stats, net, me: () => me, renderer };
