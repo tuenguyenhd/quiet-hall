@@ -2,6 +2,7 @@
 // (each with a "verify" link to the public Coinbase candles), and the weekly / all-time leaderboard.
 // Fun only: no money in, no prizes out.
 import { apiPost } from './api';
+import { haptic } from './audio';
 import { PUMP_MARKETS, type PumpMarket } from './layout';
 import { CLIENT_PUMP_MARKETS } from './client-edition';
 import type { BoardData } from './pumphall';
@@ -98,22 +99,85 @@ export function setupPump(h: Host) {
     }
   }
 
+  // results already shown (`${m}:${k}` picks, `d:${id}` duels), kept across reloads so each is told exactly once
+  const TOLD_KEY = 'qh.pump.told';
+  const told = new Set<string>();
+  try {
+    for (const k of JSON.parse(localStorage.getItem(TOLD_KEY) ?? '[]') as string[]) told.add(k);
+  } catch {
+    /* storage blocked */
+  }
+  const tell = (key: string) => {
+    told.add(key);
+    try {
+      localStorage.setItem(TOLD_KEY, JSON.stringify([...told].slice(-80)));
+    } catch {
+      /* storage blocked */
+    }
+  };
+  /** a result is only told while it is fresh (an old round from last week is not news) */
+  const FRESH_MS = 30 * 60000;
+  const label = (m: PumpMarket) => PUMP_MARKETS[m]?.label ?? m;
+
   function track() {
     if (!st) return;
+    const t = now();
     for (const m of CLIENT_PUMP_MARKETS) {
       const s = st.markets[m];
       for (const r of [s.live, s.next]) if (r.mine) waiting.set(`${m}:${r.k}`, { m, k: r.k, dir: r.mine.dir, start: r.start, end: r.end });
-      for (const r of s.past) {
-        const w = waiting.get(`${m}:${r.k}`);
-        if (!w || !r.mine) continue;
-        waiting.delete(`${m}:${r.k}`);
-        const move = `${m} ${r.res === 'up' ? '⬆ went UP' : r.res === 'down' ? '⬇ went DOWN' : r.res === 'flat' ? 'stayed flat' : 'round void'} ($${fmtP(r.lock)} → $${fmtP(r.close)})`;
-        const good = r.mine.won === 1;
-        const text = good ? `✅ ${move}. You were right: +${r.mine.pts} pts!` : r.mine.won === 0 ? `❌ ${move}. Not this time.` : `➖ ${move}. No points either way.`;
-        lastResult = { text, good, until: performance.now() + 60000 };
+      // a past round leaves "waiting" only once it is settled (res set): before that it is still being checked
+      for (const r of s.past) if (r.res != null) waiting.delete(`${m}:${r.k}`);
+    }
+    // my settled picks (all markets), from the history the server keeps for me: survives reloads and app switches
+    for (const p of st.history ?? []) {
+      const key = `${p.m}:${p.k}`;
+      if (p.res == null || told.has(key)) continue;
+      tell(key);
+      if (t - p.end > FRESH_MS) continue;
+      waiting.delete(key);
+      const move = `${label(p.m)} ${p.res === 'up' ? '⬆ went up' : p.res === 'down' ? '⬇ went down' : p.res === 'flat' ? 'stayed flat' : 'round void'}`;
+      const prices = p.lock != null && p.close != null ? `$${fmtP(p.lock)} → $${fmtP(p.close)}` : '';
+      if (p.won === 1) {
+        lastResult = { text: `🎉 ${move}. You called it: +${p.pts} pts!`, good: true, until: performance.now() + 60000 };
+        celebrate('You called it!', `${move}${prices ? ` · ${prices}` : ''}`, p.pts);
+      } else {
+        const text = p.won === 0 ? `❌ ${move}${prices ? ` (${prices})` : ''}. Not this time.` : `➖ ${move}. No points either way.`;
+        lastResult = { text, good: false, until: performance.now() + 60000 };
         h.toast(text, 5000);
       }
     }
+    // duels I won
+    for (const d of st.duels ?? []) {
+      const key = `d:${d.id}`;
+      if (d.res == null || told.has(key)) continue;
+      tell(key);
+      if (t - d.endAt > FRESH_MS) continue;
+      if (d.won === 1) celebrate('Duel won!', `${label(d.m)} ${d.res === 'up' ? '⬆ went up' : d.res === 'down' ? '⬇ went down' : 'moved'}${d.opp ? ` · you beat ${d.opp}` : ''}`, d.pts);
+      else if (d.won === 0) h.toast(`⚔ Duel lost${d.opp ? ` to ${d.opp}` : ''}. Rematch?`, 5000);
+      else h.toast('⚔ Duel drawn. No points either way.', 4000);
+    }
+  }
+
+  /** the win moment: a big card with confetti, a buzz, gone by itself after a few seconds (or on tap) */
+  function celebrate(title: string, line: string, pts: number) {
+    document.getElementById('pump-win')?.remove();
+    const el = document.createElement('div');
+    el.id = 'pump-win';
+    const bits = ['🎉', '✨', '🟢', '📈', '💎', '🚀', '🍀'];
+    const confetti = Array.from({ length: 26 }, (_, i) => {
+      const x = (i * 37) % 100;
+      const delay = ((i * 53) % 60) / 100;
+      const dur = 1.6 + ((i * 29) % 90) / 100;
+      return `<i style="left:${x}%;animation-delay:${delay}s;animation-duration:${dur}s">${bits[i % bits.length]}</i>`;
+    }).join('');
+    el.innerHTML = `<div class="pump-win-confetti">${confetti}</div>
+      <div class="pump-win-card"><div class="pump-win-title">${title}</div><div class="pump-win-line">${line}</div>${pts ? `<div class="pump-win-pts">+${pts} pts</div>` : ''}<div class="pump-win-foot">points only · just for fun</div></div>`;
+    el.addEventListener('click', () => el.remove());
+    document.body.appendChild(el);
+    haptic(30);
+    setTimeout(() => haptic(60), 180);
+    setTimeout(() => el.classList.add('out'), 3800);
+    setTimeout(() => el.remove(), 4400);
   }
 
   /** status card: what is happening with my pick right now */
