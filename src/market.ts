@@ -1,12 +1,12 @@
 // Kettle's Living Market and the Market Cup (NEAR edition). Pure data shared by client, Worker and tests.
 // Design: design/gdd/edition-near.md, "Core Rules: NEAR economy" A–E and Formulas. Change numbers here, not in logic.
-import { PUMP } from './layout';
+import { BAZAAR } from './layout';
 import type { Item } from './valley';
 
-/** Kettle's stall inside the Trading Hall (the PumpHall building in the other editions): left side, clear of the board */
-export const KETTLE = { x: PUMP.x - 9, z: PUMP.z - 2 };
-/** trading is allowed anywhere inside the Trading Hall */
-export const TRADE_ZONE = { x: PUMP.x, z: PUMP.z, r: PUMP.r + 2 };
+/** Kettle's own stall: the back (south) of the Market square, facing the entrance road */
+export const KETTLE = { x: BAZAAR.x, z: BAZAAR.z + 4 };
+/** trading and Cup joins are allowed anywhere in the Market square (not in PumpHall any more) */
+export const TRADE_ZONE = { x: BAZAAR.x, z: BAZAAR.z, r: BAZAAR.r + 2 };
 
 export interface MarketItem {
   item: Item;

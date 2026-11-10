@@ -74,10 +74,10 @@ const mmss = (ms: number) => {
 
 export function setupNear(h: NearHost) {
   document.body.classList.add('edition-near', 'near-guest');
-  // PumpHall plays Bitcoin and NEAR in this edition, and holds the Market stall; the valley is a place.
+  // PumpHall plays Bitcoin and NEAR in this edition; the Market (south-east) and the valley are places of their own.
   for (const p of PLACES) {
-    if (p.id === 'pump') p.hint = 'Guess Bitcoin or NEAR up or down on the big board (points, no money). The Market stall is inside.';
-    if (p.id === 'court') p.hint = 'North: the Quiet Hall (sit). South: PumpHall and the Market. North-east past the Tea House: Meme Valley.';
+    if (p.id === 'pump') p.hint = 'Guess Bitcoin or NEAR up or down on the big board, or duel someone (points, no money). The Market is down the south-east road.';
+    if (p.id === 'court') p.hint = 'North: the Quiet Hall (sit). South: PumpHall (up/down). South-east: the Market. North-east past the Tea House: Meme Valley.';
   }
   // PumpHall buttons are written for SOL / SKR in index.html: relabel them for Bitcoin / NEAR
   const relabel = (sel: string, attr: 'm' | 'dm') =>
@@ -214,21 +214,7 @@ export function setupNear(h: NearHost) {
   bench.position.set(WORKBENCH.x, y(WORKBENCH.x, WORKBENCH.z), WORKBENCH.z);
   tap(bench, 'bench', 'bench');
   root.add(bench);
-  // Kettle's stall in the Trading Hall
-  const stall = new THREE.Group();
-  const counter = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 1.2), mat(0x8a6a48));
-  counter.position.y = 0.5;
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(2.4, 1.1, 4), mat(0x2bd4a0, 0x2bd4a0, 0.25));
-  roof.position.y = 2.6;
-  roof.rotation.y = Math.PI / 4;
-  const kettle = new THREE.Mesh(new THREE.SphereGeometry(0.45, 10, 8), mat(0x444a52, 0x9945ff, 0.15));
-  kettle.position.set(0, 1.4, 0);
-  stall.add(counter, roof, kettle, makeSign(['🛒 Market', 'buy · sell · Cup'], 3.6, 2.4));
-  stall.position.set(KETTLE.x, y(KETTLE.x, KETTLE.z), KETTLE.z);
-  // face the entrance (north edge of the hall), so the sign reads the right way round as you walk in
-  stall.rotation.y = Math.atan2(TRADE_ZONE.x - KETTLE.x, TRADE_ZONE.z - TRADE_ZONE.r - KETTLE.z);
-  tap(stall, 'kettle', 'kettle');
-  root.add(stall);
+  // Kettle's stalls are a place of their own now (the Market square, south-east): built in ./bazaar.ts with the world
   // the telescope at the Lookout: the "Coming next" door to the preview screens
   const scope = new THREE.Group();
   const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.24, 1.6, 10), mat(0xc9a35a, 0xc9a35a, 0.2));
@@ -698,9 +684,9 @@ export function setupNear(h: NearHost) {
   $('near-book').addEventListener('click', openBook);
   $('near-market').addEventListener('click', () => {
     if (dist(h.me().position, TRADE_ZONE) <= TRADE_ZONE.r) return openMarket();
-    h.toast('The Market stall is in PumpHall (south road). Walking there…', 3500);
+    h.toast('The Market is down the south-east road from the courtyard. Walking there…', 3500);
     pending = { kind: 'kettle', id: 'kettle', at: new THREE.Vector3(KETTLE.x, 0, KETTLE.z), reach: TRADE_ZONE.r - 2 };
-    h.walkTo(new THREE.Vector3(KETTLE.x, 0, KETTLE.z + 3));
+    h.walkTo(new THREE.Vector3(KETTLE.x, 0, KETTLE.z - 3));
   });
   $('near-leaves').addEventListener('click', openBag);
 
