@@ -7,8 +7,29 @@ import { popEmoji } from './effects';
 import { disposeOwned } from './dispose';
 import { PETS } from './layout';
 
-/** size relative to the wandering animals (pets are a bit smaller, frogs a bit bigger) */
-const SCALE: Record<string, number> = { shiba: 0.62, husky: 0.6, frog: 0.9, turtle: 0.85 };
+/**
+ * Size factor on each model's `height` (animals.ts). Tuned 2026-11-10 from a side-by-side contact sheet so every
+ * pet reads about as tall as the Shiba next to the blocky avatars; flat or wide pets (frog, turtle, tiger,
+ * axolotl) a little lower because their width already makes them look big.
+ */
+const SCALE: Record<string, number> = {
+  shiba: 0.62,
+  husky: 0.58,
+  frog: 0.8,
+  turtle: 0.85,
+  slime: 1.08,
+  hamster: 1.2,
+  teddy: 0.94,
+  sharpei: 0.94,
+  bulldog: 1.0,
+  stripe: 1.0,
+  dragon: 0.82,
+  chick: 1.2,
+  tiger: 0.82,
+  duck: 1.08,
+  penguin: 1.07,
+  axolotl: 1.07,
+};
 /**
  * Which clip a pet plays when walking / standing / sitting. '' = no clip: a choppy code waddle / bob /
  * squash instead (degen style). `turn`: the model faces away from +z and needs turning (radians).
