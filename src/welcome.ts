@@ -39,16 +39,26 @@ export function setupWelcome(h: WelcomeHooks) {
   });
 
   // 2. the name step (signed in): an auto degen name, 🎲 for another, or their own
-  let auto = h.store.get('autoname') ?? '';
-  if (!auto) h.store.set('autoname', (auto = degenName()));
+  // the fren they picked (its label, e.g. "Froggo"): the suggested name's meme matches it
+  const fren = () => (document.querySelector('#species .on')?.textContent ?? '').replace(/[^A-Za-z]/g, '');
+  let auto = h.store.get('autoname2') ?? '';
+  if (!auto) h.store.set('autoname2', (auto = degenName(Math.random, fren())));
   const nameRow = document.createElement('div');
   nameRow.id = 'name-row';
   nameRow.innerHTML = `<label for="name-input">Your name</label>
-    <div class="name-field"><input id="name-input" maxlength="24" autocomplete="off" spellcheck="false" value="${esc(auto)}" /><button id="name-dice" type="button" aria-label="Another name">🎲</button></div>
+    <div class="name-field"><input id="name-input" maxlength="16" autocomplete="off" spellcheck="false" value="${esc(auto)}" /><button id="name-dice" type="button" aria-label="Another name">🎲</button></div>
     <p class="small">Shown in the hall instead of your address. Keep it, or type your own.</p>`;
   enterBtn.before(nameRow);
   const input = $('name-input') as HTMLInputElement;
-  $('name-dice').addEventListener('click', () => (input.value = degenName()));
+  $('name-dice').addEventListener('click', () => (input.value = degenName(Math.random, fren())));
+  // a suggested name follows the fren they pick, until they type their own (or have one saved)
+  let typed = false;
+  input.addEventListener('input', () => (typed = true));
+  document.getElementById('species')?.addEventListener('click', () =>
+    setTimeout(() => {
+      if (!typed && !h.session()?.nick) input.value = degenName(Math.random, fren());
+    }, 0),
+  );
   input.addEventListener('keydown', (e) => e.key === 'Enter' && enterBtn.click());
 
   // 3. the look folds into one line ("auto" unless opened)
