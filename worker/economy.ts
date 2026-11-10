@@ -82,6 +82,7 @@ export class Economy extends DurableObject<EconEnv> {
       CREATE TABLE IF NOT EXISTS cup_bag(round TEXT NOT NULL, acct TEXT NOT NULL, item TEXT NOT NULL, qty INTEGER NOT NULL,
         traded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(round, acct, item));
       CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS links(account TEXT PRIMARY KEY, acct TEXT NOT NULL UNIQUE, at INTEGER NOT NULL);
     `);
   }
 
@@ -473,7 +474,7 @@ export class Economy extends DurableObject<EconEnv> {
   /** Joins the current round: free, needs one paid sit minute ever, at most 3 entrants per network address. */
   async cupJoin(acct: string, ip: string): Promise<{ ok: boolean; why?: string; round?: string; chips?: number; end?: number }> {
     await this.tick();
-    const owner = await ownerId(this.env.OWNER_SECRET || 'dev-only-owner-secret', acct);
+    const owner = this.linkedAccount(acct) ?? (await ownerId(this.env.OWNER_SECRET || 'dev-only-owner-secret', acct));
     return this.ctx.storage.transactionSync(() => {
       const now = Date.now();
       const r = this.currentRound(now);
@@ -618,6 +619,28 @@ export class Economy extends DurableObject<EconEnv> {
       this.sql.exec("UPDATE cup_rounds SET status = 'settled', results = ?, results_hash = ? WHERE id = ?", results, hash, id);
       return { hash, trophies: places ? entries.slice(0, CUP.trophies).map((e) => e.owner) : [] };
     });
+  }
+
+  // ---------- NEAR account links (log in with a NEAR wallet) ----------
+
+  /**
+   * Links a verified NEAR account to a visitor. One account ↔ one visitor. If the account is already linked to
+   * another visitor (another device), that visitor id is returned so this device can switch to it (progress restored).
+   */
+  link(acct: string, account: string): { acct: string; account: string; switched: boolean } {
+    return this.ctx.storage.transactionSync(() => {
+      const prev = this.sql.exec<{ acct: string }>('SELECT acct FROM links WHERE account = ?', account).toArray()[0];
+      if (prev) return { acct: prev.acct, account, switched: prev.acct !== acct };
+      const mine = this.sql.exec<{ account: string }>('SELECT account FROM links WHERE acct = ?', acct).toArray()[0];
+      if (mine) return { acct, account: mine.account, switched: false }; // this visitor is already linked to another account
+      this.ensure(acct, Date.now());
+      this.sql.exec('INSERT INTO links(account, acct, at) VALUES (?, ?, ?)', account, acct, Date.now());
+      return { acct, account, switched: false };
+    });
+  }
+
+  linkedAccount(acct: string): string | null {
+    return this.sql.exec<{ account: string }>('SELECT account FROM links WHERE acct = ?', acct).toArray()[0]?.account ?? null;
   }
 
   history(): { ts: number; item: string; bid: number; ask: number }[] {

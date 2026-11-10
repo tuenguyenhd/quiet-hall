@@ -10,6 +10,7 @@ import { CUP, KETTLE, MARKET, TRADE_ZONE } from '../market';
 import { LOOKOUT, COURT, PLACES, TEASERS } from '../layout';
 import { BADGES } from '../badges';
 import { PREVIEWS } from './previews';
+import { finishPendingLogin, loadWallets } from './login';
 
 export const NEAR = import.meta.env.VITE_EDITION === 'near';
 
@@ -33,7 +34,8 @@ export interface NearHost {
   sitting(): boolean;
   /** wear a rescued fren as your pet */
   setPet(k: number): void;
-  /** the big board in the Trading Hall */
+  /** after a NEAR login: the account becomes this player's name */
+  setVerifiedName(name: string): void;
 }
 
 interface Econ {
@@ -43,6 +45,8 @@ interface Econ {
   streak: number;
   frens: { fren: string; serial: number; rescues: number }[];
   drips: { kind: string; serial: number }[];
+  /** the NEAR account this player logged in with (null = guest) */
+  near?: string | null;
 }
 interface Quote {
   item: Item;
@@ -113,7 +117,8 @@ export function setupNear(h: NearHost) {
     <button class="pill" id="near-leaves" title="Leaves: earned by sitting. Play money, no cash value.">🍃 <b>0</b></button>
     <button class="pill" id="near-bag" title="Your bag">🎒</button>
     <button class="pill" id="near-book" title="Rescue Book">📖</button>
-    <button class="pill" id="near-market" title="Market and Market Cup">🛒</button>`;
+    <button class="pill" id="near-market" title="Market and Market Cup">🛒</button>
+    <button class="pill" id="near-login" title="Log in with a NEAR wallet">👤</button>`;
   $('hud').appendChild(bar);
 
   const overlay = document.createElement('section');
@@ -133,6 +138,10 @@ export function setupNear(h: NearHost) {
 
   function renderBar() {
     $('near-leaves').querySelector('b')!.textContent = String(econ.leaves);
+    const lg = $('near-login');
+    lg.textContent = econ.near ? '✓' : '👤';
+    lg.title = econ.near ? `Logged in as ${econ.near}` : 'Log in with a NEAR wallet';
+    lg.classList.toggle('on', !!econ.near);
   }
 
   // ---------- 3D: the valley ----------
@@ -352,8 +361,13 @@ export function setupNear(h: NearHost) {
       return `<li class="${got ? 'have' : 'miss'}">${f.pet === 1 ? '🐕' : '🐸'} <b>${esc(f.name)}</b> ${got ? `#${got.serial} · rescued ${got.rescues}× ${rec(`fren-${f.id}-${got.serial}`)}` : '<span class="small">not yet</span>'}</li>`;
     }).join('');
     const dl = drips.map((d) => `<li class="have">${itemLabel(d.kind)} #${d.serial} ${rec(`drip-${d.kind}-${d.serial}`)}</li>`).join('');
+    setTimeout(() => document.getElementById('near-book-login')?.addEventListener('click', (e) => (e.preventDefault(), void openLogin())), 0);
     body().innerHTML = `<h2>📖 Rescue Book</h2><ul class="near-needs">${tiles}</ul>${dl ? `<div class="label">Drip</div><ul class="near-needs">${dl}</ul>` : ''}
-      <p class="small">Your frens and drip are recorded on NEAR testnet under an account made for you: <code>${esc(short(String(m.owner)))}</code>. You never need a wallet.</p>
+      <p class="small">${
+        econ.near
+          ? `Your frens and drip are recorded on NEAR testnet to your account <b>${esc(econ.near)}</b>.`
+          : `Your frens and drip are recorded on NEAR testnet under an account made for you: <code>${esc(short(String(m.owner)))}</code>. You never need a wallet; <a href="#" id="near-book-login">log in</a> to use your own.`
+      }</p>
       <p class="near-foot">Receipts are bound to you and cannot be sold.</p>`;
   }
 
@@ -427,6 +441,43 @@ export function setupNear(h: NearHost) {
       );
   }
 
+  async function openLogin() {
+    if (econ.near) {
+      show(`<h2>✓ Logged in</h2><p class="small">You are <b>${esc(econ.near)}</b> on NEAR testnet.</p>
+        <ul class="near-needs"><li class="have">Your rescues, crafts and Cup trophies are recorded to this account.</li><li class="have">Log in on another phone with the same wallet and your Leaves, bag and frens come with you.</li><li class="have">Your name in the hall and on the boards is your account name.</li></ul>
+        <p class="near-foot">Logging in signed a message only: no transaction, no fee, nothing moved.</p>`);
+      body().dataset.kind = 'login';
+      return;
+    }
+    show(`<h2>👤 Log in with NEAR</h2><p class="small">Optional. Your progress is saved either way; logging in lets you keep it on any device and records your rescues to <b>your own</b> NEAR account.</p><div id="near-wallets"><p class="small">Loading wallets…</p></div><p class="small" id="near-login-status"></p>
+      <p class="near-foot">You sign a short message: no transaction, no fee. NEAR testnet.</p>`);
+    body().dataset.kind = 'login';
+    try {
+      const w = await loadWallets();
+      const list = $('near-wallets');
+      list.innerHTML = w.wallets
+        .map((x) => `<button class="near-wallet" data-id="${esc(x.id)}" ${x.available ? '' : 'disabled'}><img src="${esc(x.icon)}" alt="" width="28" height="28"><span>${esc(x.name)}</span>${x.available ? '' : '<small>not available here</small>'}</button>`)
+        .join('');
+      list.querySelectorAll<HTMLButtonElement>('button[data-id]').forEach((b) =>
+        b.addEventListener('click', async () => {
+          const st = $('near-login-status');
+          st.textContent = 'Check your wallet to sign…';
+          try {
+            const r = await w.login(b.dataset.id!, h.pid);
+            if (r.ok) st.textContent = `Logged in as ${r.name}. Reloading…`;
+            else if (r.why !== 'redirecting') st.textContent = `Not logged in: ${r.why}`;
+          } catch (e) {
+            st.textContent = `Not logged in: ${String((e as Error)?.message ?? e).slice(0, 120)}`;
+          }
+        }),
+      );
+    } catch (e) {
+      $('near-wallets').innerHTML = `<p class="small">Couldn't load the wallets: ${esc(String((e as Error)?.message ?? e).slice(0, 120))}</p>`;
+    }
+  }
+  $('near-login').addEventListener('click', () => void openLogin());
+  void finishPendingLogin().then((msg) => msg && h.toast(msg, 5000));
+
   $('near-bag').addEventListener('click', openBag);
   $('near-book').addEventListener('click', openBook);
   $('near-market').addEventListener('click', () => {
@@ -445,6 +496,7 @@ export function setupNear(h: NearHost) {
     switch (m.t) {
       case 'econ':
         econ = { ...econ, ...(m as unknown as Econ) };
+        if (econ.near) h.setVerifiedName(/^[0-9a-f]{64}$/.test(econ.near) ? short(econ.near) : econ.near.slice(0, 32));
         firstSitDone = econ.frens.length > 0 || (econ.today.sit ?? 0) > 0;
         trail.visible = firstSitDone && econ.frens.length === 0;
         renderBar();
@@ -594,6 +646,7 @@ export function setupNear(h: NearHost) {
     if (kind === 'book') return void openBook();
     if (kind === 'market') return void openMarket();
     if (kind === 'previews') return openPreviews();
+    if (kind === 'login') return void openLogin();
   }
 
   return { onMessage, tap: tapObj, update, open, isNear: true };

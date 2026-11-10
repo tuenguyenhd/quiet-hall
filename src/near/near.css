@@ -194,3 +194,24 @@ body.edition-near #btn-lantern {
   border: 1px solid var(--line, #ccc);
   margin: 8px 0;
 }
+
+#near-login.on { background: #14f195; }
+.near-wallet {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  margin: 6px 0;
+  padding: 8px 14px;
+  border-radius: 14px;
+  border: 2px solid var(--ink, #160d2e);
+  background: #fff;
+  font: inherit;
+  font-family: var(--pop);
+  cursor: pointer;
+  text-align: left;
+}
+.near-wallet img { border-radius: 8px; }
+.near-wallet small { margin-left: auto; opacity: 0.6; font-family: var(--sans); }
+.near-wallet:disabled { opacity: 0.5; cursor: default; }

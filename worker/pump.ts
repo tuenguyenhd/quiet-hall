@@ -384,7 +384,10 @@ export class Pump extends DurableObject {
     if (this.sql.exec(`SELECT 1 FROM picks WHERE m = ? AND k = ? AND pid = ?`, m, k, pid).toArray().length) return { error: 'You already picked this round' };
     const fromIp = this.sql.exec<{ n: number }>(`SELECT COUNT(*) AS n FROM picks WHERE m = ? AND k = ? AND ip = ?`, m, k, ip).one().n;
     if (fromIp >= PER_IP_PER_ROUND) return { error: 'Too many picks from this network this round' };
-    const name = cleanPlayerName(nameIn) || defaultName(seed);
+    // a player who logged in with NEAR shows as their account on the boards (looked up here, never trusted from the client)
+    const econ = (this.env as unknown as { ECONOMY?: DurableObjectNamespace<import('./economy').Economy> }).ECONOMY;
+    const linked = econ ? await econ.get(econ.idFromName('main')).linkedAccount(pid) : null;
+    const name = linked ? (/^[0-9a-f]{64}$/.test(linked) ? `${linked.slice(0, 6)}…${linked.slice(-4)}` : linked.slice(0, 32)) : cleanPlayerName(nameIn) || defaultName(seed);
     const tag = await tagOf(pid);
     this.ctx.storage.transactionSync(() => {
       this.sql.exec(`INSERT INTO players (pid, name, tag) VALUES (?, ?, ?) ON CONFLICT(pid) DO UPDATE SET name = excluded.name`, pid, name, tag);

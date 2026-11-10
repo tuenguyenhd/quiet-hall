@@ -130,7 +130,9 @@ const names = new Map<string, string>();
 /** invisible tap target per player (skinned / baked meshes are unreliable to raycast) */
 const hitGeo = new THREE.CylinderGeometry(0.55, 0.55, 2, 8).translate(0, 1, 0);
 const hitMat = new THREE.MeshBasicMaterial({ visible: false });
-const myName = () => cleanPlayerName(store.get('name')) || defaultName(mySeed);
+/** NEAR edition: the verified account name after a NEAR login (set by the NEAR module), else the chosen name */
+let verifiedName: string | null = null;
+const myName = () => verifiedName ?? (cleanPlayerName(store.get('name')) || defaultName(mySeed));
 const stats = { here: 1, sitting: 0, minutes: 0, world: 0, worldAt: 0 };
 let entered = false;
 
@@ -709,6 +711,9 @@ const near = NEAR
       setPet(k: number) {
         me.setPet(k);
         net.send({ t: 'pet', k });
+      },
+      setVerifiedName(n: string) {
+        verifiedName = n;
       },
     })
   : null;

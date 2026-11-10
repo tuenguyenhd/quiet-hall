@@ -4,6 +4,7 @@ import { Ledger, priceTable, type SpotOwner } from './ledger';
 import { Pump } from './pump';
 import { Economy, minuteMs } from './economy';
 import { Mirror, ownerId } from './mirror';
+import { LOGIN_MESSAGE, LOGIN_RECIPIENT, loginNonce, verifyLogin } from './nearlogin';
 import { edition, ECONOMY } from '../src/economy';
 import { FRENS, GATHER, WORKBENCH, dist, frenById, nodeById } from '../src/valley';
 import { CUP, TRADE_ZONE } from '../src/market';
@@ -153,8 +154,14 @@ const ledger = (env: Env) => env.LEDGER.get(env.LEDGER.idFromName('main'));
 const isNear = (env: Env) => edition(env.EDITION) === 'near';
 const economy = (env: Env) => env.ECONOMY!.get(env.ECONOMY!.idFromName('main'));
 const mirror = (env: Env) => env.MIRROR!.get(env.MIRROR!.idFromName('main'));
-/** visitor id → NEAR owner id. Falls back to a fixed dev secret only when none is configured (mock / local). */
-const ownerOf = (env: Env, pid: string) => ownerId(env.OWNER_SECRET || 'dev-only-owner-secret', pid);
+/**
+ * visitor id → NEAR owner id for receipts: the NEAR account they logged in with, or else an implicit id derived
+ * from a server secret (fixed dev secret only when none is configured: mock / local).
+ */
+const ownerOf = async (env: Env, pid: string) =>
+  (env.ECONOMY ? await economy(env).linkedAccount(pid) : null) ?? (await ownerId(env.OWNER_SECRET || 'dev-only-owner-secret', pid));
+/** how a NEAR account shows as a player name (implicit 64-hex ids are shortened) */
+const nearName = (account: string) => (/^[0-9a-f]{64}$/.test(account) ? `${account.slice(0, 6)}…${account.slice(-4)}` : account.slice(0, 32));
 /** NEAR edition: only these API paths exist (edition-near.md: EDITION removes UI *and* routes) */
 const NEAR_API = /^\/api\/(health|config|near\/[a-z-]+|pump\/[a-z-]+)$/;
 /** NEAR edition: socket messages that belong to Solana / money / prediction features */
@@ -353,6 +360,28 @@ async function nearApi(req: Request, env: Env, path: string): Promise<Response> 
     return json({ owner, nearAccount: env.NEAR_ACCOUNT ?? null, ...(await economy(env).state(pid)), receipts: await mirror(env).receipts(owner) });
   }
   if (path === '/api/near/audit') return json(await economy(env).audit());
+  if (path === '/api/near/login-nonce') {
+    if (!PID_RE.test(pid)) return json({ error: 'Bad pid' }, 400);
+    return json({ nonce: await loginNonce(env.SESSION_SECRET || 'dev-only-session-secret', pid), message: LOGIN_MESSAGE, recipient: LOGIN_RECIPIENT });
+  }
+  if (path === '/api/near/login' && req.method === 'POST') {
+    const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const p = String(b.pid ?? '');
+    if (!PID_RE.test(p)) return json({ error: 'Bad pid' }, 400);
+    const rpcs = [env.NEAR_RPC || 'https://test.rpc.fastnear.com', ...(env.NEAR_RPC_FALLBACKS || '').split(',').map((x) => x.trim()).filter(Boolean)];
+    const v = await verifyLogin(env.SESSION_SECRET || 'dev-only-session-secret', rpcs, {
+      pid: p,
+      nonce: String(b.nonce ?? ''),
+      accountId: String(b.accountId ?? ''),
+      publicKey: String(b.publicKey ?? ''),
+      signature: String(b.signature ?? ''),
+      callbackUrl: typeof b.callbackUrl === 'string' ? b.callbackUrl : undefined,
+    });
+    if (!v.ok) return json({ ok: false, why: v.why }, 401);
+    const r = await economy(env).link(p, v.accountId);
+    // switched: this NEAR account already belongs to another visitor id (another device) → the client adopts it
+    return json({ ok: true, account: r.account, name: nearName(r.account), pid: r.acct, switched: r.switched });
+  }
   if (path === '/api/near/market') {
     const E = economy(env);
     return json({ quotes: await E.quotes(), history: await E.history(), cup: await E.cupBoard(PID_RE.test(pid) ? pid : undefined) });
@@ -1014,7 +1043,14 @@ export class Hall extends DurableObject<Env> {
           if (stale) await E.cancelWish(a.pid, stale);
           await E.touch(a.pid);
           await E.start();
-          send(ws, { t: 'econ', ...(await E.state(a.pid)), ...(await E.book(a.pid)) });
+          const account = await E.linkedAccount(a.pid);
+          send(ws, { t: 'econ', ...(await E.state(a.pid)), ...(await E.book(a.pid)), near: account });
+          if (account) {
+            // the name of a logged-in player is their NEAR account, set by the server (players can't type a '.near' name)
+            a.nm = nearName(account);
+            ws.serializeAttachment(a);
+            this.broadcast({ t: 'nm', id: a.id, nm: a.nm });
+          }
         }
         // arrived through a friend's "sit with me" link?
         // `with` is the inviter's public invite id (a hash of their visitor id), never the visitor id itself
