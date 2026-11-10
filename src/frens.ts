@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Avatar } from './avatar';
 import { popEmoji } from './effects';
 import { COURT, GARDEN, GROVE, LAKE, LIGHT_COUNT, LOOKOUT, TEA } from './layout';
+import { DISPLAY_FONT } from './near-mark';
 
 interface Fren {
   name: string;
@@ -48,14 +49,14 @@ function bubbleTex(text: string, name: string) {
   g.lineTo(320, 195);
   g.lineTo(345, 155);
   g.fill();
-  g.font = '400 34px "Lilita One", system-ui, sans-serif';
+  g.font = `400 34px "${DISPLAY_FONT}", system-ui, sans-serif`;
   g.fillStyle = '#9945ff';
   g.textAlign = 'center';
   g.fillText(name, 313, 56);
-  g.font = '400 44px "Lilita One", system-ui, sans-serif';
+  g.font = `400 44px "${DISPLAY_FONT}", system-ui, sans-serif`;
   g.fillStyle = '#120b24';
   let fs = 44;
-  while (g.measureText(text).width > 570 && fs > 26) g.font = `400 ${(fs -= 2)}px "Lilita One", system-ui, sans-serif`;
+  while (g.measureText(text).width > 570 && fs > 26) g.font = `400 ${(fs -= 2)}px "${DISPLAY_FONT}", system-ui, sans-serif`;
   g.fillText(text, 313, 118);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;

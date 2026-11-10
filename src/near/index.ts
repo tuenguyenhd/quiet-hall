@@ -398,7 +398,7 @@ export function setupNear(h: NearHost) {
       <div class="chips near-qty">${[1, 5, 10].map((n) => `<button data-qty="${n}" class="${tradeQty === n ? 'on' : ''}">×${n}</button>`).join('')}</div>
       ${cupMode && !inCup ? `<p class="small">Market Cup round ${esc(cup?.round ?? '')}: ${mmss(left)} left · ${cup?.entrants ?? 0} entrants. Free: 200 play chips, prizes in Leaves.</p><button class="primary" id="near-cup-join">Join this round</button>` : rows}
       ${cupMode ? `<div class="label">Live top 10 ${inCup ? `· you: #${cup!.me!.rank}, score ${cup!.me!.score}` : ''}</div><ol class="near-top">${top || '<li class="small">No entrants yet</li>'}</ol>
-        <p class="small">Each round is committed on NEAR before it starts and settled after it ends, so anyone can check it.</p>` : `<p class="small">Prices move with every player's trades. Kettle buys up to 60 Leaves' worth from you a day (today: ${econ.today.market_sell ?? 0}).</p>`}
+        <p class="small">Each round is committed on NEAR before it starts and settled after it ends, so anyone can check it.</p>` : `<p class="small">Prices move with every player's trades. The Market buys up to 60 Leaves' worth from you a day (today: ${econ.today.market_sell ?? 0}).</p>`}
       <p class="near-foot">Play money. No cash value. Free to enter.</p>`;
     body()
       .querySelectorAll<HTMLButtonElement>('button[data-side]')

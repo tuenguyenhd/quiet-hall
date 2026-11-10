@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { add, mat, mesh } from './build';
 import { PUMP } from './layout';
 import { stickerWallTexture } from './stickers';
-import { NEAR_BUILD } from './near-mark';
+import { NEAR_BUILD, DISPLAY_FONT } from './near-mark';
 import { CLIENT_PUMP_MARKETS } from './client-edition';
 import { PUMP_MARKETS, type PumpMarket } from './layout';
 
@@ -143,7 +143,7 @@ export function buildPumpHall(c: Ctx) {
     const draw = () => {
       x.fillStyle = '#0c0820';
       x.fillRect(0, 0, 1024, 160);
-      x.font = '110px "Lilita One", system-ui, sans-serif';
+      x.font = `110px "${DISPLAY_FONT}", system-ui, sans-serif`;
       x.textAlign = 'center';
       x.textBaseline = 'middle';
       x.shadowColor = GREEN;
@@ -153,7 +153,7 @@ export function buildPumpHall(c: Ctx) {
       tx.needsUpdate = true;
     };
     draw();
-    document.fonts?.load('110px "Lilita One"').then(draw);
+    document.fonts?.load(`110px "${DISPLAY_FONT}"`).then(draw);
     return tx;
   };
   // neon gate over the entrance (north edge of the dais)
@@ -347,11 +347,11 @@ export function buildPumpHall(c: Ctx) {
       x.stroke();
     }
     x.textBaseline = 'middle';
-    x.font = '64px "Lilita One", system-ui, sans-serif';
+    x.font = `64px "${DISPLAY_FONT}", system-ui, sans-serif`;
     x.fillStyle = GREEN;
     x.textAlign = 'left';
     x.fillText('PUMPHALL', 40, 60);
-    x.font = '30px "Lilita One", system-ui, sans-serif';
+    x.font = `30px "${DISPLAY_FONT}", system-ui, sans-serif`;
     x.fillStyle = '#c8b8ff';
     x.textAlign = 'right';
     x.fillText('up or down? · just for fun', W - 40, 62);
@@ -359,26 +359,29 @@ export function buildPumpHall(c: Ctx) {
       const y = 175 + i * 185;
       const m = d?.[k];
       x.textAlign = 'left';
-      x.font = '56px "Lilita One", system-ui, sans-serif';
+      x.font = `56px "${DISPLAY_FONT}", system-ui, sans-serif`;
       x.fillStyle = '#ffffff';
-      x.fillText(k === 'BTC' ? 'BTC' : PUMP_MARKETS[k].label, 40, y);
-      x.font = '84px "Lilita One", system-ui, sans-serif';
+      const label = k === 'BTC' ? 'BTC' : PUMP_MARKETS[k].label;
+      x.fillText(label, 40, y);
+      // the price starts after the label (wider display fonts must not run into it)
+      const px = Math.max(190, 40 + x.measureText(label).width + 28);
+      x.font = `${px > 190 ? 72 : 84}px "${DISPLAY_FONT}", system-ui, sans-serif`;
       const dir = m?.price != null && m.lock != null ? Math.sign(m.price - m.lock) : 0;
       x.fillStyle = dir > 0 ? GREEN : dir < 0 ? RED : '#ffe14d';
-      x.fillText(`$${fmtPrice(m?.price ?? null)}`, 190, y);
-      x.font = '34px "Lilita One", system-ui, sans-serif';
+      x.fillText(`$${fmtPrice(m?.price ?? null)}`, px, y);
+      x.font = `34px "${DISPLAY_FONT}", system-ui, sans-serif`;
       x.fillStyle = '#c8b8ff';
-      x.fillText(m?.lock != null ? `${dir > 0 ? '▲' : dir < 0 ? '▼' : '='} from $${fmtPrice(m.lock)}` : 'locking…', 190, y + 62);
+      x.fillText(m?.lock != null ? `${dir > 0 ? '▲' : dir < 0 ? '▼' : '='} from $${fmtPrice(m.lock)}` : 'locking…', px, y + 62);
       x.textAlign = 'right';
       x.fillStyle = '#ffffff';
-      x.font = '50px "Lilita One", system-ui, sans-serif';
+      x.font = `50px "${DISPLAY_FONT}", system-ui, sans-serif`;
       x.fillText(m ? fmtLeft(m.left) : '--:--', W - 40, y);
-      x.font = '28px "Lilita One", system-ui, sans-serif';
+      x.font = `28px "${DISPLAY_FONT}", system-ui, sans-serif`;
       x.fillStyle = m && m.closes > 0 ? GREEN : '#ff9aa8';
       x.fillText(m ? (m.closes > 0 ? `next round open · ${fmtLeft(m.closes)}` : 'next round: picks closed') : '', W - 40, y + 60);
     });
     x.textAlign = 'center';
-    x.font = '30px "Lilita One", system-ui, sans-serif';
+    x.font = `30px "${DISPLAY_FONT}", system-ui, sans-serif`;
     x.fillStyle = '#ffe14d';
     x.fillText('TAP TO PLAY ✦ no money · no prizes · points + leaderboard', W / 2, H - 40);
     tex.needsUpdate = true;

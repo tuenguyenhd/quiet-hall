@@ -3,7 +3,7 @@
 // each on its own banner (never combined with the Quiet Hall mark). Unlit material so lighting never tints them.
 import * as THREE from 'three';
 import { SEEKER_S, SOLANA_MARK, SOLANA_MOBILE_WORDMARK } from './brand-marks';
-import { NEAR_BUILD, NEAR_MARK } from './near-mark';
+import { NEAR_BUILD, NEAR_MARK, DISPLAY_FONT } from './near-mark';
 
 const W = 512;
 const H = 1280;
@@ -28,7 +28,7 @@ function base(g: CanvasRenderingContext2D) {
 function text(g: CanvasRenderingContext2D, s: string, y: number, size: number, color: string) {
   g.fillStyle = color;
   g.textAlign = 'center';
-  g.font = `400 ${size}px "Lilita One", system-ui, sans-serif`;
+  g.font = `400 ${size}px "${DISPLAY_FONT}", system-ui, sans-serif`;
   g.fillText(s, W / 2, y);
 }
 
@@ -110,7 +110,7 @@ function bannerTexture(draw: (g: CanvasRenderingContext2D) => void) {
   tex.anisotropy = 4;
   draw(g);
   // redraw once the display font is ready (marks are vectors and don't depend on it)
-  document.fonts?.load('64px "Lilita One"').then(() => {
+  document.fonts?.load(`64px "${DISPLAY_FONT}"`).then(() => {
     draw(g);
     tex.needsUpdate = true;
   });

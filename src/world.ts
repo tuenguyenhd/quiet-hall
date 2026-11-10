@@ -7,6 +7,7 @@ import { buildTeasers } from './teasers';
 import { buildPumpHall, type BoardData } from './pumphall';
 import { PUMP, SPOTS, TEASERS, BELL, BOUNDS, COURT, GARDEN, GROVE, HALL, HALL_CUSHIONS, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
 import { buildPlaces, labelSprite } from './places';
+import { DISPLAY_FONT } from './near-mark';
 
 export interface Obstacle {
   x: number;
@@ -181,13 +182,13 @@ function muralTexture(aspect: number) {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.lineJoin = 'round';
-    g.font = `400 ${Math.round(Hh * 0.3)}px "Lilita One", system-ui, sans-serif`;
+    g.font = `400 ${Math.round(Hh * 0.3)}px "${DISPLAY_FONT}", system-ui, sans-serif`;
     g.lineWidth = Hh * 0.05;
     g.strokeStyle = '#160d2e';
     g.strokeText('✦ sit together ✦', W / 2, Hh * 0.3);
     g.fillStyle = '#fffaf0';
     g.fillText('✦ sit together ✦', W / 2, Hh * 0.3);
-    g.font = `400 ${Math.round(Hh * 0.12)}px "Lilita One", system-ui, sans-serif`;
+    g.font = `400 ${Math.round(Hh * 0.12)}px "${DISPLAY_FONT}", system-ui, sans-serif`;
     g.fillStyle = '#ffe14d';
     g.fillText('breathe with us', W / 2, Hh * 0.86);
     // sticker border
@@ -198,7 +199,7 @@ function muralTexture(aspect: number) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
-  document.fonts?.load('400 60px "Lilita One"').then(() => {
+  document.fonts?.load(`400 60px "${DISPLAY_FONT}"`).then(() => {
     draw();
     t.needsUpdate = true;
   });
@@ -526,7 +527,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
       g.stroke();
       g.textAlign = 'center';
       g.fillStyle = o ? '#ffe14d' : '#9c927e';
-      g.font = '400 30px "Lilita One", system-ui, sans-serif';
+      g.font = `400 30px "${DISPLAY_FONT}", system-ui, sans-serif`;
       g.fillText(o ? '✦ PATRON ✦' : 'PATRON BANNER', 128, 64);
       g.fillStyle = o ? '#fffaf0' : '#b3a990';
       const name = o ? o.name : 'your name here';
@@ -534,18 +535,18 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
       const words = name.split(' ').slice(0, 3);
       words.forEach((w, k) => {
         let fs = 84;
-        do g.font = `400 ${(fs -= 4)}px "Lilita One", system-ui, sans-serif`;
+        do g.font = `400 ${(fs -= 4)}px "${DISPLAY_FONT}", system-ui, sans-serif`;
         while (g.measureText(w).width > 210 && fs > 30);
         g.fillText(w, 128, 190 + k * 100);
       });
-      g.font = '400 24px "Lilita One", system-ui, sans-serif';
+      g.font = `400 24px "${DISPLAY_FONT}", system-ui, sans-serif`;
       g.fillStyle = o ? '#14f195' : '#b3a990';
       g.fillText(o ? o.line : `#${i + 1} · tap to rent`, 128, 500);
     };
     draw();
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
-    document.fonts?.load('400 40px "Lilita One"').then(() => {
+    document.fonts?.load(`400 40px "${DISPLAY_FONT}"`).then(() => {
       draw();
       t.needsUpdate = true;
     });

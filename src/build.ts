@@ -1,5 +1,6 @@
 // Small helpers shared by the world and the places.
 import * as THREE from 'three';
+import { DISPLAY_FONT } from './near-mark';
 
 export function rng(seed: number) {
   let s = seed;
@@ -65,7 +66,7 @@ export function segDist(px: number, pz: number, ax: number, az: number, bx: numb
 }
 
 /** Canvas-text board for signposts. Text shrinks to fit the widest line; redrawn once the font has loaded. */
-export function textTexture(lines: string[], w = 512, h = 128, bg = '#7a5a3f', fg = '#f6efdc', family = '"Lilita One", system-ui, sans-serif') {
+export function textTexture(lines: string[], w = 512, h = 128, bg = '#7a5a3f', fg = '#f6efdc', family = `"${DISPLAY_FONT}", system-ui, sans-serif`) {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;

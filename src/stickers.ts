@@ -3,10 +3,10 @@
 // No third-party mascots or project logos (those need permission).
 import * as THREE from 'three';
 import { SEEKER_ARC, SEEKER_S, SOLANA_MARK } from './brand-marks';
-import { NEAR_BUILD, NEAR_MARK } from './near-mark';
+import { NEAR_BUILD, NEAR_MARK, DISPLAY_FONT } from './near-mark';
 
 const INK = '#160d2e';
-const FONT = '"Lilita One", system-ui, sans-serif';
+const FONT = `"${DISPLAY_FONT}", system-ui, sans-serif`;
 const WORDS = ['gm', 'wagmi', 'LFG', 'gm ser', 'few understand', 'touch grass', 'just breathe', 'hodl calm', 'sit together', 'wen zen', '1000x calm', 'probably nothing', 'ngmi → gmi', 'stay based'];
 const EMOJI = ['🚀', '💎', '🙌', '🌕', '⚡', '🍵', '🔥', '🌈', '🧘', '☀️', '🪷', '🏮'];
 const PASTEL = ['#ffe14d', '#ff9ad5', '#14f195', '#5ad1ff', '#c6a6ff', '#ffb36b', '#fffaf0'];

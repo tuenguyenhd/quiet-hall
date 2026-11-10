@@ -1,5 +1,25 @@
 /* NEAR edition UI. Loaded only by src/near/index.ts (VITE_EDITION=near). */
 
+/* Fonts (SIL OFL 1.1, licences in public/fonts): Dela Gothic One (titles, buttons) + Signika (text). Latin subsets. */
+@font-face {
+  font-family: 'Dela Gothic One';
+  src: url('/fonts/dela-gothic-one-latin.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Signika';
+  src: url('/fonts/signika-latin-var.woff2') format('woff2');
+  font-weight: 300 700;
+  font-display: swap;
+}
+body.edition-near {
+  --pop: 'Dela Gothic One', system-ui, sans-serif;
+  --sans: 'Signika', -apple-system, system-ui, sans-serif;
+  --serif: var(--pop);
+  font-family: var(--sans);
+}
+
 /* Solana, payment and prediction UI does not exist in this edition */
 body.edition-near #btn-wallet,
 body.edition-near #btn-lantern {

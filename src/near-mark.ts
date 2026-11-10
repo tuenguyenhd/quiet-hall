@@ -9,3 +9,6 @@ export const NEAR_MARK =
 
 /** true in the NEAR edition build (vite --mode near / VITE_EDITION=near) */
 export const NEAR_BUILD = import.meta.env.VITE_EDITION === 'near';
+
+/** display font for canvas text (signs, boards, banners, stickers): Dela Gothic One in the NEAR edition */
+export const DISPLAY_FONT = NEAR_BUILD ? 'Dela Gothic One' : 'Lilita One';
