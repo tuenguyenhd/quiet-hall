@@ -361,6 +361,12 @@ async function nearApi(req: Request, env: Env, path: string): Promise<Response> 
     const owner = await ownerOf(env, pid);
     return json({ owner, nearAccount: env.NEAR_ACCOUNT ?? null, ...(await economy(env).state(pid)), receipts: await mirror(env).receipts(owner) });
   }
+  if (path === '/api/near/whoami') {
+    // the welcome card asks this before the player enters: is this visitor logged in with NEAR?
+    if (!PID_RE.test(pid)) return json({ error: 'Bad pid' }, 400);
+    const account = await economy(env).linkedAccount(pid);
+    return json({ account, name: account ? nearName(account) : null });
+  }
   if (path === '/api/near/audit') return json(await economy(env).audit());
   if (path === '/api/near/login-nonce') {
     if (!PID_RE.test(pid)) return json({ error: 'Bad pid' }, 400);

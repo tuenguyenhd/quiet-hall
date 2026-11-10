@@ -148,7 +148,12 @@ export function setupNear(h: NearHost) {
     lg.title = econ.near ? `Logged in as ${econ.near}` : 'Log in with NEAR';
     lg.classList.toggle('on', !!econ.near);
     // the welcome card's login button hides once logged in
-    document.getElementById('near-login-welcome-box')?.classList.toggle('hidden', !!econ.near);
+    const wb = document.getElementById('near-login-welcome-box');
+    if (wb) {
+      wb.classList.toggle('logged', !!econ.near);
+      const done = document.getElementById('near-login-welcome-done');
+      if (done) done.innerHTML = econ.near ? `${nearIcon(16)}<span>Logged in as <b>${esc(who)}</b></span>` : '';
+    }
     // guests can explore, rescue and trade; PumpHall up/down needs a NEAR login
     document.body.classList.toggle('near-guest', !econ.near);
     // guests get a small "Quick join" under the login; logged in, the big "Enter the hall" is back
@@ -515,6 +520,7 @@ export function setupNear(h: NearHost) {
     },
   });
 
+  let justLoggedIn = false;
   /** "Log in with NEAR": NEAR Connect's standard wallet picker, one free signature (mainnet accounts by default) */
   let loggingIn = false;
   async function startLogin(network: LoginNetwork = 'mainnet') {
@@ -536,7 +542,12 @@ export function setupNear(h: NearHost) {
   try {
     const j = JSON.parse(sessionStorage.getItem('qh.justLoggedIn') ?? 'null') as { name: string; bonus: number } | null;
     sessionStorage.removeItem('qh.justLoggedIn');
-    if (j) setTimeout(() => h.toast(j.bonus > 0 ? `Logged in as ${j.name} ✓ · +${j.bonus} 🍃 welcome bonus` : `Logged in as ${j.name} ✓`, 5000), 1200);
+    if (j) {
+      // they logged in from the welcome card or in the hall: go straight (back) into the hall
+      justLoggedIn = true;
+      // after the hall's own "You are now …" greeting, so it is not overwritten
+      setTimeout(() => h.toast(j.bonus > 0 ? `Logged in as ${j.name} ✓ · +${j.bonus} 🍃 welcome bonus` : `Logged in as ${j.name} ✓`, 5000), 4000);
+    }
   } catch {
     /* storage blocked */
   }
@@ -548,6 +559,7 @@ export function setupNear(h: NearHost) {
       const box = document.createElement('div');
       box.id = 'near-login-welcome-box';
       box.innerHTML = `<button id="near-login-welcome" class="near-login-btn">${nearIcon(20)}<span>Log in with NEAR</span></button>
+        <p id="near-login-welcome-done" class="near-login-done"></p>
         <p class="small near-login-note">+${LOGIN_BONUS} 🍃 bonus · play PumpHall and the Market · keep progress on any phone · <a href="#" id="near-login-testnet">testnet account?</a></p>`;
       lead.after(box);
       // no "No sign-up" line in this edition: logging in is the way to play
@@ -576,6 +588,17 @@ export function setupNear(h: NearHost) {
   }
 
   renderBar();
+  // the hall connection only starts on Enter, so ask now whether this visitor is logged in: the welcome card
+  // then shows the account instead of the login button (and after a login, we go straight into the hall)
+  void fetch(`/api/near/whoami?pid=${encodeURIComponent(h.pid)}`)
+    .then((r) => r.json())
+    .then((w: { account: string | null }) => {
+      if (!w.account) return;
+      econ.near = econ.near ?? w.account;
+      renderBar();
+      if (justLoggedIn && !$('welcome').classList.contains('hidden')) $('btn-enter').click();
+    })
+    .catch((e) => console.warn('[near] whoami', e));
 
   $('near-bag').addEventListener('click', openBag);
   $('near-book').addEventListener('click', openBook);

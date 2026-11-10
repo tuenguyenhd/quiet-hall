@@ -294,3 +294,8 @@ body.edition-near.near-guest #pump-history { display: none; }
 #near-login-wait > span:not(.near-spin) { flex: 1 1 200px; }
 .near-spin { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff4; border-top-color: #fff; animation: near-spin 0.8s linear infinite; }
 @keyframes near-spin { to { transform: rotate(360deg); } }
+
+/* welcome card once logged in: the account instead of the login button */
+#near-login-welcome-box .near-login-done { display: none; }
+#near-login-welcome-box.logged .near-login-done { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; font-weight: 600; }
+#near-login-welcome-box.logged #near-login-welcome, #near-login-welcome-box.logged .near-login-note { display: none; }
