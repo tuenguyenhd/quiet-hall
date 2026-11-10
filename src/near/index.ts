@@ -724,6 +724,10 @@ export function setupNear(h: NearHost) {
         quotes = m.q as Quote[];
         if (isOpen('market')) renderMarket();
         return;
+      case 'duel_no':
+        // a guest tapped ⚔: say what logging in unlocks (duel.ts shows the plain message too)
+        if (m.login) openLoginPerks('Duels need a login');
+        return;
       case 'cupJoined':
         if (!m.ok && m.login) return openLoginPerks('The Market Cup needs a login');
         if (!m.ok) return h.toast(String(m.why), 4500);

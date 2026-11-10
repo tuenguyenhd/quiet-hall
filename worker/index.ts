@@ -793,6 +793,8 @@ export class Hall extends DurableObject<Env> {
     if (!to || !b) return send(ws, { t: 'duel_no', why: 'They left.' });
     const why = this.duelBlock(a, b, now);
     if (why) return send(ws, { t: 'duel_no', why });
+    // NEAR edition: both players must be logged in, so a challenge never waits on someone who cannot accept
+    if (isNear(this.env) && !(await this.nearLoggedIn(b))) return send(ws, { t: 'duel_no', why: `${b.nm} has not logged in with NEAR yet, so they cannot duel.` });
     const cool = this.noAgain.get(`${a.pid}>${b.pid}`) ?? 0;
     if (now < cool) return send(ws, { t: 'duel_no', why: 'They said not now. Give them a couple of minutes.' });
     for (const [k, v] of this.invites) if (now - v.at > DUEL.inviteMs || v.from === a.id || v.to === a.id) this.invites.delete(k);
@@ -1229,14 +1231,15 @@ export class Hall extends DurableObject<Env> {
       }
       case 'duel_ask': {
         if (!a.hello) return;
-        if (isNear(this.env) && !(await this.nearLoggedIn(a))) return send(ws, { t: 'duel_no', why: 'Log in with NEAR to duel.' });
+        if (isNear(this.env) && !(await this.nearLoggedIn(a))) return send(ws, { t: 'duel_no', why: 'Log in with NEAR to duel.', login: true });
         await this.duelAsk(ws, a, m);
         ws.serializeAttachment(a); // keep the invite counter
         return;
       }
       case 'duel_ans': {
         if (!a.hello) return;
-        if (isNear(this.env) && !(await this.nearLoggedIn(a))) return send(ws, { t: 'duel_no', why: 'Log in with NEAR to duel.' });
+        // a guest can always say no; accepting needs a login (guests are not challenged, see duelAsk)
+        if (isNear(this.env) && m.ok === true && !(await this.nearLoggedIn(a))) return send(ws, { t: 'duel_no', why: 'Log in with NEAR to duel.', login: true });
         await this.duelAns(ws, a, m);
         return;
       }
