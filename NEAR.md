@@ -48,8 +48,9 @@ The game server (a Cloudflare Worker) holds the game account's key and is the tr
 
 ```bash
 npm install
-npm run dev:near        # app on http://localhost:5174, NEAR Worker on :8788
+npm run dev:near        # app on http://localhost:5174, NEAR Worker on :8788 (no secrets needed)
 ```
+Needs Node 20+ only; `wrangler dev` runs locally without a Cloudflare login. Rust is only needed to rebuild the contract.
 Without a `NEAR_PRIVATE_KEY` the Mirror runs in **mock mode**: everything works and receipts are marked "mock" instead of being sent. To write to testnet locally, create `.dev.vars.near` with your **own test contract**'s `NEAR_ACCOUNT` and `NEAR_PRIVATE_KEY`, plus `OWNER_SECRET` and `SESSION_SECRET`. Never point a local Worker at the production contract.
 
 **Production smoke test** (real clock, real testnet writes, ~3 minutes): `node scripts/near-prod-smoke.mjs https://quiet-hall-near.ted-233.workers.dev`
@@ -58,12 +59,12 @@ Without a `NEAR_PRIVATE_KEY` the Mirror runs in **mock mode**: everything works 
 
 **Tests** (start the Worker with a fast clock: `npx wrangler dev -c wrangler.near.toml --port 8788 --var MINUTE_MS:200 --var NEAR_MIRROR_MODE:mock --var CUP_ROUND_MIN:30 --var CUP_JOIN_CLOSE_MIN:5`):
 ```bash
-node scripts/near-economy-test.mjs  http://127.0.0.1:8788 <LOAD_TEST_KEY>   # 27 checks: sit pay, caps, hidden time, no double pay, mirror
-node scripts/near-valley-test.mjs   http://127.0.0.1:8788                    # 23 checks: personal stock, reach, co-rescue, crafting, receipts
-node scripts/near-market-test.mjs   http://127.0.0.1:8788 <LOAD_TEST_KEY>   # 27 checks: market, Cup, settlement, hashes
-cd contracts/items && cargo test                                              # 10 contract tests
+node scripts/near-economy-test.mjs  http://127.0.0.1:8788   # sit pay, caps, hidden time, no double pay, mirror
+node scripts/near-valley-test.mjs   http://127.0.0.1:8788   # personal stock, reach, co-rescue, crafting, receipts
+node scripts/near-market-test.mjs   http://127.0.0.1:8788   # market, Cup, settlement, hashes
+cd contracts/items && cargo test                             # 10 contract tests (rustup installs Rust 1.95 for this folder)
 ```
-All 87 pass; the market suite also passes with the live testnet mirror. Screenshots: `docs/qa/near-2026-11-10/`.
+From a fresh clone (no secrets) 72 checks run and pass (economy 23, valley 23, market 26). With a `LOAD_TEST_KEY` passed as a second argument, 5 more test-hook checks run: 77, plus 10 contract tests. The market suite also passes with the live testnet mirror. Screenshots: `docs/qa/near-2026-11-10/`.
 
 ## What existed before the hackathon, and what was built for it
 
