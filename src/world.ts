@@ -74,6 +74,11 @@ const HW = HALL.hw;
 const HD = HALL.hd;
 const H = HALL.h;
 
+/** extra no-grass circles (paved plazas) added by edition modules before the world is built */
+export const CLEAR_ZONES: { x: number; z: number; r: number }[] = [];
+/** extra solid things (circles) added by edition modules before the world is built: you can't walk through them */
+export const EXTRA_OBSTACLES: { x: number; z: number; r: number }[] = [];
+
 // Paths: courtyard to every place (also used to keep grass and trees off them)
 export const PATHS: [number, number][][] = [
   [
@@ -213,7 +218,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   const R = rng(7);
   // NEAR edition: the Market is a place of its own (before the terrain, so its square is flattened and kept clear)
   if (NEAR_BUILD && !PLACES.some((p) => p.id === BAZAAR_PLACE.id)) PLACES.push(BAZAAR_PLACE);
-  const obstacles: Obstacle[] = [];
+  const obstacles: Obstacle[] = [...EXTRA_OBSTACLES];
   const clickables: THREE.Object3D[] = [];
   const seats: Seat[] = [];
 
@@ -827,6 +832,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     if (Math.abs(x - TEA.x) < TEA.w / 2 + 0.5 && Math.abs(z - TEA.z) < TEA.d / 2 + 0.5) continue;
     if (Math.hypot(x - BELL.x, z - BELL.z) < 2.6) continue;
     if (NEAR_BUILD && Math.hypot(x - BAZAAR.x, z - BAZAAR.z) < 11.8) continue; // the Market's paved square
+    if (CLEAR_ZONES.some((c) => Math.hypot(x - c.x, z - c.z) < c.r)) continue;
     const s = 0.7 + R() * 0.9;
     q.setFromAxisAngle(up, R() * 6.28);
     grass.setMatrixAt(gi, m4.compose(new THREE.Vector3(x, terrain(x, z), z), q, new THREE.Vector3(s, s * (0.8 + R() * 0.5), s)));

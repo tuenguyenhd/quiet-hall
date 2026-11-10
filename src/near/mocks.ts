@@ -8,7 +8,7 @@ import './mocks.css';
 import { add, mat, mesh } from '../build';
 import { COURT, PLACES } from '../layout';
 import { DISPLAY_FONT, NEAR_BUILD } from '../near-mark';
-import { PATHS } from '../world';
+import { CLEAR_ZONES, EXTRA_OBSTACLES, PATHS } from '../world';
 import { PREVIEWS } from './previews';
 
 /** the district: centre, radius (also its PLACES entry) */
@@ -36,6 +36,14 @@ if (NEAR_BUILD && !PLACES.some((p) => p.id === 'soon')) {
     look: [SOON.x, SOON.z + 2],
   });
   PATHS.push(ROAD);
+  // the sand plaza stays clear of grass, and the sites are solid (walk around them, not through them)
+  CLEAR_ZONES.push({ x: SOON.x, z: SOON.z, r: 14.5 });
+  EXTRA_OBSTACLES.push(
+    { x: -73, z: 85, r: 3.4 }, // Cabal Camp tents
+    { x: -88, z: 101, r: 4.2 }, // Event Arena stage
+    { x: -72, z: 114, r: 3.2 }, // Sitting Bazaar mats row
+    { x: -59, z: 87, r: 2.4 }, // the Vault: Coldwall and his door
+  );
 }
 
 type SiteId = 'cabal' | 'arena' | 'bazaar' | 'vault';
