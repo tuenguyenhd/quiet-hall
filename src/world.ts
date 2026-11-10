@@ -5,9 +5,10 @@ import { addBrandBanners } from './brand';
 import { dressWorld } from './world-assets';
 import { buildTeasers } from './teasers';
 import { buildPumpHall, type BoardData } from './pumphall';
-import { PUMP, SPOTS, TEASERS, BELL, BOUNDS, COURT, GARDEN, GROVE, HALL, HALL_CUSHIONS, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
+import { BAZAAR, PUMP, SPOTS, TEASERS, BELL, BOUNDS, COURT, GARDEN, GROVE, HALL, HALL_CUSHIONS, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
 import { buildPlaces, labelSprite } from './places';
-import { DISPLAY_FONT } from './near-mark';
+import { DISPLAY_FONT, NEAR_BUILD } from './near-mark';
+import { BAZAAR_FORK, BAZAAR_PLACE, BAZAAR_ROAD, buildBazaar } from './near/bazaar';
 
 export interface Obstacle {
   x: number;
@@ -121,6 +122,8 @@ export const PATHS: [number, number][][] = [
     [101, 0],
   ],
 ];
+// NEAR edition: the Market has its own square in the south-east, with a road from the courtyard
+if (NEAR_BUILD) PATHS.push(BAZAAR_ROAD);
 
 export function pathDist(x: number, z: number) {
   let d = Infinity;
@@ -208,6 +211,8 @@ function muralTexture(aspect: number) {
 
 export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boolean): World {
   const R = rng(7);
+  // NEAR edition: the Market is a place of its own (before the terrain, so its square is flattened and kept clear)
+  if (NEAR_BUILD && !PLACES.some((p) => p.id === BAZAAR_PLACE.id)) PLACES.push(BAZAAR_PLACE);
   const obstacles: Obstacle[] = [];
   const clickables: THREE.Object3D[] = [];
   const seats: Seat[] = [];
@@ -668,7 +673,12 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   sign(-HW - 2.5, HZ + HD - 3, -0.6, ['← Maple Grove', '↑ Lookout']);
   sign(HW + 2.5, HZ + HD - 3, 0.6, ['Tea House →']);
   // the fork where you arrive: mindfulness one way, the fun-only prediction hall the other
-  sign(3.4, COURT.z + 7, 0.25, ['↑ Quiet Hall · sit', '↓ PumpHall · predict']);
+  if (NEAR_BUILD) {
+    // NEAR edition: every activity has its own direction, all listed where you arrive
+    sign(3.4, COURT.z + 7, 0.25, ['↑ Quiet Hall · sit', '↓ PumpHall · up/down', '↘ Market · trade', '↗ Meme Valley · frens', '↙ Coming soon']);
+    // where the Market road leaves the PumpHall road: arrows as seen walking south from the courtyard
+    sign(BAZAAR_FORK.x, BAZAAR_FORK.z, Math.PI + 0.35, ['↑ PumpHall', '↖ Market']);
+  } else sign(3.4, COURT.z + 7, 0.25, ['↑ Quiet Hall · sit', '↓ PumpHall · predict']);
 
   // ---------- "built on Solana" / "made for Seeker" banners: at the PumpHall gate (the Quiet Hall stays calm) ----------
   addBrandBanners(scene, obstacles, terrain, [
@@ -678,6 +688,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
 
   // ---------- places ----------
   const spots = buildPlaces(ctx);
+  if (NEAR_BUILD) buildBazaar(ctx);
   // ---------- coming soon: Lotus Island, Sky Shrine, Night Market ----------
   buildTeasers({ scene, terrain, obstacles, clickables, blockers });
   // ---------- PumpHall (south): fun-only price predictions ----------
@@ -815,6 +826,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     if (Math.abs(x - GARDEN.x) < GARDEN.w / 2 + 0.6 && Math.abs(z - GARDEN.z) < GARDEN.d / 2 + 0.6) continue;
     if (Math.abs(x - TEA.x) < TEA.w / 2 + 0.5 && Math.abs(z - TEA.z) < TEA.d / 2 + 0.5) continue;
     if (Math.hypot(x - BELL.x, z - BELL.z) < 2.6) continue;
+    if (NEAR_BUILD && Math.hypot(x - BAZAAR.x, z - BAZAAR.z) < 11.8) continue; // the Market's paved square
     const s = 0.7 + R() * 0.9;
     q.setFromAxisAngle(up, R() * 6.28);
     grass.setMatrixAt(gi, m4.compose(new THREE.Vector3(x, terrain(x, z), z), q, new THREE.Vector3(s, s * (0.8 + R() * 0.5), s)));

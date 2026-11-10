@@ -12,7 +12,7 @@
 1. **Sit.** Open the link, tap a cushion, breathe. Every minute you sit (server-timed; hidden time doesn't count) earns 1 Leaf.
 2. **Rescue a fren together.** Follow the lanterns to Meme Valley. Tap Moon Rocks to gather (each player has their own stock, so nobody can take yours). Grant Shibby's wish and sit beside him for a minute: **everyone sitting beside him is rescued too.** He follows you home.
 3. **Craft.** Make a Moon Collar at the workbench.
-4. **Trade.** The Market stall in PumpHall: prices move with every trade anyone makes (mid = base·e^(k·gap), 10% spread, decays back to base). The Market buys up to 60 Leaves' worth from you a day.
+4. **Trade.** The Market, its own square south-east of the courtyard (PumpHall is up/down and duels only): prices move with every trade anyone makes (mid = base·e^(k·gap), 10% spread, decays back to base). The Market buys up to 60 Leaves' worth from you a day.
 5. **Call it.** PumpHall's big board runs live Bitcoin and NEAR prices (Coinbase public candles): guess up or down for the next round, or bump into someone and duel. Points and a leaderboard only, no money.
 6. **Compete.** The Market Cup: every 3 hours, join free with 200 play chips, trade the same live market, top 10 win Leaves.
 7. **Look ahead.** The telescope at the Lookout shows six **Preview** screens (sample data, clearly labelled): Cabal Hall, Sitting Bazaar, Whale Order, Calm the FUD Golem, trade feed, Agent Cup.

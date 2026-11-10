@@ -13,6 +13,9 @@ export const COURT = { x: 0, z: 14, r: 22 };
 export const BELL = { x: 30, z: 4 };
 /** PumpHall: the fun-only price prediction hall, south of the courtyard (the second path from spawn). */
 export const PUMP = { x: 0, z: 100, r: 16 };
+/** The Market (NEAR edition only): Kettle's stalls in their own square, south-east of the courtyard. Id 'bazaar'
+ *  in PLACES (the 'market' id belongs to the Night Market teaser). Other editions do not build it. */
+export const BAZAAR = { x: 85, z: 100, r: 15 };
 export const BOUNDS = 164;
 /** Far rim where the ground rises into hills. */
 export const RIM = 176;

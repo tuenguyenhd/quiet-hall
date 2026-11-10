@@ -378,7 +378,7 @@ Other gameplay numbers are those of the shared docs, with `MIN_SIT` = 1 and `STA
 
 ## Visual/Audio Requirements
 
-Same world and style. South road shows Kettle's stall and a big price board (4 lines, bid and ask, live Cup top 10). Solana banners and stickers are hidden. One small "receipt" link per Rescue Book entry. Two fren props (torn map, lily hat), one drip mesh (Moon Collar).
+Same world and style. The Market has its own square at the end of the south-east road (BAZAAR in src/layout.ts, 2026-11-11): Kettle's stall, four item stalls, a Market Cup board; trades and Cup joins only there. PumpHall (south road) keeps up/down and duels. Solana banners and stickers are hidden. One small "receipt" link per Rescue Book entry. Two fren props (torn map, lily hat), one drip mesh (Moon Collar).
 
 ## Game Feel
 

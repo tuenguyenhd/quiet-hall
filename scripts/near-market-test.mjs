@@ -14,6 +14,8 @@ const check = (c, n, extra = '') => (c ? (ok++, console.log('✔', n)) : (bad++,
 const get = async (p) => (await fetch(BASE + p)).json();
 const sha = (s) => createHash('sha256').update(s).digest('hex');
 const pid = (p) => (p + Date.now().toString(36)).slice(0, 16);
+// the Market square (BAZAAR in src/layout.ts): trading and Cup joins work only here, not in PumpHall (0, 100)
+const MX = 85, MZ = 100;
 async function client(id, x, z) {
   const ws = new WebSocket(wsUrl);
   const msgs = [];
@@ -44,7 +46,7 @@ const rock0 = quote(m0.quotes, 'moon_rock');
 check(rock0 && rock0.bid < rock0.ask && rock0.ask <= 2 * 3 * 1.1 + 1, 'Moon Rock has a bid below its ask', JSON.stringify(rock0));
 if (!KEY) throw new Error('pass the LOAD_TEST_KEY: trading needs a NEAR login, and the test logs its players in with it');
 // trading needs a NEAR login: a guest at the stall is refused (and the client shows the login perks)
-const G = await client(pid('mg'), 0, 100);
+const G = await client(pid('mg'), MX, MZ);
 const gt = await trade(G, 'moon_rock', 'buy', 1);
 check(gt?.ok === false && gt?.login === true && /Log in with NEAR/.test(gt?.why), 'a guest cannot trade (login required)', JSON.stringify(gt));
 G.send({ t: 'cupJoin' });
@@ -60,9 +62,11 @@ const A = await loginAs(await client(pid('ma'), 0, 60));
 check(A.bonus === 50, 'the first login of an account gives the +50 Leaves bonus', String(A.bonus));
 const again = await get(`/api/near/test-link?k=${KEY}&pid=${A.pid}`);
 check(again.bonus === 0, 'logging in again gives no second bonus', JSON.stringify(again));
-check((await trade(A, 'moon_rock', 'buy', 1))?.why?.includes('PumpHall'), 'trading outside PumpHall is refused');
-await go(A, 0, 96);
-const B = await loginAs(await client(pid('mb'), 2, 98));
+check((await trade(A, 'moon_rock', 'buy', 1))?.why?.includes('Market'), 'trading outside the Market is refused');
+await go(A, 0, 100);
+check((await trade(A, 'moon_rock', 'buy', 1))?.why?.includes('south-east'), 'trading inside PumpHall is refused (the Market has its own place)');
+await go(A, MX, MZ - 4);
+const B = await loginAs(await client(pid('mb'), MX + 2, MZ - 2));
 
 // --- buying moves the price up, everyone sees it; the spread is a sink
 const before = (await me(A)).leaves;
@@ -76,7 +80,7 @@ check((await trade(A, 'moon_rock', 'sell', 5))?.why === 'You do not have that ma
 check((await trade(A, 'moon_rock', 'buy', 999))?.ok === false, 'a 999-unit trade is refused');
 
 // --- 30 net buys push the price up; it decays back toward base with no trades
-const C = await loginAs(await client(pid('mc'), 0, 100));
+const C = await loginAs(await client(pid('mc'), MX, MZ));
 await sitFor(C, 62); // 10 welcome + 60 sit + 2 streak = 72 Leaves
 const q1 = quote((await get('/api/near/market')).quotes, 'moon_rock');
 await trade(C, 'moon_rock', 'buy', 20);
@@ -97,12 +101,12 @@ const meC = await me(C);
 check((meC.today.market_sell ?? 0) <= 60, 'market sales never pass 60 Leaves a day', JSON.stringify({ sold: meC.today.market_sell, s1, cBal }));
 
 // --- the Market Cup
-const D = await loginAs(await client(pid('md'), 0, 100));
+const D = await loginAs(await client(pid('md'), MX, MZ));
 D.send({ t: 'cupJoin' });
 check((await until(D, 'cupJoined'))?.why?.startsWith('Sit for a minute'), 'joining the Cup needs one paid sit minute');
 await go(D, 0, 40);
 D.send({ t: 'cupJoin' });
-check((await until(D, 'cupJoined'))?.why?.includes('PumpHall'), 'joining away from PumpHall is refused');
+check((await until(D, 'cupJoined'))?.why?.includes('Market'), 'joining away from the Market is refused');
 await sitFor(A, 1);
 await sitFor(B, 1);
 // wait for a fresh round so all three can join before the cut-off
@@ -115,7 +119,7 @@ for (const c of [A, B, C]) {
 check(joins.every((j) => j?.ok && j.chips === 200), 'A, B and C join with 200 chips each', JSON.stringify(joins));
 const round = joins[0]?.round;
 await sitFor(D, 1);
-await go(D, 0, 100);
+await go(D, MX, MZ);
 D.send({ t: 'cupJoin' });
 check((await until(D, 'cupJoined'))?.why?.includes('Too many entrants'), 'a 4th entrant from one network address is refused');
 check((await trade(D, 'moon_rock', 'buy', 1, true))?.why === 'Join the Cup first.', 'Cup trades need an entry');

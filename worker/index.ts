@@ -611,7 +611,7 @@ export class Hall extends DurableObject<Env> {
       }
       case 'trade': {
         if (!(await this.nearLoggedIn(a))) return send(ws, { t: 'traded', ok: false, why: 'Log in with NEAR to buy and sell.', login: true });
-        if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'traded', ok: false, why: 'Trade at the Market stall in PumpHall.' });
+        if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'traded', ok: false, why: 'Trade at the Market (south-east of the courtyard).' });
         const side = m.side === 'buy' ? 'buy' : m.side === 'sell' ? 'sell' : null;
         if (!side) return;
         const r = await E.trade(a.pid, String(m.item ?? ''), side, Math.floor(num(m.n, 1)), m.cup === true);
@@ -622,7 +622,7 @@ export class Hall extends DurableObject<Env> {
       }
       case 'cupJoin': {
         if (!(await this.nearLoggedIn(a))) return send(ws, { t: 'cupJoined', ok: false, why: 'Log in with NEAR to join the Market Cup.', login: true });
-        if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'cupJoined', ok: false, why: 'Join the Cup at the Market stall in PumpHall.' });
+        if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'cupJoined', ok: false, why: 'Join the Cup at the Market (south-east of the courtyard).' });
         return send(ws, { t: 'cupJoined', ...(await E.cupJoin(a.pid, a.ip)), chips: CUP.chips });
       }
       case 'book': {
