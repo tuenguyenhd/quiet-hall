@@ -13,6 +13,7 @@ import { PREVIEWS } from './previews';
 import { loginWithNear, type LoginNetwork, type LoginUi } from './login';
 import { NEAR_MARK } from '../near-mark';
 import { degenName } from './names';
+import { setupMocks } from './mocks';
 
 /** the NEAR mark for login buttons (white on black, unaltered) */
 const nearIcon = (size: number) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="${NEAR_MARK}"/></svg>`;
@@ -141,6 +142,8 @@ export function setupNear(h: NearHost) {
     body().innerHTML = html;
     overlay.classList.remove('hidden');
   };
+  // the Coming Soon district (south-west): walk-in mock-ups of what is not built yet
+  const mocks = setupMocks(h, show, body);
   const isOpen = (kind: string) => !overlay.classList.contains('hidden') && body().dataset.kind === kind;
 
   function renderBar() {
@@ -316,6 +319,7 @@ export function setupNear(h: NearHost) {
   function tapObj(o: THREE.Object3D) {
     const d = o.userData.near as { kind: string; id: string };
     if (d.kind === 'scope') return openPreviews();
+    if (d.kind === 'mock') return mocks.open(d.id);
     const target =
       d.kind === 'node' ? NODES.find((n) => n.id === d.id)! : d.kind === 'fren' ? FRENS.find((f) => f.id === d.id)! : d.kind === 'bench' ? WORKBENCH : KETTLE;
     const reach = d.kind === 'kettle' ? TRADE_ZONE.r - 2 : d.kind === 'bench' ? GATHER.reach + 1.5 : GATHER.reach;
@@ -846,6 +850,7 @@ export function setupNear(h: NearHost) {
   let t = 0;
   function update(dt: number) {
     t += dt;
+    mocks.update(dt);
     for (const fp of frenPets) {
       fp.pet.update(dt, true, true);
       fp.ring.rotation.z += dt * 0.5;
@@ -875,6 +880,7 @@ export function setupNear(h: NearHost) {
     if (kind === 'book') return void openBook();
     if (kind === 'market') return void openMarket();
     if (kind === 'previews') return openPreviews();
+    if (kind.startsWith('mock:')) return mocks.open(kind.slice(5));
     if (kind === 'login') return void startLogin();
   }
 

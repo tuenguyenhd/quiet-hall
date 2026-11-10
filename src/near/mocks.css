@@ -1,0 +1,88 @@
+/* Coming Soon district explainers (src/near/mocks.ts). NEAR edition only. */
+.mk-tabs {
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.mk-tabs button {
+  min-height: 36px;
+  padding: 0 11px;
+  font-size: 13px;
+}
+.mk-pane p {
+  margin: 6px 0;
+}
+.mk-screen {
+  border: 1.5px dashed #b9a6e0;
+  border-radius: 14px;
+  padding: 8px 10px 4px;
+  margin: 10px 0;
+  background: rgba(120, 100, 160, 0.05);
+}
+.mk-screen-t {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #7a5fb0;
+  margin-bottom: 4px;
+}
+.mk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.mk-table th {
+  text-align: left;
+  font-size: 11px;
+  opacity: 0.6;
+  font-weight: 600;
+  padding: 3px 4px;
+}
+.mk-table td {
+  padding: 6px 4px;
+  border-top: 1px solid var(--line, #ddd);
+  vertical-align: top;
+}
+.mk-chat {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0;
+  font-size: 13px;
+}
+.mk-chat li {
+  padding: 5px 8px;
+  margin: 3px 0;
+  border-radius: 10px;
+  background: #fff;
+}
+.mk-chat li.mk-sys {
+  background: none;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.mk-chat li.mk-npc {
+  background: rgba(122, 215, 255, 0.18);
+}
+.mk-plaque {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(91, 84, 112, 0.12);
+}
+.mk-bracket {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.mk-bracket p {
+  margin: 2px 0;
+}
+.mk-off {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px dashed #b9a6e0;
+  background: rgba(120, 100, 160, 0.08);
+  color: #7a5fb0;
+  font-weight: 600;
+}
