@@ -4,29 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#140c2b" />
-    <!-- Boot splash: inline so it is styled on the very first paint, before any CSS or JS loads.
-         Everything else stays hidden until main.ts has rendered its first frame and adds html.ready. -->
-    <style>
-      html, body { margin: 0; background: #140c2b; }
-      html:not(.ready) body > :not(#boot) { visibility: hidden; }
-      #boot {
-        position: fixed; inset: 0; z-index: 9999;
-        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
-        background: radial-gradient(circle at 50% 42%, #2a1a55 0%, #140c2b 62%);
-        color: #f4efe6; font: 600 16px/1.4 system-ui, -apple-system, sans-serif; letter-spacing: 0.4px;
-        transition: opacity 0.5s ease;
-      }
-      #boot .orb {
-        width: 96px; height: 96px; border-radius: 50%;
-        background: radial-gradient(circle, rgba(153, 69, 255, 0.95) 0%, rgba(20, 241, 149, 0.55) 55%, rgba(20, 241, 149, 0) 72%);
-        animation: boot-breathe 4s ease-in-out infinite;
-      }
-      #boot .name { font-size: 22px; }
-      #boot .sub { font-weight: 400; font-size: 14px; opacity: 0.7; }
-      @keyframes boot-breathe { 0%, 100% { transform: scale(0.72); opacity: 0.75; } 50% { transform: scale(1); opacity: 1; } }
-      @media (prefers-reduced-motion: reduce) { #boot .orb { animation: none; } }
-      html.ready #boot { opacity: 0; pointer-events: none; }
-    </style>
     <meta name="description" content="Quiet Hall — sit together in silence. A shared meditation space, no sign-up." />
     <title>Quiet Hall</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -36,11 +13,6 @@
     <link rel="preload" href="/fonts/LilitaOne.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
-    <div id="boot" role="status" aria-live="polite">
-      <div class="orb" aria-hidden="true"></div>
-      <div class="name">Quiet Hall</div>
-      <div class="sub">Opening the hall… breathe in</div>
-    </div>
     <canvas id="scene"></canvas>
 
     <div id="hud" class="hidden">
