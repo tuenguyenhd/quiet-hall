@@ -5,9 +5,18 @@
 import { DurableObject } from 'cloudflare:workers';
 import { ECONOMY, edition, type EconomyConfig, type Reason } from '../src/economy';
 import { GATHER, WISH_REWARD, frenById, nodeById, recipeById, type Fren, type Item } from '../src/valley';
+import { APPRENTICES, CUP, MARKET, PRICE, askOf, bidOf, marketItem, midPrice } from '../src/market';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
+import { ownerId, type Job, type Mirror } from './mirror';
 
 interface EconEnv {
   EDITION?: string;
+  MIRROR?: DurableObjectNamespace<Mirror>;
+  OWNER_SECRET?: string;
+  /** test hooks: Cup round length and join cut-off in game minutes */
+  CUP_ROUND_MIN?: string;
+  CUP_JOIN_CLOSE_MIN?: string;
   /** test hook: length of one "game minute" in ms (default 60000). Lets scripts sit for seconds, not minutes. */
   MINUTE_MS?: string;
 }
@@ -62,6 +71,17 @@ export class Economy extends DurableObject<EconEnv> {
         rescues INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(acct, fren));
       CREATE TABLE IF NOT EXISTS drips(acct TEXT NOT NULL, kind TEXT NOT NULL, serial INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(kind, serial));
       CREATE TABLE IF NOT EXISTS counters(name TEXT PRIMARY KEY, value INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS market(item TEXT PRIMARY KEY, gap REAL NOT NULL, updated INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS price_hist(ts INTEGER NOT NULL, item TEXT NOT NULL, bid INTEGER NOT NULL, ask INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS price_hist_ts ON price_hist(ts);
+      CREATE TABLE IF NOT EXISTS trade_last(acct TEXT PRIMARY KEY, last INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS cup_rounds(id TEXT PRIMARY KEY, start INTEGER NOT NULL, end_at INTEGER NOT NULL, setup TEXT NOT NULL,
+        setup_hash TEXT NOT NULL, status TEXT NOT NULL, results TEXT, results_hash TEXT);
+      CREATE TABLE IF NOT EXISTS cup_entries(round TEXT NOT NULL, acct TEXT NOT NULL, chips INTEGER NOT NULL, trades INTEGER NOT NULL DEFAULT 0,
+        joined INTEGER NOT NULL, ip TEXT NOT NULL, owner TEXT NOT NULL, PRIMARY KEY(round, acct));
+      CREATE TABLE IF NOT EXISTS cup_bag(round TEXT NOT NULL, acct TEXT NOT NULL, item TEXT NOT NULL, qty INTEGER NOT NULL,
+        traded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(round, acct, item));
+      CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v INTEGER NOT NULL);
     `);
   }
 
@@ -338,6 +358,270 @@ export class Economy extends DurableObject<EconEnv> {
   /** open wish for this player today, if any (for the Hall after a reconnect) */
   openWish(acct: string): string | null {
     return this.sql.exec<{ fren: string }>("SELECT fren FROM wishes WHERE acct = ? AND day = ? AND status = 'open'", acct, dayOf(Date.now())).toArray()[0]?.fren ?? null;
+  }
+
+  // ---------- Kettle's Living Market (prices moved by every player's trades) ----------
+
+  private roundLenMs(): number {
+    const v = Number(this.env.CUP_ROUND_MIN);
+    return (Number.isFinite(v) && v > 0 ? v : CUP.roundMin) * this.minuteMs;
+  }
+  private joinCloseMs(): number {
+    const v = Number(this.env.CUP_JOIN_CLOSE_MIN);
+    return (Number.isFinite(v) && v >= 0 ? v : CUP.joinCloseMin) * this.minuteMs;
+  }
+
+  /** the item's gap after decay toward 0 since it was last stored */
+  private gapNow(item: string, now: number): number {
+    const r = this.sql.exec<{ gap: number; updated: number }>('SELECT gap, updated FROM market WHERE item = ?', item).toArray()[0];
+    if (!r) return 0;
+    const mins = Math.max(0, (now - r.updated) / this.minuteMs);
+    return r.gap * Math.pow(1 - PRICE.decayPerMin, mins);
+  }
+  private setGap(item: string, gap: number, now: number) {
+    this.sql.exec('INSERT OR REPLACE INTO market(item, gap, updated) VALUES (?, ?, ?)', item, gap, now);
+  }
+
+  /** current quotes for every market item */
+  quotes(now = Date.now()): { item: Item; bid: number; ask: number; mid: number }[] {
+    return MARKET.map((m) => {
+      const mid = midPrice(m, this.gapNow(m.item, now));
+      return { item: m.item, bid: bidOf(mid), ask: askOf(mid), mid: Math.round(mid * 100) / 100 };
+    });
+  }
+
+  /** prices along the curve for n units, one unit at a time; returns the total and the new gap */
+  private walk(item: string, side: 'buy' | 'sell', n: number, gap: number): { total: number; gap: number } {
+    const m = marketItem(item)!;
+    let total = 0;
+    for (let i = 0; i < n; i++) {
+      const mid = midPrice(m, gap);
+      if (side === 'buy') {
+        total += askOf(mid);
+        gap += 1;
+      } else {
+        total += bidOf(mid);
+        gap -= 1;
+      }
+    }
+    return { total, gap };
+  }
+
+  private currentRound(now: number): { id: string; start: number; end: number } {
+    const len = this.roundLenMs();
+    const start = Math.floor(now / len) * len;
+    const iso = new Date(start).toISOString(); // 2026-11-14T03:00:00.000Z → 20261114-030000
+    return { id: iso.slice(0, 10).replace(/-/g, '') + '-' + iso.slice(11, 19).replace(/:/g, ''), start, end: start + len };
+  }
+
+  /**
+   * One trade against Kettle. `cup` trades use the player's Cup chips and Cup bag for the current round;
+   * real trades use Leaves and the bag. Both move the same prices.
+   */
+  trade(acct: string, item: string, side: 'buy' | 'sell', n: number, cup: boolean):
+    { ok: boolean; why?: string; total?: number; balance?: number; chips?: number; quotes?: ReturnType<Economy['quotes']> } {
+    if (!marketItem(item)) return { ok: false, why: 'unknown item' };
+    if (side !== 'buy' && side !== 'sell') return { ok: false, why: 'bad side' };
+    if (!Number.isInteger(n) || n < 1 || n > PRICE.maxUnits) return { ok: false, why: `1 to ${PRICE.maxUnits} units` };
+    return this.ctx.storage.transactionSync(() => {
+      const now = Date.now();
+      this.ensure(acct, now);
+      const last = this.sql.exec<{ last: number }>('SELECT last FROM trade_last WHERE acct = ?', acct).toArray()[0]?.last ?? 0;
+      if (now - last < PRICE.tradeGapMin * this.minuteMs) return { ok: false, why: 'too fast' };
+      const gap0 = this.gapNow(item, now);
+      const { total, gap } = this.walk(item, side, n, gap0);
+      if (cup) {
+        const r = this.currentRound(now);
+        const e = this.sql.exec<{ chips: number }>('SELECT chips FROM cup_entries WHERE round = ? AND acct = ?', r.id, acct).toArray()[0];
+        if (!e) return { ok: false, why: 'Join the Cup first.' };
+        if (now >= r.end) return { ok: false, why: 'This round has ended.' };
+        const row = this.sql.exec<{ qty: number; traded: number }>('SELECT qty, traded FROM cup_bag WHERE round = ? AND acct = ? AND item = ?', r.id, acct, item).toArray()[0];
+        const qty = row?.qty ?? 0;
+        const traded = row?.traded ?? 0;
+        if (traded + n > CUP.maxUnitsPerItem) return { ok: false, why: `Cup limit: ${CUP.maxUnitsPerItem} units of each item per round` };
+        if (side === 'buy' && e.chips < total) return { ok: false, why: 'Not enough chips.' };
+        if (side === 'sell' && qty < n) return { ok: false, why: 'You do not hold that many in the Cup.' };
+        const dq = side === 'buy' ? n : -n;
+        const dc = side === 'buy' ? -total : total;
+        this.sql.exec(
+          'INSERT INTO cup_bag(round, acct, item, qty, traded) VALUES (?, ?, ?, ?, ?) ON CONFLICT(round, acct, item) DO UPDATE SET qty = qty + ?, traded = traded + ?',
+          r.id, acct, item, dq, n, dq, n,
+        );
+        this.sql.exec('UPDATE cup_entries SET chips = chips + ?, trades = trades + 1 WHERE round = ? AND acct = ?', dc, r.id, acct);
+      } else if (side === 'buy') {
+        if (this.balanceOf(acct) < total) return { ok: false, why: 'Not enough Leaves.' };
+        if (!this.bagAdd(acct, item, n)) return { ok: false, why: 'Your bag is full.' };
+        this.write(acct, -total, 'market_buy', item, now);
+      } else {
+        if (this.qty(acct, item) < n) return { ok: false, why: 'You do not have that many.' };
+        const cap = this.cfg.caps.market_sell ?? Infinity;
+        if (this.earnedOn(acct, dayOf(now), 'market_sell') + total > cap) return { ok: false, why: `Kettle buys at most ${cap} Leaves' worth from you a day.` };
+        this.bagTake(acct, { [item]: n });
+        this.write(acct, total, 'market_sell', item, now);
+      }
+      this.setGap(item, gap, now);
+      this.sql.exec('INSERT OR REPLACE INTO trade_last(acct, last) VALUES (?, ?)', acct, now);
+      const chips = cup
+        ? this.sql.exec<{ chips: number }>('SELECT chips FROM cup_entries WHERE round = ? AND acct = ?', this.currentRound(now).id, acct).toArray()[0]?.chips
+        : undefined;
+      return { ok: true, total, balance: this.balanceOf(acct), chips, quotes: this.quotes(now) };
+    });
+  }
+
+  // ---------- the Market Cup ----------
+
+  /** Joins the current round: free, needs one paid sit minute ever, at most 3 entrants per network address. */
+  async cupJoin(acct: string, ip: string): Promise<{ ok: boolean; why?: string; round?: string; chips?: number; end?: number }> {
+    await this.tick();
+    const owner = await ownerId(this.env.OWNER_SECRET || 'dev-only-owner-secret', acct);
+    return this.ctx.storage.transactionSync(() => {
+      const now = Date.now();
+      const r = this.currentRound(now);
+      if (now > r.end - this.joinCloseMs()) return { ok: false, why: 'Joins close 30 minutes before the end. Next round soon.' };
+      if (this.sql.exec('SELECT 1 FROM cup_entries WHERE round = ? AND acct = ?', r.id, acct).toArray().length) return { ok: true, round: r.id, end: r.end };
+      const sat = this.sql.exec("SELECT 1 FROM rows WHERE acct = ? AND reason = 'sit' AND delta > 0 LIMIT 1", acct).toArray().length;
+      if (!sat) return { ok: false, why: 'Sit for a minute first. The Cup is for people who have sat in the hall.' };
+      const n = this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM cup_entries WHERE round = ? AND ip = ?', r.id, ip).toArray()[0].n;
+      if (n >= CUP.maxEntrantsPerAddress) return { ok: false, why: 'Too many entrants from this network this round.' };
+      this.sql.exec('INSERT INTO cup_entries(round, acct, chips, joined, ip, owner) VALUES (?, ?, ?, ?, ?, ?)', r.id, acct, CUP.chips, now, ip, owner);
+      return { ok: true, round: r.id, chips: CUP.chips, end: r.end };
+    });
+  }
+
+  private scores(round: string, quotes: { item: string; bid: number }[]) {
+    const bid = Object.fromEntries(quotes.map((q) => [q.item, q.bid]));
+    const entries = this.sql
+      .exec<{ acct: string; chips: number; trades: number; joined: number; owner: string }>('SELECT acct, chips, trades, joined, owner FROM cup_entries WHERE round = ?', round)
+      .toArray();
+    return entries
+      .map((e) => {
+        let score = e.chips;
+        for (const b of this.sql.exec<{ item: string; qty: number }>('SELECT item, qty FROM cup_bag WHERE round = ? AND acct = ?', round, e.acct)) score += b.qty * (bid[b.item] ?? 0);
+        return { ...e, score };
+      })
+      .sort((a, b) => b.score - a.score || a.trades - b.trades || a.joined - b.joined);
+  }
+
+  /** live board for a round (owner ids only, never visitor ids) */
+  cupBoard(acct?: string): { round: string; start: number; end: number; entrants: number; top: { owner: string; score: number }[]; me?: { chips: number; bag: Record<string, number>; score: number; rank: number } } {
+    const now = Date.now();
+    const r = this.currentRound(now);
+    const ranked = this.scores(r.id, this.quotes(now));
+    const out: ReturnType<Economy['cupBoard']> = { round: r.id, start: r.start, end: r.end, entrants: ranked.length, top: ranked.slice(0, 10).map((e) => ({ owner: e.owner, score: e.score })) };
+    const i = acct ? ranked.findIndex((e) => e.acct === acct) : -1;
+    if (i >= 0) {
+      const bag: Record<string, number> = {};
+      for (const b of this.sql.exec<{ item: string; qty: number }>('SELECT item, qty FROM cup_bag WHERE round = ? AND acct = ? AND qty > 0', r.id, acct!)) bag[b.item] = b.qty;
+      out.me = { chips: ranked[i].chips, bag, score: ranked[i].score, rank: i + 1 };
+    }
+    return out;
+  }
+
+  round(id: string) {
+    const r = this.sql
+      .exec<{ id: string; start: number; end_at: number; setup: string; setup_hash: string; status: string; results: string | null; results_hash: string | null }>(
+        'SELECT * FROM cup_rounds WHERE id = ?',
+        id,
+      )
+      .toArray()[0];
+    return r ?? null;
+  }
+
+  // ---------- the tick: apprentices, round open/settle, hourly price post ----------
+
+  private meta(k: string): number {
+    return this.sql.exec<{ v: number }>('SELECT v FROM meta WHERE k = ?', k).toArray()[0]?.v ?? 0;
+  }
+  private setMeta(k: string, v: number) {
+    this.sql.exec('INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)', k, v);
+  }
+
+  /** starts the alarm loop if it is not running (called by the Hall on hello) */
+  async start(): Promise<void> {
+    if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + 1000);
+  }
+
+  async alarm() {
+    await this.tick();
+    const now = Date.now();
+    const nextTick = now + APPRENTICES.everyMin * this.minuteMs;
+    const roundEnd = this.currentRound(now).end;
+    await this.ctx.storage.setAlarm(Math.max(now + 200, Math.min(nextTick, roundEnd + 50)));
+  }
+
+  /** Everything time-driven. Safe to call often; each part runs only when due. */
+  async tick(): Promise<{ settled: string[]; committed: string[]; posted: boolean }> {
+    const now = Date.now();
+    const jobs: Job[] = [];
+    const settled: string[] = [];
+    const committed: string[] = [];
+    // 1. settle every open round that has ended
+    for (const r of this.sql.exec<{ id: string; setup: string }>("SELECT id, setup FROM cup_rounds WHERE status = 'open' AND end_at <= ?", now).toArray()) {
+      const res = this.settle(r.id, now);
+      settled.push(r.id);
+      jobs.push({ job: `settle-${r.id}`, method: 'settle_round', args: { round_id: r.id, setup: r.setup, results_hash: res.hash } });
+      res.trophies.forEach((owner, i) => jobs.push({ job: `trophy-${r.id}-${i + 1}`, method: 'mint_trophy', args: { owner, round_id: r.id, place: i + 1 } }));
+    }
+    // 2. open (commit) the current round if not yet
+    const cur = this.currentRound(now);
+    if (!this.round(cur.id)) {
+      const setup = JSON.stringify({ round: cur.id, start: cur.start, end: cur.end, quotes: this.quotes(now), apprenticeSeed: bytesToHex(crypto.getRandomValues(new Uint8Array(16))) });
+      const hash = bytesToHex(sha256(new TextEncoder().encode(setup)));
+      this.sql.exec("INSERT INTO cup_rounds(id, start, end_at, setup, setup_hash, status) VALUES (?, ?, ?, ?, ?, 'open')", cur.id, cur.start, cur.end, setup, hash);
+      committed.push(cur.id);
+      jobs.unshift({ job: `commit-${cur.id}`, method: 'commit_round', args: { round_id: cur.id, setup_hash: hash } });
+    }
+    // 3. Kettle's apprentices: small labelled trades so the board never freezes (seeded by the round, not by players)
+    const lastA = this.meta('apprentice');
+    if (now - lastA >= APPRENTICES.everyMin * this.minuteMs) {
+      this.setMeta('apprentice', now);
+      const setup = JSON.parse(this.round(cur.id)!.setup) as { apprenticeSeed: string };
+      for (let i = 0; i < APPRENTICES.count; i++) {
+        const h = sha256(new TextEncoder().encode(`${setup.apprenticeSeed}:${Math.floor(now / (APPRENTICES.everyMin * this.minuteMs))}:${i}`));
+        const m = MARKET[h[0] % MARKET.length];
+        const side = h[1] % 2 ? 'buy' : 'sell';
+        const units = 1 + (h[2] % APPRENTICES.maxUnits);
+        const gap = this.gapNow(m.item, now);
+        this.setGap(m.item, side === 'buy' ? gap + units : gap - units, now);
+      }
+      for (const q of this.quotes(now)) this.sql.exec('INSERT INTO price_hist(ts, item, bid, ask) VALUES (?, ?, ?, ?)', now, q.item, q.bid, q.ask);
+      this.sql.exec('DELETE FROM price_hist WHERE ts < ?', now - PRICE.historyMin * this.minuteMs);
+    }
+    // 4. hourly on-chain price post
+    const hour = Math.floor(now / (PRICE.postEveryMin * this.minuteMs));
+    let posted = false;
+    if (hour > this.meta('posted_hour')) {
+      this.setMeta('posted_hour', hour);
+      jobs.push({ job: `prices-${hour}`, method: 'post_prices', args: { hour, quotes: this.quotes(now).map(({ item, bid, ask }) => ({ item, bid, ask })) } });
+      posted = true;
+    }
+    if (jobs.length && this.env.MIRROR) await this.env.MIRROR.get(this.env.MIRROR.idFromName('main')).enqueue(jobs);
+    return { settled, committed, posted };
+  }
+
+  /** Settles a round: scores at closing bids, Leaves prizes (best placing per day), results file + hash, trophy owners. */
+  private settle(id: string, now: number): { hash: string; trophies: string[] } {
+    return this.ctx.storage.transactionSync(() => {
+      const closing = this.quotes(now);
+      const ranked = this.scores(id, closing);
+      const places = ranked.length >= CUP.minEntrantsForPlaces;
+      const entries = ranked.map((e, i) => {
+        let prize = places && i < CUP.prizes.length ? CUP.prizes[i] : 0;
+        if (!prize && e.score > CUP.chips) prize = CUP.profitPrize;
+        // one prize per player per UTC day: only the part above what they already won today is paid
+        const already = this.earnedOn(e.acct, dayOf(now), 'cup_prize');
+        const paid = prize > already ? this.write(e.acct, prize - already, 'cup_prize', id, now) : 0;
+        return { rank: i + 1, owner: e.owner, score: e.score, trades: e.trades, prize, paid };
+      });
+      const results = JSON.stringify({ round: id, closing: closing.map(({ item, bid }) => ({ item, bid })), entries: entries.map(({ rank, owner, score, trades, prize }) => ({ rank, owner, score, trades, prize })) });
+      const hash = bytesToHex(sha256(new TextEncoder().encode(results)));
+      this.sql.exec("UPDATE cup_rounds SET status = 'settled', results = ?, results_hash = ? WHERE id = ?", results, hash, id);
+      return { hash, trophies: places ? entries.slice(0, CUP.trophies).map((e) => e.owner) : [] };
+    });
+  }
+
+  history(): { ts: number; item: string; bid: number; ask: number }[] {
+    return this.sql.exec<{ ts: number; item: string; bid: number; ask: number }>('SELECT ts, item, bid, ask FROM price_hist ORDER BY ts').toArray();
   }
 
   state(acct: string): EconState {

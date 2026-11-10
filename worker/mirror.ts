@@ -108,7 +108,7 @@ export class Mirror extends DurableObject<MirrorEnv> {
     const now = Date.now();
     const due = this.sql
       .exec<{ job: string; method: JobMethod; args: string; tries: number; single: number }>(
-        "SELECT job, method, args, tries, single FROM jobs WHERE status = 'queued' AND next <= ? ORDER BY created LIMIT ?",
+        "SELECT job, method, args, tries, single FROM jobs WHERE status = 'queued' AND next <= ? ORDER BY created, rowid LIMIT ?",
         now,
         MAX_BATCH,
       )
@@ -173,11 +173,22 @@ export class Mirror extends DurableObject<MirrorEnv> {
     return { mode: this.mode(), counts, parked };
   }
 
+  /** Jobs by id (round pages: commit, settle, trophies) */
+  async jobs(ids: string[]): Promise<{ job: string; method: string; status: string; tx: string | null }[]> {
+    if (!ids.length) return [];
+    return this.sql
+      .exec<{ job: string; method: string; status: string; tx: string | null }>(
+        `SELECT job, method, status, tx FROM jobs WHERE job IN (${ids.map(() => '?').join(',')}) ORDER BY created, rowid`,
+        ...ids,
+      )
+      .toArray();
+  }
+
   /** Receipts for one owner id (for the Rescue Book): job, method, status, tx. */
   async receipts(owner: string): Promise<{ job: string; method: string; status: string; tx: string | null; args: unknown }[]> {
     return this.sql
       .exec<{ job: string; method: string; status: string; tx: string | null; args: string }>(
-        "SELECT job, method, status, tx, args FROM jobs WHERE json_extract(args, '$.owner') = ? ORDER BY created",
+        "SELECT job, method, status, tx, args FROM jobs WHERE json_extract(args, '$.owner') = ? ORDER BY created, rowid",
         owner,
       )
       .toArray()

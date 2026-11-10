@@ -6,6 +6,7 @@ import { Economy, minuteMs } from './economy';
 import { Mirror, ownerId } from './mirror';
 import { edition, ECONOMY } from '../src/economy';
 import { GATHER, WORKBENCH, dist, frenById, nodeById } from '../src/valley';
+import { CUP, TRADE_ZONE } from '../src/market';
 import { serverRpc } from './solana';
 import { DUEL, DUEL_MAX_D, PUMP_MARKETS, cleanChat, cleanPlayerName, defaultName, inDuelZone, type PumpMarket } from '../src/layout';
 import { SPOTS, BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
@@ -159,7 +160,7 @@ const NEAR_API = /^\/api\/(health|config|near\/[a-z-]+)$/;
 /** NEAR edition: socket messages that belong to Solana / money / prediction features */
 const NEAR_BLOCKED_WS = new Set(['dq', 'duel_ask', 'duel_ans', 'duel_cancel', 'spots', 'profile', 'lantern']);
 /** socket messages that exist only in the NEAR edition */
-const NEAR_ONLY_WS = new Set(['pick', 'grant', 'wishDone', 'craft', 'book']);
+const NEAR_ONLY_WS = new Set(['pick', 'grant', 'wishDone', 'craft', 'book', 'trade', 'cupJoin']);
 const REACH = GATHER.reach + GATHER.tolerance;
 const CO_REACH = GATHER.coRescueRadius + GATHER.tolerance;
 /** PumpHall: one board for everyone; "t<id>" rooms are isolated boards for automated tests */
@@ -352,9 +353,22 @@ async function nearApi(req: Request, env: Env, path: string): Promise<Response> 
     return json({ owner, nearAccount: env.NEAR_ACCOUNT ?? null, ...(await economy(env).state(pid)), receipts: await mirror(env).receipts(owner) });
   }
   if (path === '/api/near/audit') return json(await economy(env).audit());
+  if (path === '/api/near/market') {
+    const E = economy(env);
+    return json({ quotes: await E.quotes(), history: await E.history(), cup: await E.cupBoard(PID_RE.test(pid) ? pid : undefined) });
+  }
+  if (path === '/api/near/round') {
+    // a round page: anyone can recompute sha256(setup) and sha256(results) and compare with the chain
+    const id = q.get('id') ?? '';
+    const r = /^[0-9]{8}-[0-9]{6}$/.test(id) ? await economy(env).round(id) : null;
+    if (!r) return json({ error: 'No such round' }, 404);
+    const jobs = await mirror(env).jobs([`commit-${id}`, `settle-${id}`, `trophy-${id}-1`, `trophy-${id}-2`, `trophy-${id}-3`]);
+    return json({ ...r, results: r.results ? JSON.parse(r.results) : null, chain: { contract: env.NEAR_ACCOUNT ?? null, jobs } });
+  }
   // test hooks: only with the load-test key (unset in production = off)
   const key = q.get('k') ?? '';
   if (!env.LOAD_TEST_KEY || key !== env.LOAD_TEST_KEY) return json({ error: 'Not found' }, 404);
+  if (path === '/api/near/test-tick') return json(await economy(env).tick());
   if (path === '/api/near/test-mint') {
     if (!PID_RE.test(pid)) return json({ error: 'Bad pid' }, 400);
     const owner = await ownerOf(env, pid);
@@ -522,6 +536,20 @@ export class Hall extends DurableObject<Env> {
           ]);
         }
         return send(ws, { t: 'crafted', ...r });
+      }
+      case 'trade': {
+        if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'traded', ok: false, why: 'Trade at Kettle\'s stall in the Trading Hall.' });
+        const side = m.side === 'buy' ? 'buy' : m.side === 'sell' ? 'sell' : null;
+        if (!side) return;
+        const r = await E.trade(a.pid, String(m.item ?? ''), side, Math.floor(num(m.n, 1)), m.cup === true);
+        send(ws, { t: 'traded', item: m.item, side, n: m.n, cup: m.cup === true, ...r });
+        // everyone in the room sees the price move at once
+        if (r.ok && r.quotes) this.broadcast({ t: 'quotes', q: r.quotes }, ws);
+        return;
+      }
+      case 'cupJoin': {
+        if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'cupJoined', ok: false, why: 'Join at the Trading Hall.' });
+        return send(ws, { t: 'cupJoined', ...(await E.cupJoin(a.pid, a.ip)), chips: CUP.chips });
       }
       case 'book': {
         const owner = await ownerOf(this.env, a.pid);
@@ -968,6 +996,7 @@ export class Hall extends DurableObject<Env> {
           const stale = await E.openWish(a.pid);
           if (stale) await E.cancelWish(a.pid, stale);
           await E.touch(a.pid);
+          await E.start();
           send(ws, { t: 'econ', ...(await E.state(a.pid)), ...(await E.book(a.pid)) });
         }
         // arrived through a friend's "sit with me" link?
