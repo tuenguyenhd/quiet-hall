@@ -1759,3 +1759,17 @@ body:has(.fren-mini:not(.hidden)) .chat {
   margin-top: 2px;
   flex: none;
 }
+
+/* PumpHall sheet: Play | History | Board views, one decision at a time */
+.pump-views { display: flex; gap: 4px; padding: 4px; margin: 8px 0 10px; border-radius: 999px; background: rgba(22, 13, 46, 0.08); }
+.pump-views button { flex: 1; min-height: 40px; border: 0; border-radius: 999px; background: transparent; font: inherit; font-family: var(--pop); cursor: pointer; }
+.pump-views button.on { background: #fff; box-shadow: 2px 2px 0 var(--ink, #160d2e); }
+.pump-hero { text-align: center; margin: 6px 0 10px; }
+.pump-hero .small { margin: 2px 0 0; }
+.pump-qcard { padding: 14px 12px 8px; border-radius: 18px; border: 2px solid rgba(22, 13, 46, 0.12); background: rgba(255, 255, 255, 0.6); margin-bottom: 10px; }
+.pump-q { font-family: var(--pop); font-size: 19px; line-height: 1.25; text-align: center; margin-bottom: 10px; }
+.pump-closes, .pump-hsum { text-align: center; }
+.pump-more { margin: 8px 0; border-top: 1px dashed rgba(22, 13, 46, 0.18); padding-top: 8px; }
+.pump-more summary { cursor: pointer; font-family: var(--pop); font-size: 15px; min-height: 32px; display: flex; align-items: center; }
+.pump .pump-tag { display: block; width: fit-content; margin: 10px auto 0; }
+.pump-history li { padding: 8px 0; border-bottom: 1px dashed rgba(22, 13, 46, 0.14); line-height: 1.4; }

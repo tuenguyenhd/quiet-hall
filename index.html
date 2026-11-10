@@ -312,34 +312,54 @@
           <h2>📈 PumpHall</h2>
           <button class="sheet-x" data-close="pumpsheet" aria-label="Close">✕</button>
         </div>
+        <div class="pump-views" id="pump-views" role="tablist">
+          <button data-v="play" class="on" role="tab">Play</button>
+          <button data-v="history" role="tab">History</button>
+          <button data-v="board" role="tab">🏆 Board</button>
+        </div>
+        <div id="pump-view-play">
+          <div class="chips" id="pump-markets">
+            <button data-m="SOL" class="on">SOL · 5 min</button>
+            <button data-m="SKR">SKR · 15 min</button>
+          </div>
+          <div id="pump-status" class="pump-status hidden"></div>
+          <div class="pump-hero">
+            <div id="pump-price" class="pump-price">…</div>
+            <p class="small" id="pump-live"></p>
+          </div>
+          <div class="pump-qcard">
+            <div class="pump-q" id="pump-q">Loading prices…</div>
+            <div class="pump-pick">
+              <button class="up" id="btn-pump-up" disabled>⬆ UP</button>
+              <button class="down" id="btn-pump-down" disabled>⬇ DOWN</button>
+            </div>
+            <p class="small pump-closes" id="pump-closes"></p>
+          </div>
+          <details class="pump-more">
+            <summary>Last rounds</summary>
+            <ul class="pump-list" id="pump-past"></ul>
+          </details>
+          <label class="duel-open"><input type="checkbox" id="opt-duel" checked /> Open to duels: bump into someone here and tap ⚔ to call SOL or SKR against them. Points only.</label>
+          <details class="pump-more">
+            <summary>How it works</summary>
+            <p class="small fine">Right call = 10 pts, +2 per win in a row (max +10). Wrong or flat = 0, never minus. Prices: Coinbase public 1-minute candles (close of the last minute before the round starts / ends); tap verify to check. Duels: a win = 15 duel pts, +3 per duel win in a row (max +15); loss or draw = 0; rated duels move your rating (Elo). Not financial advice.</p>
+          </details>
+        </div>
+        <div id="pump-view-history" class="hidden">
+          <p class="small pump-hsum" id="pump-hsum"></p>
+          <ul class="pump-list pump-history" id="pump-history"></ul>
+        </div>
+        <div id="pump-view-board" class="hidden">
+          <div class="chips" id="pump-boards">
+            <button data-b="week" class="on">This week</button>
+            <button data-b="all">All time</button>
+            <button data-b="duel">⚔ Duels</button>
+          </div>
+          <ol class="pump-list board" id="pump-board"></ol>
+          <p class="small" id="pump-me"></p>
+          <ul class="pump-list hidden" id="pump-myduels"></ul>
+        </div>
         <span class="tag pump-tag">just for fun · no money · no prizes</span>
-        <div id="pump-status" class="pump-status hidden"></div>
-        <div class="chips" id="pump-markets">
-          <button data-m="SOL" class="on">SOL · 5 min</button>
-          <button data-m="SKR">SKR · 15 min</button>
-        </div>
-        <div id="pump-price" class="pump-price">…</div>
-        <p class="small" id="pump-live"></p>
-        <div class="label" id="pump-q">Loading prices…</div>
-        <div class="pump-pick">
-          <button class="up" id="btn-pump-up" disabled>⬆ UP</button>
-          <button class="down" id="btn-pump-down" disabled>⬇ DOWN</button>
-        </div>
-        <p class="small" id="pump-closes"></p>
-        <div class="label">Last rounds</div>
-        <ul class="pump-list" id="pump-past"></ul>
-        <div class="label">Leaderboard</div>
-        <div class="chips" id="pump-boards">
-          <button data-b="week" class="on">This week</button>
-          <button data-b="all">All time</button>
-          <button data-b="duel">⚔ Duels</button>
-        </div>
-        <ol class="pump-list board" id="pump-board"></ol>
-        <p class="small" id="pump-me"></p>
-        <ul class="pump-list hidden" id="pump-myduels"></ul>
-        <label class="duel-open"><input type="checkbox" id="opt-duel" checked /> Open to duels: bump into someone here and tap ⚔ to call SOL or SKR against them. Points only.</label>
-        <p class="small fine">Right call = 10 pts, +2 per win in a row (max +10). Wrong or flat = 0, never minus. Prices: Coinbase public 1-minute candles (close of the last minute before the round starts / ends); tap verify to check. Duels: a win = 15 duel pts, +3 per duel win in a row (max +15); loss or draw = 0; rated duels move your rating (Elo). Not financial advice.</p>
-        <button class="ghost" data-close="pumpsheet">Close</button>
       </div>
     </section>
     <section id="spotsheet" class="overlay hidden">

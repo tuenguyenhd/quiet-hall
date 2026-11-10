@@ -457,8 +457,24 @@ export class Pump extends DurableObject {
       all_board: board('pts', ''),
       me: me ? { name: me.name, tag: me.tag, pts: me.pts, wpts, wins: me.wins, losses: me.losses, streak: me.streak, best: me.best, rank: rank('pts', me.pts), wrank: rank('wpts', wpts, 'AND wk = ?', wk) } : null,
       duels: this.myDuels(pid),
+      history: this.history(pid),
       ...this.duelBoard(pid, wk),
     };
+  }
+
+  /** a player's own picks, newest first, with each round's prices and result (play history) */
+  private history(pid: string) {
+    if (!PID_RE.test(pid)) return [];
+    const ms = this.markets.map(() => '?').join(',');
+    return this.sql
+      .exec<{ m: PumpMarket; k: number; dir: Dir; won: number | null; pts: number; at: number; lock: number | null; close: number | null; res: Res | null }>(
+        `SELECT p.m AS m, p.k AS k, p.dir AS dir, p.won AS won, p.pts AS pts, p.at AS at, r.lock AS lock, r.close AS close, r.res AS res
+         FROM picks p LEFT JOIN rounds r ON r.m = p.m AND r.k = p.k WHERE p.pid = ? AND p.m IN (${ms}) ORDER BY p.at DESC LIMIT 30`,
+        pid,
+        ...this.markets,
+      )
+      .toArray()
+      .map((r) => ({ ...r, start: r.k * len(r.m), end: (r.k + 1) * len(r.m), verifyClose: verifyUrl(r.m, (r.k + 1) * len(r.m)) }));
   }
 
   /** test hook (local/devnet test rooms only): settle a round with given prices */

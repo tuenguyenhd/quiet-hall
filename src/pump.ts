@@ -2,7 +2,7 @@
 // (each with a "verify" link to the public Coinbase candles), and the weekly / all-time leaderboard.
 // Fun only: no money in, no prizes out.
 import { apiPost } from './api';
-import { type PumpMarket } from './layout';
+import { PUMP_MARKETS, type PumpMarket } from './layout';
 import { CLIENT_PUMP_MARKETS } from './client-edition';
 import type { BoardData } from './pumphall';
 
@@ -43,6 +43,7 @@ interface State {
   week_board: Row[];
   all_board: Row[];
   me: { name: string; tag: string; pts: number; wpts: number; wins: number; losses: number; streak: number; best: number; rank: number | null; wrank: number | null } | null;
+  history?: { m: PumpMarket; k: number; dir: Dir; won: number | null; pts: number; at: number; lock: number | null; close: number | null; res: string | null; start: number; end: number; verifyClose: string }[];
   duels: { id: string; m: PumpMarket; dir: Dir; opp: string | null; oppTag: string | null; endAt: number; rated: boolean; status: string; res: string | null; won: number | null; pts: number; r0: number | null; r1: number | null; verifyClose: string }[];
   duel_board: (Row & { rating: number })[];
   duel_me: { rating: number; rated: number; wins: number; losses: number; draws: number; streak: number; best: number; pts: number; wpts: number } | null;
@@ -61,7 +62,8 @@ interface Host {
 }
 
 const $ = (id: string) => document.getElementById(id)!;
-const fmtP = (p: number | null | undefined) => (p == null ? '…' : p >= 10 ? p.toFixed(2) : p >= 1 ? p.toFixed(3) : p.toFixed(5));
+const fmtP = (p: number | null | undefined) =>
+  p == null ? '…' : p >= 1000 ? p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : p >= 10 ? p.toFixed(2) : p >= 1 ? p.toFixed(3) : p.toFixed(5);
 const fmtT = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -158,18 +160,19 @@ export function setupPump(h: Host) {
     $('pump-price').className = 'pump-price ' + (dir > 0 ? 'up' : dir < 0 ? 'down' : '');
     const lm = s.live.mine;
     $('pump-live').innerHTML =
-      `<b>Live</b> ${hhmm(s.live.start)}–${hhmm(s.live.end)} · ends in <b>${fmtT(s.live.end - t)}</b><br>` +
-      (s.live.lock != null ? `Locked at <b>$${fmtP(s.live.lock)}</b> <a href="${s.live.verifyLock}" target="_blank" rel="noopener">verify</a>` : 'Price locking… (a few seconds)') +
-      ` · crowd ⬆${s.live.up} ⬇${s.live.down}` +
-      (lm ? ` · you: <b class="${lm.dir}">${lm.dir === 'up' ? '⬆ UP' : '⬇ DOWN'}</b>` : '');
+      (s.live.lock != null
+        ? `${dir > 0 ? '▲ up' : dir < 0 ? '▼ down' : '＝ flat'} from <b>$${fmtP(s.live.lock)}</b> at ${hhmm(s.live.start)} <a href="${s.live.verifyLock}" target="_blank" rel="noopener">verify</a>`
+        : 'Locking the start price… (a few seconds)') +
+      `<br>This round ends in <b>${fmtT(s.live.end - t)}</b>` +
+      (lm ? ` · your call: <b class="${lm.dir}">${lm.dir === 'up' ? '⬆ UP' : '⬇ DOWN'}</b>` : '');
     // next round: the one you can pick
     const closes = s.next.closesAt - t;
     const nm = s.next.mine;
-    $('pump-q').textContent = `${market} at ${hhmm(s.next.end)}: higher or lower than at ${hhmm(s.next.start)}?`;
+    $('pump-q').textContent = `${PUMP_MARKETS[market].label} at ${hhmm(s.next.end)}: higher or lower than at ${hhmm(s.next.start)}?`;
     $('pump-closes').textContent = nm
       ? `Saved ✓ Price locks at ${hhmm(s.next.start)}, result at ${hhmm(s.next.end)}. You can pick the following round once this one starts.`
       : closes > 0
-        ? `Picks close in ${fmtT(closes)} (30 s before the round starts) · crowd ⬆${s.next.up} ⬇${s.next.down}`
+        ? `⏳ Picks close in ${fmtT(closes)} · crowd ⬆${s.next.up} ⬇${s.next.down}`
         : `⏱ Last 30 s: picks are closed while the price locks (${fmtT(s.next.start - t)}). The next round opens right after.`;
     const can = !nm && closes > 0 && !busy;
     const up = $('btn-pump-up') as HTMLButtonElement;
@@ -190,6 +193,22 @@ export function setupPump(h: Host) {
           })
           .join('')
       : '<li>No finished rounds yet. Be the first!</li>';
+    // my play history (all of this edition's markets)
+    const hist = st.history ?? [];
+    const done = hist.filter((p) => p.won === 0 || p.won === 1);
+    const wins = done.filter((p) => p.won === 1).length;
+    $('pump-hsum').textContent = hist.length
+      ? `${hist.length} pick${hist.length === 1 ? '' : 's'} · ${wins} right of ${done.length} settled${done.length ? ` (${Math.round((100 * wins) / done.length)}%)` : ''} · ${done.reduce((a, p) => a + (p.pts || 0), 0)} pts`
+      : 'No picks yet. Make a call on the Play tab.';
+    $('pump-history').innerHTML = hist
+      .map((p) => {
+        const name = PUMP_MARKETS[p.m]?.label ?? p.m;
+        const call = p.dir === 'up' ? '⬆ UP' : '⬇ DOWN';
+        const res = p.res == null ? '<span class="small">waiting…</span>' : p.won === 1 ? `<b class="up">+${p.pts}</b>` : '<b class="down">✗</b>';
+        const moved = p.lock != null && p.close != null ? `$${fmtP(p.lock)} → $${fmtP(p.close)}` : '';
+        return `<li><b>${name}</b> ${hhmm(p.start)}–${hhmm(p.end)} · you said ${call} · ${moved} ${res}${p.res != null ? ` <a href="${p.verifyClose}" target="_blank" rel="noopener">verify</a>` : ''}</li>`;
+      })
+      .join('');
     // leaderboard
     ($('opt-duel') as HTMLInputElement).checked = h.duelOpen();
     const myDuels = $('pump-myduels');
@@ -238,6 +257,13 @@ export function setupPump(h: Host) {
 
   $('btn-pump-up').addEventListener('click', () => pick('up'));
   $('btn-pump-down').addEventListener('click', () => pick('down'));
+  // Play | History | Board: the leaderboard and your history have their own views instead of sitting under the game
+  for (const b of document.querySelectorAll<HTMLElement>('#pump-views button'))
+    b.addEventListener('click', () => {
+      const v = b.dataset.v;
+      for (const x of document.querySelectorAll<HTMLElement>('#pump-views button')) x.classList.toggle('on', x === b);
+      for (const id of ['play', 'history', 'board']) $(`pump-view-${id}`).classList.toggle('hidden', v !== id);
+    });
   for (const b of document.querySelectorAll<HTMLElement>('#pump-markets button'))
     b.addEventListener('click', () => {
       market = b.dataset.m as PumpMarket;
