@@ -12,9 +12,10 @@
 1. **Sit.** Open the link, tap a cushion, breathe. Every minute you sit (server-timed; hidden time doesn't count) earns 1 Leaf.
 2. **Rescue a fren together.** Follow the lanterns to Meme Valley. Tap Moon Rocks to gather (each player has their own stock, so nobody can take yours). Grant Shibby's wish and sit beside him for a minute: **everyone sitting beside him is rescued too.** He follows you home.
 3. **Craft.** Make a Moon Collar at the workbench.
-4. **Trade.** Kettle's market in the Trading Hall: prices move with every trade anyone makes (mid = base·e^(k·gap), 10% spread, decays back to base). Kettle buys up to 60 Leaves' worth from you a day.
-5. **Compete.** The Market Cup: every 3 hours, join free with 200 play chips, trade the same live market, top 10 win Leaves.
-6. **Look ahead.** The telescope at the Lookout shows six **Preview** screens (sample data, clearly labelled): Cabal Hall, Sitting Bazaar, Whale Order, Calm the FUD Golem, trade feed, Agent Cup.
+4. **Trade.** The Market stall in PumpHall: prices move with every trade anyone makes (mid = base·e^(k·gap), 10% spread, decays back to base). The Market buys up to 60 Leaves' worth from you a day.
+5. **Call it.** PumpHall's big board runs live Bitcoin and NEAR prices (Coinbase public candles): guess up or down for the next round, or bump into someone and duel. Points and a leaderboard only, no money.
+6. **Compete.** The Market Cup: every 3 hours, join free with 200 play chips, trade the same live market, top 10 win Leaves.
+7. **Look ahead.** The telescope at the Lookout shows six **Preview** screens (sample data, clearly labelled): Cabal Hall, Sitting Bazaar, Whale Order, Calm the FUD Golem, trade feed, Agent Cup.
 
 ## Where NEAR is used
 
@@ -69,15 +70,15 @@ From a fresh clone (no secrets) 72 checks run and pass (economy 23, valley 23, m
 ## What existed before the hackathon, and what was built for it
 
 - **Before (first commit 2026-11-09):** Quiet Hall, a shared meditation world: the hall, sitting, presence, chat, pets, blessings, and its Solana features (wallet sign-in, tips, collectibles, PumpHall predictions).
-- **Built in the window, on branch `near-hackathon`:** everything NEAR: the items contract, the Mirror, the Economy store (Leaves, bag, market, Cup), Meme Valley (gathering, wishes with co-rescue, crafting), Kettle's Living Market, the Market Cup with on-chain commit/settle, the NEAR client UI and previews, the verify script, all NEAR tests. `git log main..near-hackathon` shows the diff.
+- **Built in the window, on branch `near-hackathon`:** everything NEAR: the items contract, the Mirror, the Economy store (Leaves, bag, market, Cup), Meme Valley (gathering, wishes with co-rescue, crafting), the Living Market, the Market Cup with on-chain commit/settle, the NEAR client UI and previews, the verify script, all NEAR tests. `git log main..near-hackathon` shows the diff.
 - **AI tools:** built with Claude Code (Anthropic) as a coding assistant. Libraries: three.js, near-api-js, near-sdk-rs, near-contract-standards, @noble/curves, @noble/hashes. Fren models are CC0 (Quaternius).
 
 ## Live, Preview, Roadmap
 
 | Tier | |
 |---|---|
-| **Live** | Sit → Leaves · co-rescue · personal-stock gathering · crafting · Kettle's Living Market · Market Cup · NEP-171 receipts · hourly price posts · Cup commit/settle · trophies · verify script |
+| **Live** | Sit → Leaves · co-rescue · personal-stock gathering · crafting · the Living Market · Market Cup · NEP-171 receipts · hourly price posts · Cup commit/settle · trophies · verify script |
 | **Preview** (sample data, labelled) | Cabal Hall · Sitting Bazaar · Whale Order · Calm the FUD Golem · trade feed and trader card · Agent Cup |
-| **Roadmap** | NEAR Auth social login · OutLayer-proven Cup scoring · AI characters (Kettle haggling, the Vault guard) with limited function-call keys · Shade Agents in an Agent Cup · receipt roots (one Merkle root an hour, mint on claim) · valley shards and regional markets · NEAR Intents for "pay with any token" cosmetics in the other editions |
+| **Roadmap** | NEAR Auth social login · OutLayer-proven Cup scoring · AI characters (a market trader you can haggle with, the Vault guard) with limited function-call keys · Shade Agents in an Agent Cup · receipt roots (one Merkle root an hour, mint on claim) · valley shards and regional markets · NEAR Intents for "pay with any token" cosmetics in the other editions |
 
 Never planned: a token, an airdrop, paid odds, or cashing out Leaves.
