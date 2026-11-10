@@ -226,12 +226,20 @@ export const TEASERS = [
 
 // ---------- PumpHall: fun-only price predictions ----------
 /** Markets. Prices come from Coinbase Exchange public 1-minute candles (anyone can check them).
- *  SKR trades less often, so its rounds are longer. */
+ *  SKR and NEAR trade less often than SOL and Bitcoin, so their rounds are longer. */
 export const PUMP_MARKETS = {
-  SOL: { product: 'SOL-USD', roundMin: 5 },
-  SKR: { product: 'SKR-USD', roundMin: 15 },
+  SOL: { product: 'SOL-USD', roundMin: 5, label: 'SOL' },
+  SKR: { product: 'SKR-USD', roundMin: 15, label: 'SKR' },
+  BTC: { product: 'BTC-USD', roundMin: 5, label: 'Bitcoin' },
+  NEAR: { product: 'NEAR-USD', roundMin: 15, label: 'NEAR' },
 } as const;
 export type PumpMarket = keyof typeof PUMP_MARKETS;
+/** which markets PumpHall plays in each edition (design/gdd/edition-*.md) */
+export const PUMP_MARKETS_BY_EDITION: Record<'seeker' | 'near' | 'web3', PumpMarket[]> = {
+  seeker: ['SOL', 'SKR'],
+  near: ['BTC', 'NEAR'],
+  web3: ['BTC', 'NEAR'],
+};
 /** picks close this long before a round locks */
 export const PUMP_CLOSE_MS = 30000;
 /** points: a right call earns 10, plus 2 per win in a row before it (max +10). Wrong or flat: 0. Never negative. */

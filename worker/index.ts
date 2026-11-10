@@ -8,7 +8,7 @@ import { edition, ECONOMY } from '../src/economy';
 import { FRENS, GATHER, WORKBENCH, dist, frenById, nodeById } from '../src/valley';
 import { CUP, TRADE_ZONE } from '../src/market';
 import { serverRpc } from './solana';
-import { DUEL, DUEL_MAX_D, PUMP_MARKETS, cleanChat, cleanPlayerName, defaultName, inDuelZone, type PumpMarket } from '../src/layout';
+import { DUEL, DUEL_MAX_D, PUMP_MARKETS_BY_EDITION, cleanChat, cleanPlayerName, defaultName, inDuelZone, type PumpMarket } from '../src/layout';
 import { SPOTS, BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
 
 export { Ledger, Pump, Economy, Mirror };
@@ -156,9 +156,9 @@ const mirror = (env: Env) => env.MIRROR!.get(env.MIRROR!.idFromName('main'));
 /** visitor id → NEAR owner id. Falls back to a fixed dev secret only when none is configured (mock / local). */
 const ownerOf = (env: Env, pid: string) => ownerId(env.OWNER_SECRET || 'dev-only-owner-secret', pid);
 /** NEAR edition: only these API paths exist (edition-near.md: EDITION removes UI *and* routes) */
-const NEAR_API = /^\/api\/(health|config|near\/[a-z-]+)$/;
+const NEAR_API = /^\/api\/(health|config|near\/[a-z-]+|pump\/[a-z-]+)$/;
 /** NEAR edition: socket messages that belong to Solana / money / prediction features */
-const NEAR_BLOCKED_WS = new Set(['dq', 'duel_ask', 'duel_ans', 'duel_cancel', 'spots', 'profile', 'lantern']);
+const NEAR_BLOCKED_WS = new Set(['spots', 'profile', 'lantern']);
 /** socket messages that exist only in the NEAR edition */
 const NEAR_ONLY_WS = new Set(['pick', 'grant', 'wishDone', 'craft', 'book', 'trade', 'cupJoin']);
 const REACH = GATHER.reach + GATHER.tolerance;
@@ -256,7 +256,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   }
   if (path === '/api/pump/pick') {
     const m = String(body.m ?? '') as PumpMarket;
-    if (!(m in PUMP_MARKETS)) return json({ error: 'Unknown market' }, 400);
+    if (!PUMP_MARKETS_BY_EDITION[edition(env.EDITION)].includes(m)) return json({ error: 'Unknown market' }, 400);
     const r = await pump(env, pumpRoom(body.room)).pick(String(body.pid ?? ''), ip, body.name, Math.floor(num(body.seed)) >>> 0, m, Math.floor(num(body.k)), body.dir === 'down' ? 'down' : body.dir === 'up' ? 'up' : ('' as never));
     return 'error' in r ? json(r, 400) : json(r);
   }
@@ -547,7 +547,7 @@ export class Hall extends DurableObject<Env> {
         return send(ws, { t: 'crafted', ...r });
       }
       case 'trade': {
-        if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'traded', ok: false, why: 'Trade at Kettle\'s stall in the Trading Hall.' });
+        if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'traded', ok: false, why: 'Trade at the Market stall in PumpHall.' });
         const side = m.side === 'buy' ? 'buy' : m.side === 'sell' ? 'sell' : null;
         if (!side) return;
         const r = await E.trade(a.pid, String(m.item ?? ''), side, Math.floor(num(m.n, 1)), m.cup === true);
@@ -557,7 +557,7 @@ export class Hall extends DurableObject<Env> {
         return;
       }
       case 'cupJoin': {
-        if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'cupJoined', ok: false, why: 'Join at the Trading Hall.' });
+        if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'cupJoined', ok: false, why: 'Join the Cup at the Market stall in PumpHall.' });
         return send(ws, { t: 'cupJoined', ...(await E.cupJoin(a.pid, a.ip)), chips: CUP.chips });
       }
       case 'book': {
@@ -724,7 +724,7 @@ export class Hall extends DurableObject<Env> {
     const mk = String(m.m ?? '') as PumpMarket;
     const dir = m.dir === 'up' || m.dir === 'down' ? m.dir : null;
     const len = Math.floor(num(m.len, 1));
-    if (!(mk in PUMP_MARKETS) || !dir || !DUEL.lens.includes(len)) return send(ws, { t: 'duel_no', why: 'Pick a market and up or down.' });
+    if (!PUMP_MARKETS_BY_EDITION[edition(this.env.EDITION)].includes(mk) || !dir || !DUEL.lens.includes(len)) return send(ws, { t: 'duel_no', why: 'Pick a market and up or down.' });
     if (now - a.dw > 60000) {
       a.dw = now;
       a.dn = 0;

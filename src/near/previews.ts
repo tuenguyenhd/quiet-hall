@@ -27,7 +27,7 @@ export const PREVIEWS: { emoji: string; title: string; tag: string; html: string
     emoji: '🐋',
     title: 'Whale Order',
     tag: 'community event',
-    html: `<p class="small">Kettle posts one giant order. Everyone chips in; if it fills, every contributor gets a share of a fixed Leaves pool and a trophy.</p>
+    html: `<p class="small">The Market posts one giant order. Everyone chips in; if it fills, every contributor gets a share of a fixed Leaves pool and a trophy.</p>
       <div class="near-row"><div><b>2,000 Moon Rocks in 48 hours</b><div class="small">31 h left</div></div><span>🐋</span></div>
       ${bar(64, '1,284 / 2,000')}
       <ol class="near-top"><li>☾ The Quiet Apes <b>312</b></li><li>🌿 Copium Club <b>207</b></li><li>🧘 solo sitters <b>765</b></li></ol>`,
@@ -44,7 +44,7 @@ export const PREVIEWS: { emoji: string; title: string; tag: string; html: string
     emoji: '📣',
     title: 'Trade feed and trader card',
     tag: 'social trading',
-    html: `<ul class="near-needs"><li class="have">📈 <b>kai</b> sold 12 🪨 at the top · +31% on the day</li><li class="have">🏆 <b>mira</b> won Cup round 20261114-030000 with 412</li><li class="have">🫖 <b>degen_dao</b> talked Kettle down 38% on a recipe</li></ul>
+    html: `<ul class="near-needs"><li class="have">📈 <b>kai</b> sold 12 🪨 at the top · +31% on the day</li><li class="have">🏆 <b>mira</b> won Cup round 20261114-030000 with 412</li><li class="have">🫖 <b>degen_dao</b> called NEAR up 5 rounds in a row</li></ul>
       <div class="near-card-mini"><b>kai.near</b><div class="small">Cup rounds 14 · best 412 · wins 2 · frens 5/5</div></div>
       <p class="small">Follow traders you like and share your card. Play money only.</p>`,
   },

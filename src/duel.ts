@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { apiPost } from './api';
 import { DUEL, inDuelZone, type PumpMarket } from './layout';
+import { CLIENT_PUMP_MARKETS } from './client-edition';
 
 type Dir = 'up' | 'down';
 type Msg = Record<string, unknown>;
@@ -72,7 +73,8 @@ export function setupDuel(h: Host) {
   /** who is open to duels (from welcome / join / dq) */
   const open = new Map<string, boolean>();
   let mine = h.store.get('duel') !== '0';
-  let market: PumpMarket = (h.store.get('duelm') as PumpMarket) || 'SOL';
+  const saved = h.store.get('duelm') as PumpMarket;
+  let market: PumpMarket = CLIENT_PUMP_MARKETS.includes(saved) ? saved : CLIENT_PUMP_MARKETS[0];
   let len = Number(h.store.get('duell')) || DUEL.lens[0];
 
   // ---------- state ----------

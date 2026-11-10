@@ -6,9 +6,9 @@
 // (the last trade before T). Coinbase candles are public history, so anyone can re-check every result with
 // the `verify` URL we store. Rounds settle on an alarm ~30 s after they end (candles need a few seconds).
 import { DurableObject } from 'cloudflare:workers';
-import { DUEL, PUMP_CLOSE_MS, PUMP_MARKETS, cleanPlayerName, defaultName, duelLockAt, duelPoints, eloNext, pumpPoints, type PumpMarket } from '../src/layout';
+import { edition } from '../src/economy';
+import { DUEL, PUMP_CLOSE_MS, PUMP_MARKETS, PUMP_MARKETS_BY_EDITION, cleanPlayerName, defaultName, duelLockAt, duelPoints, eloNext, pumpPoints, type PumpMarket } from '../src/layout';
 
-const MARKETS = Object.keys(PUMP_MARKETS) as PumpMarket[];
 const len = (m: PumpMarket) => PUMP_MARKETS[m].roundMin * 60000;
 const SETTLE_AFTER = 30000; // wait for the closing candle
 const VOID_AFTER = 15 * 60000; // no price after this long: the round is void (nobody scores)
@@ -51,8 +51,12 @@ export class Pump extends DurableObject {
   private locks = new Map<string, number>();
   private sql: SqlStorage;
 
+  /** the markets this edition plays (Seeker: SOL, SKR; NEAR: Bitcoin, NEAR) */
+  private markets: PumpMarket[];
+
   constructor(ctx: DurableObjectState, env: unknown) {
     super(ctx, env as never);
+    this.markets = PUMP_MARKETS_BY_EDITION[edition((env as { EDITION?: string } | undefined)?.EDITION)];
     this.sql = ctx.storage.sql;
     this.sql.exec(`CREATE TABLE IF NOT EXISTS rounds (m TEXT, k INTEGER, lock REAL, close REAL, res TEXT, up INTEGER DEFAULT 0, down INTEGER DEFAULT 0, PRIMARY KEY (m, k))`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS picks (m TEXT, k INTEGER, pid TEXT, ip TEXT, dir TEXT, at INTEGER, won INTEGER, pts INTEGER DEFAULT 0, PRIMARY KEY (m, k, pid))`);
@@ -183,7 +187,7 @@ export class Pump extends DurableObject {
 
   async createDuel(o: { a: string; an: unknown; as: number; b: string; bn: unknown; bs: number; adir: Dir; m: PumpMarket; lenMin: number; sameIp: boolean }) {
     if (!PID_RE.test(o.a) || !PID_RE.test(o.b) || o.a === o.b) return { error: 'Both players need a visitor id' };
-    if (!PUMP_MARKETS[o.m]) return { error: 'Unknown market' };
+    if (!PUMP_MARKETS[o.m] || !this.markets.includes(o.m)) return { error: 'Unknown market' };
     if (o.adir !== 'up' && o.adir !== 'down') return { error: 'Call up or down' };
     if (!DUEL.lens.includes(o.lenMin)) return { error: 'Unknown round length' };
     const now = Date.now();
@@ -370,7 +374,7 @@ export class Pump extends DurableObject {
   // ---------- API ----------
   async pick(pid: string, ip: string, nameIn: unknown, seed: number, m: PumpMarket, k: number, dir: Dir) {
     if (!PID_RE.test(pid)) return { error: 'No visitor id' };
-    if (!PUMP_MARKETS[m]) return { error: 'Unknown market' };
+    if (!PUMP_MARKETS[m] || !this.markets.includes(m)) return { error: 'Unknown market' };
     if (dir !== 'up' && dir !== 'down') return { error: 'Pick up or down' };
     const now = Date.now();
     const L = len(m);
@@ -399,7 +403,7 @@ export class Pump extends DurableObject {
     if (next) await this.wake(next);
     const wk = weekKey(now);
     const markets: Record<string, unknown> = {};
-    for (const m of MARKETS) {
+    for (const m of this.markets) {
       const L = len(m);
       const cur = Math.floor(now / L); // live round (locked)
       const nxt = cur + 1; // open for picks

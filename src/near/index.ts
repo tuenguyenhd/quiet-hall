@@ -34,7 +34,6 @@ export interface NearHost {
   /** wear a rescued fren as your pet */
   setPet(k: number): void;
   /** the big board in the Trading Hall */
-  setMarketBoard(rows: { item: string; label: string; bid: number; ask: number }[]): void;
 }
 
 interface Econ {
@@ -64,14 +63,23 @@ const mmss = (ms: number) => {
 
 export function setupNear(h: NearHost) {
   document.body.classList.add('edition-near');
-  // In this edition the south-road building is the Trading Hall (no price predictions), and the valley is a place.
+  // PumpHall plays Bitcoin and NEAR in this edition, and holds the Market stall; the valley is a place.
   for (const p of PLACES) {
-    if (p.id === 'pump') {
-      p.name = 'Trading Hall';
-      p.hint = "Kettle's market and the Market Cup. Play money, prices moved by players.";
-    }
-    if (p.id === 'court') p.hint = 'North: the Quiet Hall (sit). South: the Trading Hall. North-east past the Tea House: Meme Valley.';
+    if (p.id === 'pump') p.hint = 'Guess Bitcoin or NEAR up or down on the big board (points, no money). The Market stall is inside.';
+    if (p.id === 'court') p.hint = 'North: the Quiet Hall (sit). South: PumpHall and the Market. North-east past the Tea House: Meme Valley.';
   }
+  // PumpHall buttons are written for SOL / SKR in index.html: relabel them for Bitcoin / NEAR
+  const relabel = (sel: string, attr: 'm' | 'dm') =>
+    document.querySelectorAll<HTMLButtonElement>(sel).forEach((b, i) => {
+      const k = (['BTC', 'NEAR'] as const)[i];
+      if (!k) return;
+      b.dataset[attr] = k;
+      b.textContent = attr === 'm' ? `${k === 'BTC' ? 'Bitcoin' : 'NEAR'} · ${k === 'BTC' ? 5 : 15} min` : k === 'BTC' ? 'Bitcoin' : 'NEAR';
+    });
+  relabel('button[data-m]', 'm');
+  relabel('button[data-dm]', 'dm');
+  const duelOpen = document.querySelector('label.duel-open');
+  if (duelOpen?.lastChild) duelOpen.lastChild.textContent = ' Open to duels: bump into someone here and tap ⚔ to call Bitcoin or NEAR against them. Points only.';
   // the Patron banner avenue is a paid (SOL) rental: nothing is sold in this edition, so the stands are hidden
   h.scene.traverse((o) => {
     if (o.userData.action === 'spot' && o.userData.kind === 'banner' && o.parent) {
@@ -105,7 +113,7 @@ export function setupNear(h: NearHost) {
     <button class="pill" id="near-leaves" title="Leaves: earned by sitting. Play money, no cash value.">🍃 <b>0</b></button>
     <button class="pill" id="near-bag" title="Your bag">🎒</button>
     <button class="pill" id="near-book" title="Rescue Book">📖</button>
-    <button class="pill" id="near-market" title="Kettle's market and the Market Cup">📈</button>`;
+    <button class="pill" id="near-market" title="Market and Market Cup">🛒</button>`;
   $('hud').appendChild(bar);
 
   const overlay = document.createElement('section');
@@ -122,17 +130,6 @@ export function setupNear(h: NearHost) {
     overlay.classList.remove('hidden');
   };
   const isOpen = (kind: string) => !overlay.classList.contains('hidden') && body().dataset.kind === kind;
-
-  /** the Trading Hall board mirrors Kettle's quotes */
-  function pushBoard() {
-    if (!quotes.length) return;
-    h.setMarketBoard(quotes.map((q) => ({ item: q.item, label: itemLabel(q.item), bid: q.bid, ask: q.ask })));
-  }
-  setInterval(() => {
-    // refresh the board every 20 s while you are near the Trading Hall
-    if (dist(h.me().position, TRADE_ZONE) < 80) void loadMarket().then(pushBoard);
-  }, 20_000);
-  setTimeout(() => void loadMarket().then(pushBoard), 3000);
 
   function renderBar() {
     $('near-leaves').querySelector('b')!.textContent = String(econ.leaves);
@@ -188,7 +185,7 @@ export function setupNear(h: NearHost) {
   roof.rotation.y = Math.PI / 4;
   const kettle = new THREE.Mesh(new THREE.SphereGeometry(0.45, 10, 8), mat(0x444a52, 0x9945ff, 0.15));
   kettle.position.set(0, 1.4, 0);
-  stall.add(counter, roof, kettle, makeSign(["🫖 Kettle's market", 'buy · sell · Cup'], 3.6, 2.4));
+  stall.add(counter, roof, kettle, makeSign(['🛒 Market', 'buy · sell · Cup'], 3.6, 2.4));
   stall.position.set(KETTLE.x, y(KETTLE.x, KETTLE.z), KETTLE.z);
   // face the entrance (north edge of the hall), so the sign reads the right way round as you walk in
   stall.rotation.y = Math.atan2(TRADE_ZONE.x - KETTLE.x, TRADE_ZONE.z - TRADE_ZONE.r - KETTLE.z);
@@ -330,7 +327,7 @@ export function setupNear(h: NearHost) {
   function openBag() {
     const items = Object.entries(econ.bag).filter(([, n]) => n > 0);
     show(`<h2>🎒 Bag</h2>${items.length ? `<ul class="near-needs">${items.map(([k, n]) => `<li class="have">${itemLabel(k)} <b>${n}</b></li>`).join('')}</ul>` : '<p class="small">Empty. Tap rocks, yarn and shrooms in Meme Valley (north-east, past the Tea House).</p>'}
-      <p class="small">🍃 ${econ.leaves} Leaves · today: ${econ.today.sit ?? 0} from sitting, ${econ.today.market_sell ?? 0} from Kettle, ${econ.today.wish ?? 0} from wishes</p>
+      <p class="small">🍃 ${econ.leaves} Leaves · today: ${econ.today.sit ?? 0} from sitting, ${econ.today.market_sell ?? 0} from the Market, ${econ.today.wish ?? 0} from wishes</p>
       <p class="near-foot">Leaves are play money. No cash value.</p>`);
     body().dataset.kind = 'bag';
   }
@@ -371,7 +368,7 @@ export function setupNear(h: NearHost) {
     }
   }
   async function openMarket() {
-    show(`<h2>🫖 Kettle's market</h2><p class="small">Loading prices…</p>`);
+    show(`<h2>🛒 Market</h2><p class="small">Loading prices…</p>`);
     body().dataset.kind = 'market';
     const hist = await loadMarket();
     renderMarket(hist);
@@ -396,7 +393,7 @@ export function setupNear(h: NearHost) {
     }).join('');
     const left = cup ? cup.end - Date.now() : 0;
     const top = (cup?.top ?? []).map((t, i) => `<li>${i + 1}. <code>${esc(short(t.owner))}</code> <b>${t.score}</b></li>`).join('');
-    body().innerHTML = `<h2>🫖 Kettle's market</h2>
+    body().innerHTML = `<h2>🛒 Market</h2>
       <div class="chips near-mode"><button data-mode="leaves" class="${cupMode ? '' : 'on'}">🍃 Leaves (${econ.leaves})</button><button data-mode="cup" class="${cupMode ? 'on' : ''}">🏆 Cup${inCup ? ` (${cup!.me!.chips} chips)` : ''}</button></div>
       <div class="chips near-qty">${[1, 5, 10].map((n) => `<button data-qty="${n}" class="${tradeQty === n ? 'on' : ''}">×${n}</button>`).join('')}</div>
       ${cupMode && !inCup ? `<p class="small">Market Cup round ${esc(cup?.round ?? '')}: ${mmss(left)} left · ${cup?.entrants ?? 0} entrants. Free: 200 play chips, prizes in Leaves.</p><button class="primary" id="near-cup-join">Join this round</button>` : rows}
@@ -434,7 +431,7 @@ export function setupNear(h: NearHost) {
   $('near-book').addEventListener('click', openBook);
   $('near-market').addEventListener('click', () => {
     if (dist(h.me().position, TRADE_ZONE) <= TRADE_ZONE.r) return openMarket();
-    h.toast("Kettle's market is in the Trading Hall (south road). Walking there…", 3500);
+    h.toast('The Market stall is in PumpHall (south road). Walking there…', 3500);
     pending = { kind: 'kettle', id: 'kettle', at: new THREE.Vector3(KETTLE.x, 0, KETTLE.z), reach: TRADE_ZONE.r - 2 };
     h.walkTo(new THREE.Vector3(KETTLE.x, 0, KETTLE.z + 3));
   });
@@ -550,7 +547,6 @@ export function setupNear(h: NearHost) {
       }
       case 'quotes':
         quotes = m.q as Quote[];
-        pushBoard();
         if (isOpen('market')) renderMarket();
         return;
       case 'cupJoined':

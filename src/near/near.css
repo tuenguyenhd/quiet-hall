@@ -2,10 +2,7 @@
 
 /* Solana, payment and prediction UI does not exist in this edition */
 body.edition-near #btn-wallet,
-body.edition-near #btn-lantern,
-body.edition-near #btn-pump,
-body.edition-near #duel-bubble,
-body.edition-near #duel-chip {
+body.edition-near #btn-lantern {
   display: none !important;
 }
 

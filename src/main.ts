@@ -710,7 +710,6 @@ const near = NEAR
         me.setPet(k);
         net.send({ t: 'pet', k });
       },
-      setMarketBoard: (rows) => world.setMarketBoard(rows),
     })
   : null;
 

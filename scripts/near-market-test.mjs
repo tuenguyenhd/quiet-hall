@@ -43,7 +43,7 @@ const m0 = await get('/api/near/market');
 const rock0 = quote(m0.quotes, 'moon_rock');
 check(rock0 && rock0.bid < rock0.ask && rock0.ask <= 2 * 3 * 1.1 + 1, 'Moon Rock has a bid below its ask', JSON.stringify(rock0));
 const A = await client(pid('ma'), 0, 60);
-check((await trade(A, 'moon_rock', 'buy', 1))?.why?.includes('Trading Hall'), 'trading outside the Trading Hall is refused');
+check((await trade(A, 'moon_rock', 'buy', 1))?.why?.includes('PumpHall'), 'trading outside PumpHall is refused');
 await go(A, 0, 96);
 const B = await client(pid('mb'), 2, 98);
 
@@ -85,7 +85,7 @@ D.send({ t: 'cupJoin' });
 check((await until(D, 'cupJoined'))?.why?.startsWith('Sit for a minute'), 'joining the Cup needs one paid sit minute');
 await go(D, 0, 40);
 D.send({ t: 'cupJoin' });
-check((await until(D, 'cupJoined'))?.why?.includes('Trading Hall'), 'joining away from the Trading Hall is refused');
+check((await until(D, 'cupJoined'))?.why?.includes('PumpHall'), 'joining away from PumpHall is refused');
 await sitFor(A, 1);
 await sitFor(B, 1);
 // wait for a fresh round so all three can join before the cut-off

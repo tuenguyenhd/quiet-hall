@@ -455,7 +455,7 @@ export class Economy extends DurableObject<EconEnv> {
       } else {
         if (this.qty(acct, item) < n) return { ok: false, why: 'You do not have that many.' };
         const cap = this.cfg.caps.market_sell ?? Infinity;
-        if (this.earnedOn(acct, dayOf(now), 'market_sell') + total > cap) return { ok: false, why: `Kettle buys at most ${cap} Leaves' worth from you a day.` };
+        if (this.earnedOn(acct, dayOf(now), 'market_sell') + total > cap) return { ok: false, why: `The Market buys at most ${cap} Leaves' worth from you a day.` };
         this.bagTake(acct, { [item]: n });
         this.write(acct, total, 'market_sell', item, now);
       }

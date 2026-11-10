@@ -2,7 +2,8 @@
 // (each with a "verify" link to the public Coinbase candles), and the weekly / all-time leaderboard.
 // Fun only: no money in, no prizes out.
 import { apiPost } from './api';
-import { PUMP_MARKETS, type PumpMarket } from './layout';
+import { type PumpMarket } from './layout';
+import { CLIENT_PUMP_MARKETS } from './client-edition';
 import type { BoardData } from './pumphall';
 
 type Dir = 'up' | 'down';
@@ -72,7 +73,7 @@ const room = new URLSearchParams(location.search).get('pumproom') ?? undefined;
 export function setupPump(h: Host) {
   let st: State | null = null;
   let got = 0; // performance.now() when st arrived (server clock = st.now + elapsed)
-  let market: PumpMarket = 'SOL';
+  let market: PumpMarket = CLIENT_PUMP_MARKETS[0];
   let board: 'week' | 'all' | 'duel' = 'week';
   let busy = false;
   let timer = 0;
@@ -97,7 +98,7 @@ export function setupPump(h: Host) {
 
   function track() {
     if (!st) return;
-    for (const m of Object.keys(PUMP_MARKETS) as PumpMarket[]) {
+    for (const m of CLIENT_PUMP_MARKETS) {
       const s = st.markets[m];
       for (const r of [s.live, s.next]) if (r.mine) waiting.set(`${m}:${r.k}`, { m, k: r.k, dir: r.mine.dir, start: r.start, end: r.end });
       for (const r of s.past) {
@@ -138,7 +139,7 @@ export function setupPump(h: Host) {
     if (!st) return null;
     const t = now();
     const d = {} as BoardData;
-    for (const m of Object.keys(PUMP_MARKETS) as PumpMarket[]) {
+    for (const m of CLIENT_PUMP_MARKETS) {
       const s = st.markets[m];
       d[m] = { price: s.price, lock: s.live.lock, left: s.live.end - t, closes: s.next.closesAt - t };
     }
@@ -263,7 +264,7 @@ export function setupPump(h: Host) {
       if (d) h.setBoard(d);
       if (open()) render();
       // a round just ended: fetch now so results appear quickly
-      for (const m of Object.keys(PUMP_MARKETS) as PumpMarket[]) if (now() > st.markets[m].live.end + 1500 && performance.now() - lastLoad > 1500) lastLoad = 0;
+      for (const m of CLIENT_PUMP_MARKETS) if (now() > st.markets[m].live.end + 1500 && performance.now() - lastLoad > 1500) lastLoad = 0;
     }
   }
   timer = window.setInterval(tick, 1000);

@@ -44,7 +44,7 @@ const pid = (p) => p + Date.now().toString(36).slice(-8);
 // --- edition gating
 const cfg = await get('/api/config');
 check(cfg.body?.edition === 'near', 'config says edition near');
-for (const p of ['/api/pump/state', '/api/spots', '/api/tip/order', '/api/verify', '/api/me', '/api/rpc']) {
+for (const p of ['/api/spots', '/api/tip/order', '/api/verify', '/api/me', '/api/rpc']) {
   check((await get(p)).status === 404, `NEAR edition has no ${p}`);
 }
 
@@ -105,10 +105,12 @@ const rc2 = await sit(C, 3 * MIN + 80);
 check(rc2?.paid === 0, 'after the cap, more sitting pays 0 today', JSON.stringify(rc2));
 
 // --- blocked socket messages in the NEAR edition
-A.send({ t: 'duel_ask', id: 'x' });
 A.send({ t: 'lantern', wish: 0 });
 await wait(400);
-check(!A.msgs.some((m) => /^duel|^lantern/.test(m.t)), 'duel and lantern messages are ignored');
+check(!A.msgs.some((m) => /^lantern/.test(m.t)), 'paid lantern messages are ignored');
+// PumpHall plays Bitcoin and NEAR in this edition
+const ps = await (await fetch(BASE + '/api/pump/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pid: 'pumpcheck01', room: 'main' }) })).json();
+check(JSON.stringify(Object.keys(ps.markets ?? {}).sort()) === '["BTC","NEAR"]', 'PumpHall markets are Bitcoin and NEAR', JSON.stringify(Object.keys(ps.markets ?? {})));
 
 // --- /api/near/me and the mirror queue
 const pidM = pid('nm');
