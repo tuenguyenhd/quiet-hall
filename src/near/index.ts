@@ -7,7 +7,7 @@ import './near.css';
 import { Pet } from '../pets';
 import { CAVES, FRENS, GATE, ITEMS, NODES, POND, RECIPES, VALLEY, WORKBENCH, GATHER, dist, type Item } from '../valley';
 import { CUP, KETTLE, MARKET, TRADE_ZONE } from '../market';
-import { LOOKOUT, COURT } from '../layout';
+import { LOOKOUT, COURT, PLACES } from '../layout';
 import { PREVIEWS } from './previews';
 
 export const NEAR = import.meta.env.VITE_EDITION === 'near';
@@ -58,6 +58,17 @@ const mmss = (ms: number) => {
 
 export function setupNear(h: NearHost) {
   document.body.classList.add('edition-near');
+  // In this edition the south-road building is the Trading Hall (no price predictions), and the valley is a place.
+  for (const p of PLACES) {
+    if (p.id === 'pump') {
+      p.name = 'Trading Hall';
+      p.hint = "Kettle's market and the Market Cup. Play money, prices moved by players.";
+    }
+    if (p.id === 'court') p.hint = 'North: the Quiet Hall (sit). South: the Trading Hall. North-east past the Tea House: Meme Valley.';
+  }
+  if (!PLACES.some((p) => p.id === 'valley')) {
+    PLACES.push({ id: 'valley', name: 'Meme Valley', x: VALLEY.x, z: VALLEY.z, r: VALLEY.r, hint: 'Gather rocks and shrooms, and sit with a lost fren to bring them home.', view: [GATE.x - 6, GATE.z + 10], look: [VALLEY.x, VALLEY.z] });
+  }
   let econ: Econ = { leaves: 0, bag: {}, today: {}, streak: 0, frens: [], drips: [] };
   let quotes: Quote[] = [];
   let pending: { kind: 'node' | 'fren' | 'bench' | 'kettle'; id: string; at: THREE.Vector3; reach: number } | null = null;

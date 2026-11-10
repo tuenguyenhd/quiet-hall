@@ -3,7 +3,7 @@
 **A calm 3D world where your stillness powers the economy.** Sit with strangers to earn Leaves, rescue lost meme frens together in Meme Valley, trade in a market whose prices are moved only by players, and compete in a free 3-hour Market Cup whose fairness anyone can check on NEAR. Nobody needs a wallet.
 
 - **Track:** Games With Real Economies
-- **Live demo:** _add the deployed URL here_
+- **Live demo:** https://quiet-hall-near.ted-233.workers.dev
 - **Contract (NEAR testnet):** [`quiethall-521e7c.testnet`](https://explorer.testnet.near.org/accounts/quiethall-521e7c.testnet)
 - **Design docs:** [`design/gdd/edition-near.md`](design/gdd/edition-near.md) (this build), [`design/gdd/master-gdd.md`](design/gdd/master-gdd.md) (the whole game), [`design/pitch-near.md`](design/pitch-near.md)
 
@@ -50,7 +50,11 @@ The game server (a Cloudflare Worker) holds the game account's key and is the tr
 npm install
 npm run dev:near        # app on http://localhost:5174, NEAR Worker on :8788
 ```
-Without a `NEAR_PRIVATE_KEY` the Mirror runs in **mock mode**: everything works and receipts are marked "mock" instead of being sent. To write to testnet, create `.dev.vars.near` with `NEAR_PRIVATE_KEY`, `OWNER_SECRET`, `SESSION_SECRET`.
+Without a `NEAR_PRIVATE_KEY` the Mirror runs in **mock mode**: everything works and receipts are marked "mock" instead of being sent. To write to testnet locally, create `.dev.vars.near` with your **own test contract**'s `NEAR_ACCOUNT` and `NEAR_PRIVATE_KEY`, plus `OWNER_SECRET` and `SESSION_SECRET`. Never point a local Worker at the production contract.
+
+**Production smoke test** (real clock, real testnet writes, ~3 minutes): `node scripts/near-prod-smoke.mjs https://quiet-hall-near.ted-233.workers.dev`
+
+**Known:** Cup round `20261110-090000` (the first, 09:00–12:00 UTC on Nov 10) was committed on chain by a pre-launch local check, so its settlement does not match the commitment and `verify-round` reports it. Every later round is clean.
 
 **Tests** (start the Worker with a fast clock: `npx wrangler dev -c wrangler.near.toml --port 8788 --var MINUTE_MS:200 --var NEAR_MIRROR_MODE:mock --var CUP_ROUND_MIN:30 --var CUP_JOIN_CLOSE_MIN:5`):
 ```bash

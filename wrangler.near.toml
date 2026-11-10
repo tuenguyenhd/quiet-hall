@@ -1,6 +1,8 @@
 # NEAR edition (design/gdd/edition-near.md). Separate Worker and separate world from the Seeker edition.
 # Local:  npx wrangler dev -c wrangler.near.toml --env-file .dev.vars.near --port 8788
-# Secrets (wrangler secret put -c wrangler.near.toml): NEAR_PRIVATE_KEY, OWNER_SECRET, SESSION_SECRET
+#   .dev.vars.near must point at the TEST contract (NEAR_ACCOUNT=quiethall-b4ac38.testnet + its key).
+#   Never put the production key in a local file: two Workers writing one contract collide on round commits.
+# Secrets (production only, wrangler secret put -c wrangler.near.toml): NEAR_PRIVATE_KEY, OWNER_SECRET, SESSION_SECRET
 name = "quiet-hall-near"
 main = "worker/index.ts"
 compatibility_date = "2025-09-01"
@@ -44,7 +46,7 @@ EDITION = "near"
 NEAR_ACCOUNT = "quiethall-521e7c.testnet"
 NEAR_RPC = "https://test.rpc.fastnear.com"
 NEAR_RPC_FALLBACKS = "https://rpc.testnet.near.org"
-PUBLIC_URL = "https://quiet-hall-near.workers.dev"
+PUBLIC_URL = "https://quiet-hall-near.ted-233.workers.dev"
 # The Solana features are off in this edition; these keep shared code paths well-defined.
 SOLANA_CLUSTER = "devnet"
 SOLANA_RPC = "https://api.devnet.solana.com"
