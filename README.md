@@ -1,5 +1,8 @@
 # Quiet Hall
 
+> **NEAR Hackathon entry (branch `near-hackathon`):** see [NEAR.md](NEAR.md): Meme Valley, a player-moved market and a Market Cup whose fairness is checkable on NEAR. Run it with `npm run dev:near`.
+
+
 A shared meditation space: walk into a calm hall, see other people's lights, sit together in silence.
 Web app (Vite + Three.js) + Cloudflare Worker / Durable Object for live presence.
 Later phases wrap the same web app as a Trusted Web Activity for the Seeker dApp Store.

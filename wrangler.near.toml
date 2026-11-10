@@ -40,7 +40,8 @@ new_sqlite_classes = ["Hall", "Ledger", "Pump", "Economy", "Mirror"]
 
 [vars]
 EDITION = "near"
-NEAR_ACCOUNT = "quiethall-b4ac38.testnet"
+# production contract (real-clock data only). Live tests use quiethall-b4ac38.testnet via .dev.vars.near-test
+NEAR_ACCOUNT = "quiethall-521e7c.testnet"
 NEAR_RPC = "https://test.rpc.fastnear.com"
 NEAR_RPC_FALLBACKS = "https://rpc.testnet.near.org"
 PUBLIC_URL = "https://quiet-hall-near.workers.dev"

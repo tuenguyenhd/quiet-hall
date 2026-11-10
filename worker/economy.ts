@@ -477,10 +477,10 @@ export class Economy extends DurableObject<EconEnv> {
     return this.ctx.storage.transactionSync(() => {
       const now = Date.now();
       const r = this.currentRound(now);
-      if (now > r.end - this.joinCloseMs()) return { ok: false, why: 'Joins close 30 minutes before the end. Next round soon.' };
-      if (this.sql.exec('SELECT 1 FROM cup_entries WHERE round = ? AND acct = ?', r.id, acct).toArray().length) return { ok: true, round: r.id, end: r.end };
       const sat = this.sql.exec("SELECT 1 FROM rows WHERE acct = ? AND reason = 'sit' AND delta > 0 LIMIT 1", acct).toArray().length;
       if (!sat) return { ok: false, why: 'Sit for a minute first. The Cup is for people who have sat in the hall.' };
+      if (this.sql.exec('SELECT 1 FROM cup_entries WHERE round = ? AND acct = ?', r.id, acct).toArray().length) return { ok: true, round: r.id, end: r.end };
+      if (now > r.end - this.joinCloseMs()) return { ok: false, why: 'Joins close 30 minutes before the end. Next round soon.' };
       const n = this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM cup_entries WHERE round = ? AND ip = ?', r.id, ip).toArray()[0].n;
       if (n >= CUP.maxEntrantsPerAddress) return { ok: false, why: 'Too many entrants from this network this round.' };
       this.sql.exec('INSERT INTO cup_entries(round, acct, chips, joined, ip, owner) VALUES (?, ?, ?, ?, ?, ?)', r.id, acct, CUP.chips, now, ip, owner);

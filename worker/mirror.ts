@@ -146,16 +146,19 @@ export class Mirror extends DurableObject<MirrorEnv> {
           for (const j of batch) this.mark(j.job, 'done', { tx: res.transaction.hash });
           return;
         }
-        // the transaction executed and failed: deterministic, retrying the same batch would fail again
+        // The transaction executed and one action failed. On NEAR that rolls back EVERY action in it, so only the
+        // failing job is at fault: settle that one, and put its batch-mates back in the queue untouched.
         const err = JSON.stringify(status).slice(0, 500);
-        if (err.includes('job_id already used')) {
-          if (batch.length > 1) {
-            for (const j of batch) this.sql.exec('UPDATE jobs SET single = 1 WHERE job = ?', j.job);
-          } else this.mark(batch[0].job, 'done', { tx: res.transaction.hash, err: 'already on chain' });
+        const idx = Number((status as { Failure?: { ActionError?: { index?: number } } }).Failure?.ActionError?.index);
+        const bad = Number.isInteger(idx) && idx >= 0 && idx < batch.length ? batch[idx] : batch.length === 1 ? batch[0] : null;
+        if (!bad) {
+          // can't tell which one: retry each alone so one bad job can't block the others
+          for (const j of batch) this.sql.exec('UPDATE jobs SET single = 1 WHERE job = ?', j.job);
           return;
         }
-        for (const j of batch) this.mark(j.job, 'parked', { tx: res.transaction.hash, err });
-        return;
+        if (err.includes('job_id already used')) this.mark(bad.job, 'done', { tx: res.transaction.hash, err: 'already on chain' });
+        else this.mark(bad.job, 'parked', { tx: res.transaction.hash, err });
+        return; // the others stay 'queued' and go in the next batch
       } catch (e) {
         // network error, timeout, invalid nonce after retries: outcome unknown. The job id makes a resend safe.
         lastErr = String((e as Error)?.message ?? e).slice(0, 300);

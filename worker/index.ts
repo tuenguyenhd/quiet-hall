@@ -363,7 +363,8 @@ async function nearApi(req: Request, env: Env, path: string): Promise<Response> 
     const r = /^[0-9]{8}-[0-9]{6}$/.test(id) ? await economy(env).round(id) : null;
     if (!r) return json({ error: 'No such round' }, 404);
     const jobs = await mirror(env).jobs([`commit-${id}`, `settle-${id}`, `trophy-${id}-1`, `trophy-${id}-2`, `trophy-${id}-3`]);
-    return json({ ...r, results: r.results ? JSON.parse(r.results) : null, chain: { contract: env.NEAR_ACCOUNT ?? null, jobs } });
+    // resultsText is the exact text that was hashed; results is the same, parsed
+    return json({ ...r, resultsText: r.results, results: r.results ? JSON.parse(r.results) : null, chain: { contract: env.NEAR_ACCOUNT ?? null, jobs } });
   }
   // test hooks: only with the load-test key (unset in production = off)
   const key = q.get('k') ?? '';
