@@ -2,11 +2,14 @@ import { DurableObject } from 'cloudflare:workers';
 import { b64, decodeText, parseSiws, readSession, signSession, verifySignature } from './auth';
 import { Ledger, priceTable, type SpotOwner } from './ledger';
 import { Pump } from './pump';
+import { Economy, minuteMs } from './economy';
+import { Mirror, ownerId } from './mirror';
+import { edition, ECONOMY } from '../src/economy';
 import { serverRpc } from './solana';
 import { DUEL, DUEL_MAX_D, PUMP_MARKETS, cleanChat, cleanPlayerName, defaultName, inDuelZone, type PumpMarket } from '../src/layout';
 import { SPOTS, BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
 
-export { Ledger, Pump };
+export { Ledger, Pump, Economy, Mirror };
 
 export interface Env {
   HALL: DurableObjectNamespace<Hall>;
@@ -44,6 +47,20 @@ export interface Env {
   PUBLIC_URL: string;
   /** Daily World Sit start, UTC "HH:MM" (default 20:00). Set in .dev.vars to test. */
   WORLD_SIT?: string;
+  /** 'seeker' (default), 'near' or 'web3'. design/gdd/edition-*.md */
+  EDITION?: string;
+  /** NEAR edition: Leaves + bag (worker/economy.ts) and the only chain writer (worker/mirror.ts) */
+  ECONOMY?: DurableObjectNamespace<Economy>;
+  MIRROR?: DurableObjectNamespace<Mirror>;
+  /** test hook: one "game minute" in ms (default 60000) */
+  MINUTE_MS?: string;
+  /** secret used to derive each visitor's NEAR owner id (never sent to clients) */
+  OWNER_SECRET?: string;
+  NEAR_ACCOUNT?: string;
+  NEAR_RPC?: string;
+  NEAR_RPC_FALLBACKS?: string;
+  NEAR_PRIVATE_KEY?: string;
+  NEAR_MIRROR_MODE?: string;
 }
 
 type SitState = 'idle' | 'sit';
@@ -83,6 +100,8 @@ interface Att {
   de: number; // its end time (ms)
   dw: number; // duel invite window start (ms)
   dn: number; // invites sent in the window
+  hid: number; // hidden ms during the current sit (app in background)
+  hs: number; // hidden since (ms, 0 = visible)
 }
 
 const MAX_ROOM = 400; // sockets per hall
@@ -127,6 +146,15 @@ async function inviteId(pid: string) {
 
 const pub = (a: Att) => ({ id: a.id, color: a.c, sd: a.sd, pt: a.pt, ...(a.bu > Date.now() ? { bl: a.bl, bu: a.bu } : {}), x: r2(a.x), z: r2(a.z), ry: r2(a.ry), s: a.s, g: a.g, sp: a.sp, nm: a.nm, dq: a.dq });
 const ledger = (env: Env) => env.LEDGER.get(env.LEDGER.idFromName('main'));
+const isNear = (env: Env) => edition(env.EDITION) === 'near';
+const economy = (env: Env) => env.ECONOMY!.get(env.ECONOMY!.idFromName('main'));
+const mirror = (env: Env) => env.MIRROR!.get(env.MIRROR!.idFromName('main'));
+/** visitor id → NEAR owner id. Falls back to a fixed dev secret only when none is configured (mock / local). */
+const ownerOf = (env: Env, pid: string) => ownerId(env.OWNER_SECRET || 'dev-only-owner-secret', pid);
+/** NEAR edition: only these API paths exist (edition-near.md: EDITION removes UI *and* routes) */
+const NEAR_API = /^\/api\/(health|config|near\/[a-z-]+)$/;
+/** NEAR edition: socket messages that belong to Solana / money / prediction features */
+const NEAR_BLOCKED_WS = new Set(['dq', 'duel_ask', 'duel_ans', 'duel_cancel', 'spots', 'profile', 'lantern']);
 /** PumpHall: one board for everyone; "t<id>" rooms are isolated boards for automated tests */
 const pumpRoom = (v: unknown) => (typeof v === 'string' && /^t[a-z0-9]{4,16}$/.test(v) ? v : 'main');
 const pump = (env: Env, room = 'main') => env.PUMP.get(env.PUMP.idFromName(room));
@@ -156,10 +184,13 @@ async function readJson(req: Request): Promise<Record<string, unknown>> {
 async function api(req: Request, env: Env, path: string): Promise<Response> {
   const ip = req.headers.get('CF-Connecting-IP') ?? 'local';
   const L = ledger(env);
+  if (isNear(env) && !NEAR_API.test(path)) return json({ error: 'Not found' }, 404);
   if (path === '/api/health') return json({ ok: true, now: Date.now() });
   if (path === '/api/config') {
-    return json({ cluster: env.SOLANA_CLUSTER, rpc: env.SOLANA_RPC, recipient: env.TIP_RECIPIENT, usdcMint: env.USDC_MINT, skrMint: env.SKR_MINT || null });
+    if (isNear(env)) return json({ edition: 'near', nearAccount: env.NEAR_ACCOUNT ?? null, economy: ECONOMY.near });
+    return json({ edition: edition(env.EDITION), cluster: env.SOLANA_CLUSTER, rpc: env.SOLANA_RPC, recipient: env.TIP_RECIPIENT, usdcMint: env.USDC_MINT, skrMint: env.SKR_MINT || null });
   }
+  if (path.startsWith('/api/near/')) return nearApi(req, env, path);
   if (path === '/api/spots') {
     // owners follow the chain (marketplace sales / transfers); cheap, throttled inside
     await L.syncOwners(new URL(req.url).searchParams.get('refresh') === '1');
@@ -302,6 +333,32 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   return json({ error: 'Not found' }, 404);
 }
 
+/** NEAR edition API. The visitor id (pid) is the caller's own private id, so reading your own state with it is fine. */
+async function nearApi(req: Request, env: Env, path: string): Promise<Response> {
+  if (!isNear(env) || !env.ECONOMY || !env.MIRROR) return json({ error: 'Not found' }, 404);
+  const q = new URL(req.url).searchParams;
+  const pid = q.get('pid') ?? '';
+  if (path === '/api/near/health') return json({ ok: true, mirror: await mirror(env).status() });
+  if (path === '/api/near/me') {
+    if (!PID_RE.test(pid)) return json({ error: 'Bad pid' }, 400);
+    const owner = await ownerOf(env, pid);
+    return json({ owner, nearAccount: env.NEAR_ACCOUNT ?? null, ...(await economy(env).state(pid)), receipts: await mirror(env).receipts(owner) });
+  }
+  if (path === '/api/near/audit') return json(await economy(env).audit());
+  // test hooks: only with the load-test key (unset in production = off)
+  const key = q.get('k') ?? '';
+  if (!env.LOAD_TEST_KEY || key !== env.LOAD_TEST_KEY) return json({ error: 'Not found' }, 404);
+  if (path === '/api/near/test-mint') {
+    if (!PID_RE.test(pid)) return json({ error: 'Bad pid' }, 400);
+    const owner = await ownerOf(env, pid);
+    const n = Math.floor(Math.random() * 1e6);
+    const job = `test-${pid}-${q.get('job') ?? n}`.slice(0, 64);
+    const added = await mirror(env).enqueue([{ job, method: 'mint_fren', args: { owner, species: 'shibby', serial: n } }]);
+    return json({ job, owner, added });
+  }
+  return json({ error: 'Not found' }, 404);
+}
+
 function send(ws: WebSocket, msg: unknown) {
   try {
     ws.send(JSON.stringify(msg));
@@ -388,6 +445,23 @@ export class Hall extends DurableObject<Env> {
       this.today = d;
       await this.loadDay();
     }
+  }
+
+  /**
+   * A sit ended at `end` (server clock). Updates hall stats; in the NEAR edition also pays Leaves for it.
+   * The caller sets a.s afterwards. `ws` is null when the socket already closed.
+   */
+  private async endSit(ws: WebSocket | null, a: Att, end: number) {
+    const hidden = a.hid + (a.hs ? Math.max(0, end - a.hs) : 0);
+    await this.addSit(Math.max(0, end - a.since - hidden));
+    if (isNear(this.env) && this.env.ECONOMY && a.pid && a.since) {
+      const r = await economy(this.env).paySit(a.pid, a.since, end, hidden);
+      if (ws) send(ws, { t: 'leaves', ...r });
+    }
+    a.s = 'idle';
+    a.since = 0;
+    a.hid = 0;
+    a.hs = 0;
   }
 
   private async addSit(ms: number) {
@@ -682,6 +756,8 @@ export class Hall extends DurableObject<Env> {
       de: 0,
       dw: 0,
       dn: 0,
+      hid: 0,
+      hs: 0,
     };
     server.serializeAttachment(a);
     return new Response(null, { status: 101, webSocket: client });
@@ -708,7 +784,34 @@ export class Hall extends DurableObject<Env> {
     }
     if (!m || typeof m !== 'object') return;
 
+    if (isNear(this.env) && typeof m.t === 'string' && (NEAR_BLOCKED_WS.has(m.t) || (m.t === 'bless' && m.order !== undefined))) return;
     switch (m.t) {
+      case 'vis': {
+        // the app was hidden / shown (backgrounded on a phone). Hidden time does not count toward a sit.
+        if (!a.hello) return;
+        const hidden = m.h === true;
+        if (hidden && !a.hs) a.hs = now;
+        else if (!hidden && a.hs) {
+          const stretch = now - a.hs;
+          const hideStart = a.hs;
+          a.hs = 0;
+          if (a.s === 'sit') {
+            a.hid += stretch;
+            // a long hidden stretch ends the sit at the moment the app was hidden
+            if (stretch > ECONOMY[edition(this.env.EDITION)].hideEndsSitMin * minuteMs(this.env.MINUTE_MS)) {
+              a.hid -= stretch;
+              await this.endSit(ws, a, hideStart);
+              ws.serializeAttachment(a);
+              this.broadcast({ t: 's', id: a.id, s: 'idle' });
+              this.broadcast({ t: 'stats', ...this.stats() });
+              send(ws, { t: 'sitEnded', why: 'hidden' });
+              return;
+            }
+          }
+        }
+        ws.serializeAttachment(a);
+        return;
+      }
       case 'hello': {
         if (a.hello) return; // once per connection (re-hello = fake joins / invite farming)
         a.c = Math.max(0, Math.min(COLORS - 1, Math.floor(num(m.color))));
@@ -718,6 +821,8 @@ export class Hall extends DurableObject<Env> {
         if (m.s === 'sit' && a.s !== 'sit') {
           a.s = 'sit';
           a.since = now;
+          a.hid = 0;
+          a.hs = 0;
         }
         if (typeof m.pid === 'string' && PID_RE.test(m.pid)) a.pid = m.pid;
         a.dq = m.dq !== false;
@@ -786,9 +891,13 @@ export class Hall extends DurableObject<Env> {
         if (!a.hello) return;
         const s: SitState = m.s === 'sit' ? 'sit' : 'idle';
         if (s === a.s) return;
-        if (a.s === 'sit') await this.addSit(now - a.since);
+        if (a.s === 'sit') await this.endSit(ws, a, now);
         a.s = s;
         a.since = s === 'sit' ? now : 0;
+        if (s === 'sit') {
+          a.hid = 0;
+          a.hs = 0;
+        }
         if (s === 'sit') await this.maybeWorld(now, a.pid || a.id);
         if (s === 'sit') await this.duelDrop(a, 'sit'); // a sit cancels a duel that hasn't locked yet
         ws.serializeAttachment(a);
@@ -940,7 +1049,7 @@ export class Hall extends DurableObject<Env> {
   private async drop(ws: WebSocket) {
     const a = att(ws);
     if (!a?.hello) return;
-    if (a.s === 'sit') await this.addSit(Date.now() - a.since);
+    if (a.s === 'sit') await this.endSit(null, a, a.hs || Date.now());
     await this.duelDrop(a, 'left');
     a.hello = false;
     a.s = 'idle';

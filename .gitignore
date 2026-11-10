@@ -14,3 +14,4 @@ android/app/build/
 android/.gradle/
 android/build/
 *.apk
+.dev.vars.*

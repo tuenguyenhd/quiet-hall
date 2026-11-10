@@ -1,0 +1,52 @@
+# NEAR edition (design/gdd/edition-near.md). Separate Worker and separate world from the Seeker edition.
+# Local:  npx wrangler dev -c wrangler.near.toml --env-file .dev.vars.near --port 8788
+# Secrets (wrangler secret put -c wrangler.near.toml): NEAR_PRIVATE_KEY, OWNER_SECRET, SESSION_SECRET
+name = "quiet-hall-near"
+main = "worker/index.ts"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+preview_urls = false
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+[[durable_objects.bindings]]
+name = "HALL"
+class_name = "Hall"
+
+[[durable_objects.bindings]]
+name = "LEDGER"
+class_name = "Ledger"
+
+[[durable_objects.bindings]]
+name = "PUMP"
+class_name = "Pump"
+
+[[durable_objects.bindings]]
+name = "ECONOMY"
+class_name = "Economy"
+
+[[durable_objects.bindings]]
+name = "MIRROR"
+class_name = "Mirror"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Hall", "Ledger", "Pump", "Economy", "Mirror"]
+
+[vars]
+EDITION = "near"
+NEAR_ACCOUNT = "quiethall-b4ac38.testnet"
+NEAR_RPC = "https://test.rpc.fastnear.com"
+NEAR_RPC_FALLBACKS = "https://rpc.testnet.near.org"
+PUBLIC_URL = "https://quiet-hall-near.workers.dev"
+# The Solana features are off in this edition; these keep shared code paths well-defined.
+SOLANA_CLUSTER = "devnet"
+SOLANA_RPC = "https://api.devnet.solana.com"
+MAINNET_RPC = "https://api.mainnet-beta.solana.com"
+TIP_RECIPIENT = ""
+USDC_MINT = ""
