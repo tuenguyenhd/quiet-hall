@@ -157,7 +157,10 @@ export function setupNear(h: NearHost) {
     if (wb) {
       wb.classList.toggle('logged', !!econ.near);
       const done = document.getElementById('near-login-welcome-done');
-      if (done) done.innerHTML = econ.near ? `${nearIcon(16)}<span>Logged in as <b>${esc(addr)}</b></span>` : '';
+      if (done) {
+        done.innerHTML = econ.near ? `${nearIcon(16)}<span>Logged in as <b>${esc(addr)}</b></span> <button id="near-logout-welcome" type="button">Log out</button>` : '';
+        document.getElementById('near-logout-welcome')?.addEventListener('click', logout);
+      }
     }
     // guests can explore, rescue and trade; PumpHall up/down needs a NEAR login
     document.body.classList.toggle('near-guest', !econ.near);
@@ -473,9 +476,11 @@ export function setupNear(h: NearHost) {
 
   function showLoggedIn() {
     show(`<h2>✓ Logged in</h2><p class="small">You are <b>${esc(econ.near ?? '')}</b>.</p>
-      <ul class="near-needs"><li class="have">Your rescues, crafts and Cup trophies are recorded to this account (NEAR testnet receipts).</li><li class="have">Log in on another phone with the same wallet and your Leaves, bag and frens come with you.</li><li class="have">Your name in the hall and on the boards is your account name.</li></ul>
-      <p class="near-foot">Logging in signed a message only: no transaction, no fee, nothing moved.</p>`);
+      <ul class="near-needs"><li class="have">Your rescues, crafts and Cup trophies are recorded to this account (NEAR testnet receipts).</li><li class="have">Log in on another phone with the same wallet and your Leaves, bag and frens come with you.</li><li class="have">You show as <b>${esc(econ.nick || econ.near || '')}</b> in the hall and on the boards (type <code>/name</code> in chat to change it).</li></ul>
+      <button id="near-logout" class="ghost">Log out</button>
+      <p class="near-foot">Logging in signed a message only: no transaction, no fee, nothing moved. Log out and this phone is a guest again; log back in with the same wallet and everything comes back.</p>`);
     body().dataset.kind = 'login';
+    $('near-logout').addEventListener('click', logout);
   }
   /** what logging in unlocks: shown when a guest reaches for one of these, and on the welcome card */
   const LOGIN_BONUS = 50;
@@ -525,6 +530,19 @@ export function setupNear(h: NearHost) {
     },
   });
 
+  /**
+   * Log out: this phone becomes a new guest (a fresh visitor id) and the welcome card shows the login again.
+   * The account keeps its progress: logging in with the same wallet brings this visitor id back.
+   */
+  function logout() {
+    try {
+      for (const k of ['qh.pid', 'qh.name', 'qh.near.autoname']) localStorage.removeItem(k);
+      sessionStorage.removeItem('qh.justLoggedIn');
+    } catch {
+      /* storage blocked: nothing kept to forget */
+    }
+    location.reload();
+  }
   let justLoggedIn = false;
   /** the name picked on the welcome card (sent again once the hall connects, in case it raced the hello) */
   let chosenName = '';
