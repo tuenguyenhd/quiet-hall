@@ -536,7 +536,7 @@ export function setupNear(h: NearHost) {
    */
   function logout() {
     try {
-      for (const k of ['qh.pid', 'qh.name', 'qh.near.autoname']) localStorage.removeItem(k);
+      for (const k of ['qh.pid', 'qh.name', 'qh.near.autoname2']) localStorage.removeItem(k);
       sessionStorage.removeItem('qh.justLoggedIn');
     } catch {
       /* storage blocked: nothing kept to forget */
@@ -589,21 +589,31 @@ export function setupNear(h: NearHost) {
       lead.after(box);
 
       // logged in: one short step, a name (an auto degen name you can keep) and Enter
+      // the fren they picked (its label, e.g. "Froggo"): the suggested name's meme matches it
+      const fren = () => (document.querySelector('#species .on')?.textContent ?? '').replace(/[^A-Za-z]/g, '');
       let auto = '';
       try {
-        auto = localStorage.getItem('qh.near.autoname') || '';
-        if (!auto) localStorage.setItem('qh.near.autoname', (auto = degenName()));
+        auto = localStorage.getItem('qh.near.autoname2') || '';
+        if (!auto) localStorage.setItem('qh.near.autoname2', (auto = degenName(Math.random, fren())));
       } catch {
-        auto = degenName();
+        auto = degenName(Math.random, fren());
       }
       const nameRow = document.createElement('div');
       nameRow.id = 'near-name-row';
       nameRow.innerHTML = `<label for="near-name">Your name</label>
-        <div class="near-name-field"><input id="near-name" maxlength="24" autocomplete="off" spellcheck="false" value="${esc(auto)}" /><button id="near-name-dice" type="button" aria-label="Another name">🎲</button></div>
+        <div class="near-name-field"><input id="near-name" maxlength="16" autocomplete="off" spellcheck="false" value="${esc(auto)}" /><button id="near-name-dice" type="button" aria-label="Another name">🎲</button></div>
         <p class="small">Shown instead of your address. Keep it, or type your own.</p>`;
       const enterBtn = $('btn-enter');
       enterBtn.before(nameRow);
-      $('near-name-dice').addEventListener('click', () => (($('near-name') as HTMLInputElement).value = degenName()));
+      $('near-name-dice').addEventListener('click', () => (($('near-name') as HTMLInputElement).value = degenName(Math.random, fren())));
+      // a suggested name follows the fren they pick, until they type their own (or have one saved)
+      let typed = false;
+      ($('near-name') as HTMLInputElement).addEventListener('input', () => (typed = true));
+      document.getElementById('species')?.addEventListener('click', () =>
+        setTimeout(() => {
+          if (!typed && !econ.nick) ($('near-name') as HTMLInputElement).value = degenName(Math.random, fren());
+        }, 0),
+      );
       ($('near-name') as HTMLInputElement).addEventListener('keydown', (e) => e.key === 'Enter' && enterBtn.click());
 
       // the look (fren, light, pet) is a small optional thing: folded into one line, "auto" unless opened
