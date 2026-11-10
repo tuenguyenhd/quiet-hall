@@ -52,9 +52,11 @@ for (const p of ['/api/pump/state', '/api/spots', '/api/tip/order', '/api/verify
 const A = await client(pid('na'));
 await wait(300);
 check(!!(await until(A.msgs, (m) => m.t === 'welcome')), 'welcome received');
+const econ = await until(A.msgs, (m) => m.t === 'econ');
+check(econ?.leaves === 10, 'first visit: 10 welcome Leaves on connect', JSON.stringify(econ));
 const r1 = await sit(A, 3 * MIN + 80);
 check(r1?.minutes === 3, 'a 3-minute sit counts 3 minutes', JSON.stringify(r1));
-check(r1?.paid === 3 + 2 && r1?.welcome === 10 && r1?.balance === 15, 'pays 3 + streak 2, welcome 10, balance 15', JSON.stringify(r1));
+check(r1?.paid === 3 + 2 && r1?.balance === 15, 'pays 3 + streak 2, balance 15', JSON.stringify(r1));
 
 // --- under MIN_SIT pays nothing
 const r2 = await sit(A, MIN / 2);
