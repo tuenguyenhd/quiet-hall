@@ -5,6 +5,7 @@ import { Pump } from './pump';
 import { Economy, minuteMs } from './economy';
 import { Mirror, ownerId } from './mirror';
 import { edition, ECONOMY } from '../src/economy';
+import { GATHER, WORKBENCH, dist, frenById, nodeById } from '../src/valley';
 import { serverRpc } from './solana';
 import { DUEL, DUEL_MAX_D, PUMP_MARKETS, cleanChat, cleanPlayerName, defaultName, inDuelZone, type PumpMarket } from '../src/layout';
 import { SPOTS, BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
@@ -102,6 +103,8 @@ interface Att {
   dn: number; // invites sent in the window
   hid: number; // hidden ms during the current sit (app in background)
   hs: number; // hidden since (ms, 0 = visible)
+  wf: string; // NEAR: fren whose wish this player granted and is now sitting out ('' = none)
+  wt: number; // when that wish sit started (ms)
 }
 
 const MAX_ROOM = 400; // sockets per hall
@@ -155,6 +158,10 @@ const ownerOf = (env: Env, pid: string) => ownerId(env.OWNER_SECRET || 'dev-only
 const NEAR_API = /^\/api\/(health|config|near\/[a-z-]+)$/;
 /** NEAR edition: socket messages that belong to Solana / money / prediction features */
 const NEAR_BLOCKED_WS = new Set(['dq', 'duel_ask', 'duel_ans', 'duel_cancel', 'spots', 'profile', 'lantern']);
+/** socket messages that exist only in the NEAR edition */
+const NEAR_ONLY_WS = new Set(['pick', 'grant', 'wishDone', 'craft', 'book']);
+const REACH = GATHER.reach + GATHER.tolerance;
+const CO_REACH = GATHER.coRescueRadius + GATHER.tolerance;
 /** PumpHall: one board for everyone; "t<id>" rooms are isolated boards for automated tests */
 const pumpRoom = (v: unknown) => (typeof v === 'string' && /^t[a-z0-9]{4,16}$/.test(v) ? v : 'main');
 const pump = (env: Env, room = 'main') => env.PUMP.get(env.PUMP.idFromName(room));
@@ -445,6 +452,90 @@ export class Hall extends DurableObject<Env> {
       this.today = d;
       await this.loadDay();
     }
+  }
+
+  /** NEAR edition: Meme Valley actions. Positions and timing are checked here, items and Leaves in the Economy store. */
+  private async valley(ws: WebSocket, a: Att, m: Record<string, unknown>, now: number) {
+    const E = economy(this.env);
+    const minute = minuteMs(this.env.MINUTE_MS);
+    switch (m.t) {
+      case 'pick': {
+        const node = nodeById(m.node);
+        if (!node) return;
+        if (dist(a, node) > REACH) return send(ws, { t: 'picked', node: node.id, ok: false, why: 'too far' });
+        return send(ws, { t: 'picked', node: node.id, ...(await E.pick(a.pid, node.id)) });
+      }
+      case 'grant': {
+        const f = frenById(m.fren);
+        if (!f) return;
+        if (dist(a, f) > REACH) return send(ws, { t: 'wish', fren: f.id, ok: false, why: 'too far' });
+        if (a.wf) return send(ws, { t: 'wish', fren: f.id, ok: false, why: 'You are already sitting with a fren.' });
+        const r = await E.startWish(a.pid, f.id);
+        if (!r.ok) return send(ws, { t: 'wish', fren: f.id, ...r });
+        a.wf = f.id;
+        a.wt = now;
+        if (a.s !== 'sit') {
+          a.s = 'sit';
+          a.since = now;
+          a.hid = 0;
+          a.hs = 0;
+          this.broadcast({ t: 's', id: a.id, s: 'sit' }, ws);
+        }
+        ws.serializeAttachment(a);
+        return send(ws, { t: 'wish', fren: f.id, ok: true, until: now + f.sitMin * minute });
+      }
+      case 'wishDone': {
+        const f = frenById(a.wf);
+        if (!f) return;
+        if (a.s !== 'sit' || now - a.wt < f.sitMin * minute * 0.98 || dist(a, f) > CO_REACH) {
+          return send(ws, { t: 'wishWait', fren: f.id, left: Math.max(0, a.wt + f.sitMin * minute - now) });
+        }
+        // everyone else sitting beside the fren right now is rescued too (co-rescue)
+        const co: { pid: string; ws: WebSocket }[] = [];
+        for (const w of this.ctx.getWebSockets()) {
+          const b = att(w);
+          if (w !== ws && b?.hello && b.pid && b.pid !== a.pid && b.s === 'sit' && dist(b, f) <= CO_REACH) co.push({ pid: b.pid, ws: w });
+        }
+        const results = await E.rescue(a.pid, f.id, co.map((c) => c.pid));
+        a.wf = '';
+        a.wt = 0;
+        ws.serializeAttachment(a);
+        const helped = results.filter((r) => r.co).length;
+        const jobs = [];
+        for (const r of results) {
+          const sockets = r.acct === a.pid ? [ws] : co.filter((c) => c.pid === r.acct).map((c) => c.ws);
+          for (const w of sockets) send(w, { t: 'rescued', fren: f.id, first: r.first, serial: r.serial, paid: r.paid, co: r.co, helped: r.co ? undefined : helped });
+          if (r.first && this.env.MIRROR) {
+            jobs.push({ job: `fren-${f.id}-${r.serial}`, method: 'mint_fren' as const, args: { owner: await ownerOf(this.env, r.acct), species: f.id, serial: r.serial } });
+          }
+        }
+        if (jobs.length) await mirror(this.env).enqueue(jobs);
+        this.broadcast({ t: 'rescue', fren: f.id, by: a.id, n: results.length });
+        return;
+      }
+      case 'craft': {
+        if (dist(a, WORKBENCH) > REACH + 1.5) return send(ws, { t: 'crafted', ok: false, why: 'too far' });
+        const r = await E.craft(a.pid, String(m.r ?? ''));
+        if (r.ok && r.kind && r.serial && this.env.MIRROR) {
+          await mirror(this.env).enqueue([
+            { job: `drip-${r.kind}-${r.serial}`, method: 'mint_drip', args: { owner: await ownerOf(this.env, a.pid), kind: r.kind, serial: r.serial } },
+          ]);
+        }
+        return send(ws, { t: 'crafted', ...r });
+      }
+      case 'book': {
+        const owner = await ownerOf(this.env, a.pid);
+        return send(ws, { t: 'book', owner, ...(await E.book(a.pid)), receipts: this.env.MIRROR ? await mirror(this.env).receipts(owner) : [] });
+      }
+    }
+  }
+
+  /** the granter stood up, walked away or left before the wish sit finished: materials go back */
+  private async cancelWish(ws: WebSocket | null, a: Att, why: string) {
+    const fren = a.wf;
+    a.wf = '';
+    a.wt = 0;
+    if (this.env.ECONOMY && a.pid && (await economy(this.env).cancelWish(a.pid, fren)) && ws) send(ws, { t: 'wishCancelled', fren, why });
   }
 
   /**
@@ -758,6 +849,8 @@ export class Hall extends DurableObject<Env> {
       dn: 0,
       hid: 0,
       hs: 0,
+      wf: '',
+      wt: 0,
     };
     server.serializeAttachment(a);
     return new Response(null, { status: 101, webSocket: client });
@@ -785,6 +878,11 @@ export class Hall extends DurableObject<Env> {
     if (!m || typeof m !== 'object') return;
 
     if (isNear(this.env) && typeof m.t === 'string' && (NEAR_BLOCKED_WS.has(m.t) || (m.t === 'bless' && m.order !== undefined))) return;
+    if (!isNear(this.env) && typeof m.t === 'string' && NEAR_ONLY_WS.has(m.t)) return;
+    if (typeof m.t === 'string' && NEAR_ONLY_WS.has(m.t)) {
+      if (!a.hello || !a.pid || !this.env.ECONOMY) return;
+      return this.valley(ws, a, m, now);
+    }
     switch (m.t) {
       case 'vis': {
         // the app was hidden / shown (backgrounded on a phone). Hidden time does not count toward a sit.
@@ -865,6 +963,13 @@ export class Hall extends DurableObject<Env> {
           stats: this.stats(),
         });
         this.broadcast({ t: 'join', p: pub(a) }, ws);
+        if (isNear(this.env) && this.env.ECONOMY && a.pid) {
+          const E = economy(this.env);
+          const stale = await E.openWish(a.pid);
+          if (stale) await E.cancelWish(a.pid, stale);
+          await E.touch(a.pid);
+          send(ws, { t: 'econ', ...(await E.state(a.pid)), ...(await E.book(a.pid)) });
+        }
         // arrived through a friend's "sit with me" link?
         // `with` is the inviter's public invite id (a hash of their visitor id), never the visitor id itself
         if (typeof m.with === 'string' && PID_RE.test(m.with) && m.with !== a.inv) {
@@ -883,6 +988,10 @@ export class Hall extends DurableObject<Env> {
         if (!a.hello) return;
         [a.x, a.z] = clampPos(num(m.x, a.x), num(m.z, a.z));
         a.ry = angle(num(m.ry, a.ry));
+        if (a.wf) {
+          const f = frenById(a.wf);
+          if (f && dist(a, f) > CO_REACH) await this.cancelWish(ws, a, 'walked away');
+        }
         ws.serializeAttachment(a);
         this.broadcast({ t: 'm', id: a.id, x: r2(a.x), z: r2(a.z), ry: r2(a.ry) }, ws);
         return;
@@ -892,6 +1001,7 @@ export class Hall extends DurableObject<Env> {
         const s: SitState = m.s === 'sit' ? 'sit' : 'idle';
         if (s === a.s) return;
         if (a.s === 'sit') await this.endSit(ws, a, now);
+        if (s === 'idle' && a.wf) await this.cancelWish(ws, a, 'stood up');
         a.s = s;
         a.since = s === 'sit' ? now : 0;
         if (s === 'sit') {
@@ -1050,6 +1160,7 @@ export class Hall extends DurableObject<Env> {
     const a = att(ws);
     if (!a?.hello) return;
     if (a.s === 'sit') await this.endSit(null, a, a.hs || Date.now());
+    if (a.wf) await this.cancelWish(null, a, 'left');
     await this.duelDrop(a, 'left');
     a.hello = false;
     a.s = 'idle';
