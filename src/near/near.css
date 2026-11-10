@@ -299,3 +299,19 @@ body.edition-near.near-guest #pump-history { display: none; }
 #near-login-welcome-box .near-login-done { display: none; }
 #near-login-welcome-box.logged .near-login-done { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; font-weight: 600; }
 #near-login-welcome-box.logged #near-login-welcome, #near-login-welcome-box.logged .near-login-note { display: none; }
+
+/* welcome: the name step (logged in only) and the folded "look" line */
+#near-name-row { display: none; text-align: left; margin: 12px 0 4px; }
+body.edition-near:not(.near-guest) #near-name-row { display: block; }
+#near-name-row label { display: block; font: 700 13px var(--sans, sans-serif); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+#near-name-row .small { margin: 6px 0 0; }
+.near-name-field { display: flex; gap: 8px; }
+.near-name-field input { flex: 1; min-width: 0; padding: 12px 14px; border: 2px solid #111; border-radius: 14px; font: 600 17px var(--sans, sans-serif); background: #fff; color: #111; }
+.near-name-field button { flex: none; width: 50px; border: 2px solid #111; border-radius: 14px; background: #fff; font-size: 20px; }
+#near-look { margin: 10px 0 6px; text-align: center; }
+#near-look summary { list-style: none; cursor: pointer; font: 600 14px var(--sans, sans-serif); opacity: 0.8; padding: 6px; }
+#near-look summary::-webkit-details-marker { display: none; }
+#near-look .near-look-change { text-decoration: underline; }
+#near-look[open] summary { margin-bottom: 4px; }
+/* guests: the welcome is just the login and Quick join (look still folded, optional) */
+body.edition-near.near-guest #near-look { margin-top: 4px; }

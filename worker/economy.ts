@@ -84,6 +84,12 @@ export class Economy extends DurableObject<EconEnv> {
       CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS links(account TEXT PRIMARY KEY, acct TEXT NOT NULL UNIQUE, at INTEGER NOT NULL);
     `);
+    // the player's chosen name, shown instead of their NEAR address (added after links shipped)
+    try {
+      this.sql.exec('ALTER TABLE links ADD COLUMN nick TEXT');
+    } catch {
+      /* already there */
+    }
   }
 
   // ---------- internals (call only inside transactionSync) ----------
@@ -640,6 +646,18 @@ export class Economy extends DurableObject<EconEnv> {
       const bonus = this.cfg.loginBonus > 0 ? this.write(acct, this.cfg.loginBonus, 'login_bonus', account, now) : 0;
       return { acct, account, switched: false, bonus };
     });
+  }
+
+  /** the NEAR account linked to this visitor and the name they chose (null if they never chose one) */
+  linkInfo(acct: string): { account: string; nick: string | null } | null {
+    return this.sql.exec<{ account: string; nick: string | null }>('SELECT account, nick FROM links WHERE acct = ?', acct).toArray()[0] ?? null;
+  }
+
+  /** saves a logged-in player's name (already cleaned by the caller); false if the visitor is not logged in */
+  setNick(acct: string, nick: string): boolean {
+    if (!this.linkedAccount(acct)) return false;
+    this.sql.exec('UPDATE links SET nick = ? WHERE acct = ?', nick, acct);
+    return true;
   }
 
   linkedAccount(acct: string): string | null {

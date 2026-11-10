@@ -164,6 +164,8 @@ const ownerOf = async (env: Env, pid: string) =>
   (env.ECONOMY ? await economy(env).linkedAccount(pid) : null) ?? (await ownerId(env.OWNER_SECRET || 'dev-only-owner-secret', pid));
 /** how a NEAR account shows as a player name (implicit 64-hex ids are shortened) */
 const nearName = (account: string) => (/^[0-9a-f]{64}$/.test(account) ? `${account.slice(0, 6)}…${account.slice(-4)}` : account.slice(0, 32));
+/** a logged-in player's display name: the name they chose, else their (shortened) NEAR address */
+const shownName = (l: { account: string; nick: string | null }) => l.nick || nearName(l.account);
 /** NEAR edition: only these API paths exist (edition-near.md: EDITION removes UI *and* routes) */
 const NEAR_API = /^\/api\/(health|config|near\/[a-z-]+|pump\/[a-z-]+)$/;
 /** NEAR edition: socket messages that belong to Solana / money / prediction features */
@@ -364,8 +366,18 @@ async function nearApi(req: Request, env: Env, path: string): Promise<Response> 
   if (path === '/api/near/whoami') {
     // the welcome card asks this before the player enters: is this visitor logged in with NEAR?
     if (!PID_RE.test(pid)) return json({ error: 'Bad pid' }, 400);
-    const account = await economy(env).linkedAccount(pid);
-    return json({ account, name: account ? nearName(account) : null });
+    const l = await economy(env).linkInfo(pid);
+    return json({ account: l?.account ?? null, nick: l?.nick ?? null, name: l ? shownName(l) : null });
+  }
+  if (path === '/api/near/name' && req.method === 'POST') {
+    // a logged-in player picks the name shown instead of their address (no dots: it can never look like an account)
+    const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const p = String(b.pid ?? '');
+    if (!PID_RE.test(p)) return json({ error: 'Bad pid' }, 400);
+    const nick = cleanPlayerName(b.name);
+    if (!nick) return json({ ok: false, why: 'Pick a name with letters or numbers.' }, 400);
+    if (!(await economy(env).setNick(p, nick))) return json({ ok: false, why: 'Log in with NEAR first.' }, 401);
+    return json({ ok: true, name: nick });
   }
   if (path === '/api/near/audit') return json(await economy(env).audit());
   if (path === '/api/near/login-nonce') {
@@ -1074,11 +1086,13 @@ export class Hall extends DurableObject<Env> {
           if (stale) await E.cancelWish(a.pid, stale);
           await E.touch(a.pid);
           await E.start();
-          const account = await E.linkedAccount(a.pid);
-          send(ws, { t: 'econ', ...(await E.state(a.pid)), ...(await E.book(a.pid)), near: account });
-          if (account) {
-            // the name of a logged-in player is their NEAR account, set by the server (players can't type a '.near' name)
-            a.nm = nearName(account);
+          const link = await E.linkInfo(a.pid);
+          const account = link?.account ?? null;
+          send(ws, { t: 'econ', ...(await E.state(a.pid)), ...(await E.book(a.pid)), near: account, nick: link?.nick ?? null });
+          if (link) {
+            // a logged-in player's name is set by the server: the name they chose, else their NEAR address
+            // (typed names cannot contain dots, so nobody can pass as a '.near' account)
+            a.nm = shownName(link);
             ws.serializeAttachment(a);
             this.broadcast({ t: 'nm', id: a.id, nm: a.nm });
           }
@@ -1185,6 +1199,8 @@ export class Hall extends DurableObject<Env> {
         if (!a.hello || now - a.ct < 3000) return;
         const nm = cleanPlayerName(m.name) || defaultName(a.sd);
         a.ct = now;
+        // NEAR edition: a logged-in player's /name is saved to their account (so it follows them to other phones)
+        if (isNear(this.env) && this.env.ECONOMY && a.pid && cleanPlayerName(m.name)) await economy(this.env).setNick(a.pid, nm);
         if (nm === a.nm) return void ws.serializeAttachment(a);
         a.nm = nm;
         ws.serializeAttachment(a);

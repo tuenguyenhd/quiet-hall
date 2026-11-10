@@ -12,6 +12,7 @@ import { BADGES } from '../badges';
 import { PREVIEWS } from './previews';
 import { loginWithNear, type LoginNetwork, type LoginUi } from './login';
 import { NEAR_MARK } from '../near-mark';
+import { degenName } from './names';
 
 /** the NEAR mark for login buttons (white on black, unaltered) */
 const nearIcon = (size: number) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="${NEAR_MARK}"/></svg>`;
@@ -51,6 +52,8 @@ interface Econ {
   drips: { kind: string; serial: number }[];
   /** the NEAR account this player logged in with (null = guest) */
   near?: string | null;
+  /** the name they chose (shown instead of the address); null until they pick one */
+  nick?: string | null;
 }
 interface Quote {
   item: Item;
@@ -143,7 +146,9 @@ export function setupNear(h: NearHost) {
   function renderBar() {
     $('near-leaves').querySelector('b')!.textContent = String(econ.leaves);
     const lg = $('near-login');
-    const who = econ.near ? (/^[0-9a-f]{64}$/.test(econ.near) ? short(econ.near) : econ.near.replace(/\.(testnet|near)$/, '')) : '';
+    const addr = econ.near ? (/^[0-9a-f]{64}$/.test(econ.near) ? short(econ.near) : econ.near.replace(/\.(testnet|near)$/, '')) : '';
+    // the hall button shows the name they chose; the welcome card says which account it is
+    const who = econ.nick || chosenName || addr;
     lg.querySelector('span')!.textContent = econ.near ? `✓ ${who}` : 'Log in';
     lg.title = econ.near ? `Logged in as ${econ.near}` : 'Log in with NEAR';
     lg.classList.toggle('on', !!econ.near);
@@ -152,7 +157,7 @@ export function setupNear(h: NearHost) {
     if (wb) {
       wb.classList.toggle('logged', !!econ.near);
       const done = document.getElementById('near-login-welcome-done');
-      if (done) done.innerHTML = econ.near ? `${nearIcon(16)}<span>Logged in as <b>${esc(who)}</b></span>` : '';
+      if (done) done.innerHTML = econ.near ? `${nearIcon(16)}<span>Logged in as <b>${esc(addr)}</b></span>` : '';
     }
     // guests can explore, rescue and trade; PumpHall up/down needs a NEAR login
     document.body.classList.toggle('near-guest', !econ.near);
@@ -521,6 +526,8 @@ export function setupNear(h: NearHost) {
   });
 
   let justLoggedIn = false;
+  /** the name picked on the welcome card (sent again once the hall connects, in case it raced the hello) */
+  let chosenName = '';
   /** "Log in with NEAR": NEAR Connect's standard wallet picker, one free signature (mainnet accounts by default) */
   let loggingIn = false;
   async function startLogin(network: LoginNetwork = 'mainnet') {
@@ -562,6 +569,61 @@ export function setupNear(h: NearHost) {
         <p id="near-login-welcome-done" class="near-login-done"></p>
         <p class="small near-login-note">+${LOGIN_BONUS} 🍃 bonus · play PumpHall and the Market · keep progress on any phone · <a href="#" id="near-login-testnet">testnet account?</a></p>`;
       lead.after(box);
+
+      // logged in: one short step, a name (an auto degen name you can keep) and Enter
+      let auto = '';
+      try {
+        auto = localStorage.getItem('qh.near.autoname') || '';
+        if (!auto) localStorage.setItem('qh.near.autoname', (auto = degenName()));
+      } catch {
+        auto = degenName();
+      }
+      const nameRow = document.createElement('div');
+      nameRow.id = 'near-name-row';
+      nameRow.innerHTML = `<label for="near-name">Your name</label>
+        <div class="near-name-field"><input id="near-name" maxlength="24" autocomplete="off" spellcheck="false" value="${esc(auto)}" /><button id="near-name-dice" type="button" aria-label="Another name">🎲</button></div>
+        <p class="small">Shown instead of your address. Keep it, or type your own.</p>`;
+      const enterBtn = $('btn-enter');
+      enterBtn.before(nameRow);
+      $('near-name-dice').addEventListener('click', () => (($('near-name') as HTMLInputElement).value = degenName()));
+      ($('near-name') as HTMLInputElement).addEventListener('keydown', (e) => e.key === 'Enter' && enterBtn.click());
+
+      // the look (fren, light, pet) is a small optional thing: folded into one line, "auto" unless opened
+      const card = enterBtn.parentElement!;
+      const look = document.createElement('details');
+      look.id = 'near-look';
+      look.innerHTML = `<summary>Look: <b>auto</b> · <span class="near-look-change">change</span></summary>`;
+      const lookFrom = card.querySelector('.label');
+      if (lookFrom) {
+        const moving: Element[] = [];
+        for (let el: Element | null = lookFrom; el && el !== nameRow && el !== enterBtn; el = el.nextElementSibling) moving.push(el);
+        lookFrom.before(look);
+        look.append(...moving);
+      }
+      enterBtn.before(look);
+      look.addEventListener('toggle', () => {
+        look.querySelector('summary b')!.textContent = look.open ? 'pick below' : 'yours';
+        look.querySelector('.near-look-change')!.textContent = look.open ? 'hide' : 'change';
+      });
+
+      // Enter = submit: save the name first (capture phase, before the game connects with it)
+      $('welcome').addEventListener(
+        'click',
+        (e) => {
+          if (!econ.near || !(e.target as Element).closest?.('#btn-enter')) return;
+          const nm = ($('near-name') as HTMLInputElement).value.replace(/\s+/g, ' ').trim() || auto;
+          chosenName = nm;
+          h.setVerifiedName(nm);
+          void fetch('/api/near/name', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pid: h.pid, name: nm }) })
+            .then((r) => r.json())
+            .then((r: { ok: boolean; name?: string; why?: string }) => {
+              if (r.ok && r.name) econ.nick = chosenName = r.name;
+              else if (r.why) h.toast(r.why, 3500);
+            })
+            .catch(() => undefined);
+        },
+        true,
+      );
       // no "No sign-up" line in this edition: logging in is the way to play
       document.querySelector('#welcome .card > p.small')?.remove();
       $('near-login-welcome').addEventListener('click', () => void startLogin());
@@ -592,11 +654,15 @@ export function setupNear(h: NearHost) {
   // then shows the account instead of the login button (and after a login, we go straight into the hall)
   void fetch(`/api/near/whoami?pid=${encodeURIComponent(h.pid)}`)
     .then((r) => r.json())
-    .then((w: { account: string | null }) => {
+    .then((w: { account: string | null; nick: string | null }) => {
       if (!w.account) return;
       econ.near = econ.near ?? w.account;
+      econ.nick = econ.nick ?? w.nick;
+      const input = document.getElementById('near-name') as HTMLInputElement | null;
+      if (input && w.nick) input.value = w.nick;
       renderBar();
-      if (justLoggedIn && !$('welcome').classList.contains('hidden')) $('btn-enter').click();
+      // just logged in: the welcome card is now the short name step; focus the name so Enter goes straight in
+      if (justLoggedIn && !$('welcome').classList.contains('hidden')) ($('near-name') as HTMLInputElement).focus({ preventScroll: true });
     })
     .catch((e) => console.warn('[near] whoami', e));
 
@@ -618,7 +684,14 @@ export function setupNear(h: NearHost) {
     switch (m.t) {
       case 'econ':
         econ = { ...econ, ...(m as unknown as Econ) };
-        if (econ.near) h.setVerifiedName(/^[0-9a-f]{64}$/.test(econ.near) ? short(econ.near) : econ.near.slice(0, 32));
+        if (econ.near) {
+          // the name picked on the welcome card wins if the server had not saved it yet when we said hello
+          if (chosenName && chosenName !== econ.nick) {
+            h.send({ t: 'name', name: chosenName });
+            econ.nick = chosenName;
+          }
+          h.setVerifiedName(econ.nick || (/^[0-9a-f]{64}$/.test(econ.near) ? short(econ.near) : econ.near.slice(0, 32)));
+        }
         firstSitDone = econ.frens.length > 0 || (econ.today.sit ?? 0) > 0;
         trail.visible = firstSitDone && econ.frens.length === 0;
         renderBar();

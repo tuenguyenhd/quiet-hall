@@ -75,6 +75,25 @@ t(inv2?.m === 'NEAR' && inv2?.dir === 'down', 'a NEAR down duel invite goes thro
 D.send({ t: 'duel_ans', id: inv2?.id, ok: false });
 t(/not now/.test((await until(C, (m) => m.t === 'duel_no'))?.why ?? ''), 'declining tells the challenger');
 
+// names: a logged-in player picks the name shown instead of their address; it is saved to the account
+const setName = (c, name) => fetch(`${BASE}/api/near/name`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pid: c.pid, name }) }).then((r) => r.json());
+t((await setName(G, 'Sneaky'))?.ok === false, 'a guest cannot save a name to an account');
+const fake = await setName(A, 'vitalik.near');
+t(fake?.ok && !fake.name.includes('.'), 'a name cannot pass as a .near account (dots removed)', JSON.stringify(fake));
+t((await setName(A, 'Giga Shibby'))?.name === 'Giga Shibby', 'a logged-in player saves a name');
+const who = await (await fetch(`${BASE}/api/near/whoami?pid=${A.pid}`)).json();
+t(who.nick === 'Giga Shibby' && who.name === 'Giga Shibby' && who.account.endsWith('.testnet'), 'whoami returns the saved name and the account', JSON.stringify(who));
+const A2 = await client('ignored', P.x, P.z - 1, false);
+A2.ws.close();
+const again = new WebSocket(`${WS}/ws?room=${room}&k=${encodeURIComponent(KEY)}`);
+const seen = [];
+again.onmessage = (e) => e.data !== 'pong' && seen.push(JSON.parse(e.data));
+await new Promise((r) => (again.onopen = r));
+again.send(JSON.stringify({ t: 'hello', color: 1, seed: 7, x: P.x, z: P.z - 2, pid: A.pid, name: 'typed in the client' }));
+await wait(1200);
+t(seen.some((m) => m.t === 'nm' && m.nm === 'Giga Shibby'), 'in the hall the saved name wins over what the client sends', JSON.stringify(seen.filter((m) => m.t === 'nm')));
+again.close();
+
 for (const c of [A, B, G, C, D]) c.ws.close();
 console.log(`\n${ok} passed, ${bad} failed`);
 process.exit(bad ? 1 : 0);

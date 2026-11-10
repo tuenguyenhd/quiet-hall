@@ -386,9 +386,13 @@ export class Pump extends DurableObject {
     if (fromIp >= PER_IP_PER_ROUND) return { error: 'Too many picks from this network this round' };
     // a player who logged in with NEAR shows as their account on the boards (looked up here, never trusted from the client)
     const econ = (this.env as unknown as { ECONOMY?: DurableObjectNamespace<import('./economy').Economy> }).ECONOMY;
-    const linked = econ ? await econ.get(econ.idFromName('main')).linkedAccount(pid) : null;
+    const link = econ ? await econ.get(econ.idFromName('main')).linkInfo(pid) : null;
+    const linked = link?.account ?? null;
     if (!linked && edition((this.env as unknown as { EDITION?: string }).EDITION) === 'near') return { error: 'Log in with NEAR to play up/down.' };
-    const name = linked ? (/^[0-9a-f]{64}$/.test(linked) ? `${linked.slice(0, 6)}…${linked.slice(-4)}` : linked.slice(0, 32)) : cleanPlayerName(nameIn) || defaultName(seed);
+    // the name they chose, else their (shortened) address
+    const name = link
+      ? link.nick || (/^[0-9a-f]{64}$/.test(link.account) ? `${link.account.slice(0, 6)}…${link.account.slice(-4)}` : link.account.slice(0, 32))
+      : cleanPlayerName(nameIn) || defaultName(seed);
     const tag = await tagOf(pid);
     this.ctx.storage.transactionSync(() => {
       this.sql.exec(`INSERT INTO players (pid, name, tag) VALUES (?, ?, ?) ON CONFLICT(pid) DO UPDATE SET name = excluded.name`, pid, name, tag);
