@@ -260,13 +260,22 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (!(await verifySignature(addr, msg, sig))) return json({ error: 'Signature check failed' }, 401);
     if (!(await L.useNonce(f.nonce))) return json({ error: 'Sign-in expired, try again' }, 400);
     const p = await L.profile(addr, true);
-    return json({ token: await signSession(env.SESSION_SECRET, addr), address: addr, seeker: p.seeker, testSeeker: !!p.testSeeker, supporter: p.supporter });
+    return json({ token: await signSession(env.SESSION_SECRET, addr), address: addr, seeker: p.seeker, testSeeker: !!p.testSeeker, supporter: p.supporter, nick: p.nick ?? null });
+  }
+  if (path === '/api/name') {
+    // a signed-in wallet picks the name shown in the hall; it follows the wallet to other devices
+    const addr = await readSession(env.SESSION_SECRET, body.token);
+    if (!addr) return json({ ok: false, why: 'Sign in with a wallet first.' }, 401);
+    const nick = cleanPlayerName(body.name);
+    if (!nick) return json({ ok: false, why: 'Pick a name with letters or numbers.' }, 400);
+    await L.setNick(addr, nick);
+    return json({ ok: true, name: nick });
   }
   if (path === '/api/me') {
     const addr = await readSession(env.SESSION_SECRET, body.token);
     if (!addr) return json({ error: 'Signed out' }, 401);
     const p = await L.profile(addr, body.recheck === true);
-    return json({ address: addr, seeker: p.seeker, testSeeker: !!p.testSeeker, supporter: p.supporter });
+    return json({ address: addr, seeker: p.seeker, testSeeker: !!p.testSeeker, supporter: p.supporter, nick: p.nick ?? null });
   }
   if (path === '/api/tip/order') {
     const payer = await readSession(env.SESSION_SECRET, body.token);
@@ -732,6 +741,7 @@ export class Hall extends DurableObject<Env> {
           a.addr = addr;
           a.g = p.seeker;
           a.sp = p.supporter;
+          if (p.nick) a.nm = p.nick; // the name saved to this wallet
         }
         // pets are bought: only show one this visitor owns
         a.po = await ledger(this.env).ownedPets(a.pid, a.addr);
@@ -805,6 +815,10 @@ export class Hall extends DurableObject<Env> {
         a.g = p.seeker;
         a.sp = p.supporter;
         a.po = await ledger(this.env).ownedPets(a.pid, a.addr); // pets bought with this wallet on another device
+        if (p.nick && p.nick !== a.nm) {
+          a.nm = p.nick; // the name saved to this wallet
+          this.broadcast({ t: 'nm', id: a.id, nm: a.nm });
+        }
         ws.serializeAttachment(a);
         this.broadcast({ t: 'p', id: a.id, g: a.g, sp: a.sp });
         send(ws, { t: 'pets', pets: a.po, pt: a.pt, petNos: await ledger(this.env).petNumbers(a.pid, a.addr) });
@@ -853,6 +867,8 @@ export class Hall extends DurableObject<Env> {
         if (!a.hello || now - a.ct < 3000) return;
         const nm = cleanPlayerName(m.name) || defaultName(a.sd);
         a.ct = now;
+        // signed in: /name is saved to the wallet too
+        if (a.addr && cleanPlayerName(m.name)) await ledger(this.env).setNick(a.addr, nm);
         if (nm === a.nm) return void ws.serializeAttachment(a);
         a.nm = nm;
         ws.serializeAttachment(a);

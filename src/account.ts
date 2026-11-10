@@ -12,6 +12,8 @@ export interface Session {
   /** devnet test wallet acting as a Seeker */
   testSeeker?: boolean;
   supporter: boolean;
+  /** the name saved to this wallet (null until they pick one) */
+  nick?: string | null;
 }
 
 export interface AccountHooks {
@@ -210,7 +212,13 @@ export function setupAccount(h: AccountHooks) {
     if (h.room() === 'seeker') h.setRoom('main');
     setSession(null);
     close('profile');
-    h.toast('Signed out. Your light is still here.');
+    // back to the welcome card as a guest: the wallet's name stays with the wallet, not on this phone
+    try {
+      localStorage.removeItem('qh.name');
+    } catch {
+      /* storage blocked */
+    }
+    location.reload();
   });
 
   // ---------- tips ----------
@@ -289,7 +297,7 @@ export function setupAccount(h: AccountHooks) {
   renderPill();
   if (session) {
     apiPost<Session>('/api/me', { token: session.token })
-      .then((me) => setSession({ ...session!, seeker: me.seeker, testSeeker: me.testSeeker, supporter: me.supporter }))
+      .then((me) => setSession({ ...session!, seeker: me.seeker, testSeeker: me.testSeeker, supporter: me.supporter, nick: me.nick ?? null }))
       .catch((e) => {
         if (/signed out/i.test(String(e))) setSession(null);
       });
@@ -341,6 +349,12 @@ export function setupAccount(h: AccountHooks) {
 
   return {
     session: () => session,
+    /** opens the wallet picker to sign in; true once signed in, false if they close it */
+    signIn: () => ensureWallet(true),
+    /** the Sign out button's action (also on the welcome card) */
+    signOut: () => $('btn-signout').click(),
+    /** after the welcome card saved a name: keep the session's copy in step */
+    setNick: (nick: string) => session && setSession({ ...session, nick }),
     openProfile,
     openTip,
     buy,

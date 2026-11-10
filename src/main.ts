@@ -2,6 +2,7 @@ import './style.css';
 import * as THREE from 'three';
 import { buildWorld, type Seat, type Theme } from './world';
 import { setupAccount } from './account';
+import { setupWelcome } from './welcome';
 import { setupItems } from './items';
 import type { LanternData } from './lanterns';
 import { Avatar, lerpAngle, type SitState } from './avatar';
@@ -617,10 +618,12 @@ function setInvites(n: number, live: boolean) {
   return false;
 }
 
+let welcome: { onSession(): void } | null = null;
 const acct = setupAccount({
   toast,
   onSupport: () => items.badgeEvent({ type: 'donate' }),
   onSession(s) {
+    welcome?.onSession();
     myBadges = { g: !!s?.seeker, sp: !!s?.supporter };
     me.setBadges(myBadges.g, myBadges.sp);
     if (s) net.send({ t: 'profile', session: s.token });
@@ -632,6 +635,9 @@ const acct = setupAccount({
   room: () => net.room,
   setRoom: (r) => net.setRoom(r),
 });
+
+// the welcome card: sign in, then a name and Enter (or Quick join as a guest)
+welcome = setupWelcome({ session: acct.session, signIn: acct.signIn, signOut: acct.signOut, setNick: acct.setNick, store, toast });
 
 const items = setupItems({ scene, world, send: (m) => net.send(m), toast, buy: acct.buy, store, online: () => net.online });
 const chat = setupChat({

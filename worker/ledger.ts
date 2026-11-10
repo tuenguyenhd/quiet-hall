@@ -67,6 +67,8 @@ export interface Profile {
   checkedAt: number;
   /** simulated Seeker (devnet test wallet), never stored */
   testSeeker?: boolean;
+  /** the name this wallet's owner chose (shown in the hall instead of a random name; follows the wallet) */
+  nick?: string;
 }
 
 export interface Order {
@@ -169,6 +171,13 @@ export class Ledger extends DurableObject<Env> {
 
   private async getProfile(addr: string): Promise<Profile> {
     return (await this.ctx.storage.get<Profile>(`p:${addr}`)) ?? { seeker: false, supporter: false, mints: [], tips: 0, checkedAt: 0 };
+  }
+
+  /** saves the name chosen by a signed-in wallet (already cleaned by the caller) */
+  async setNick(addr: string, nick: string): Promise<void> {
+    const p = await this.getProfile(addr);
+    p.nick = nick;
+    await this.ctx.storage.put(`p:${addr}`, p);
   }
 
   async profile(addr: string, recheck = false): Promise<Profile> {
