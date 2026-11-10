@@ -110,6 +110,24 @@ async function isFullAccessKey(rpcs: string[], accountId: string, publicKey: str
   return false;
 }
 
+/** every 64-byte reading of a signature string: base64 (NEP-413), base58, hex, with or without "ed25519:" */
+export function signatureReadings(raw: string): Uint8Array[] {
+  const s = raw.trim().replace(/^ed25519:/, '');
+  const out: Uint8Array[] = [];
+  const add = (f: () => Uint8Array) => {
+    try {
+      const b = f();
+      if (b.length === 64 && !out.some((o) => o.every((x, k) => x === b[k]))) out.push(b);
+    } catch {
+      /* not this encoding */
+    }
+  };
+  if (/^[0-9a-fA-F]{128}$/.test(s)) add(() => Uint8Array.from(s.match(/../g)!, (h) => parseInt(h, 16)));
+  if (/^[A-Za-z0-9+/_-]+=*$/.test(s)) add(() => unb64(s.replace(/-/g, '+').replace(/_/g, '/')));
+  if (/^[1-9A-HJ-NP-Za-km-z]+$/.test(s)) add(() => base58decode(s));
+  return out;
+}
+
 export type LoginNetwork = 'mainnet' | 'testnet';
 
 export interface LoginInput {
@@ -125,29 +143,33 @@ export interface LoginInput {
 /** Verifies a NEP-413 login. Returns the account id, or a reason it failed. */
 export async function verifyLogin(secret: string, rpcsFor: Record<LoginNetwork, string[]>, i: LoginInput): Promise<{ ok: true; accountId: string } | { ok: false; why: string }> {
   if (!ACCOUNT_RE.test(i.accountId) || i.accountId.length < 2 || i.accountId.length > 64) return { ok: false, why: 'bad account id' };
+  // wallets differ: a bare base58 key is an ed25519 key without its prefix
+  if (/^[1-9A-HJ-NP-Za-km-z]{32,50}$/.test(i.publicKey)) i = { ...i, publicKey: `ed25519:${i.publicKey}` };
   if (!/^ed25519:[1-9A-HJ-NP-Za-km-z]{32,50}$/.test(i.publicKey)) return { ok: false, why: 'only ed25519 keys are supported' };
   if (i.network !== 'mainnet' && i.network !== 'testnet') return { ok: false, why: 'bad network' };
   if (i.accountId.endsWith('.testnet') !== (i.network === 'testnet') && !/^[0-9a-f]{64}$/.test(i.accountId)) return { ok: false, why: 'account and network do not match' };
   const nonce = await checkNonce(secret, i.pid, i.nonce);
   if (!nonce) return { ok: false, why: 'login expired, try again' };
-  let sig: Uint8Array;
   let pk: Uint8Array;
   try {
-    sig = unb64(i.signature);
     pk = base58decode(i.publicKey.slice('ed25519:'.length));
   } catch {
-    return { ok: false, why: 'bad signature encoding' };
+    return { ok: false, why: 'bad public key' };
   }
-  if (sig.length !== 64 || pk.length !== 32) return { ok: false, why: 'bad signature' };
+  // NEP-413 says base64, but some wallets send base58, hex or an "ed25519:"-prefixed string: try each reading
+  const sigs = signatureReadings(i.signature);
+  if (!sigs.length || pk.length !== 32) return { ok: false, why: 'bad signature encoding' };
   // some wallets sign with the callbackUrl in the payload, some without it: accept either
   const candidates = [nep413Hash(LOGIN_MESSAGE, nonce, LOGIN_RECIPIENT, i.callbackUrl), nep413Hash(LOGIN_MESSAGE, nonce, LOGIN_RECIPIENT, null)];
-  const good = candidates.some((h) => {
-    try {
-      return ed25519.verify(sig, h, pk);
-    } catch {
-      return false;
-    }
-  });
+  const good = sigs.some((sig) =>
+    candidates.some((h) => {
+      try {
+        return ed25519.verify(sig, h, pk);
+      } catch {
+        return false;
+      }
+    }),
+  );
   if (!good) return { ok: false, why: 'signature does not match' };
   if (!(await isFullAccessKey(rpcsFor[i.network], i.accountId, i.publicKey))) return { ok: false, why: 'that key is not a full-access key of the account' };
   return { ok: true, accountId: i.accountId };

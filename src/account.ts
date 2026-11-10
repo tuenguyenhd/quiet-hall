@@ -4,6 +4,7 @@ import { apiGet, apiPost } from './api';
 import { CLUSTER, connect, disconnect, listWallets, onWalletsChanged, registerWallets, short, signIn, toB64 } from './wallet';
 import { confirmTip, sendTip, type Order } from './tip';
 import type { Theme } from './world';
+import { NEAR_BUILD } from './near-mark';
 
 export interface Session {
   token: string;
@@ -63,7 +64,8 @@ export function setupAccount(h: AccountHooks) {
   let currency: 'SOL' | 'USDC' | 'SKR' = 'SOL';
   let amount = AMOUNTS.SOL[1];
 
-  registerWallets();
+  // the NEAR edition logs in with NEAR Connect: no Solana / Seeker wallets are registered there
+  if (!NEAR_BUILD) registerWallets();
   onWalletsChanged(() => {
     if (!$('wallets').classList.contains('hidden')) renderWallets();
   });

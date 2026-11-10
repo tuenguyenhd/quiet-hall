@@ -27,9 +27,10 @@ export interface BoardMarket {
 }
 export type BoardData = Partial<Record<PumpMarket, BoardMarket>>;
 
-const GREEN = '#14f195';
+// neon: Solana's purple/green in the Seeker build; NEAR green and a violet (not Solana's) in the NEAR build
+const GREEN = NEAR_BUILD ? '#00ec97' : '#14f195';
 const RED = '#ff4d6d';
-const PURPLE = '#9945ff';
+const PURPLE = NEAR_BUILD ? '#6f6cff' : '#9945ff';
 
 const fmtPrice = (p: number | null) => (p == null ? '…' : p >= 10 ? p.toFixed(2) : p >= 1 ? p.toFixed(3) : p.toFixed(5));
 const fmtLeft = (ms: number) => {

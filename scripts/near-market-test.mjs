@@ -42,10 +42,27 @@ const quote = (q, item) => q.find((x) => x.item === item);
 const m0 = await get('/api/near/market');
 const rock0 = quote(m0.quotes, 'moon_rock');
 check(rock0 && rock0.bid < rock0.ask && rock0.ask <= 2 * 3 * 1.1 + 1, 'Moon Rock has a bid below its ask', JSON.stringify(rock0));
-const A = await client(pid('ma'), 0, 60);
+if (!KEY) throw new Error('pass the LOAD_TEST_KEY: trading needs a NEAR login, and the test logs its players in with it');
+// trading needs a NEAR login: a guest at the stall is refused (and the client shows the login perks)
+const G = await client(pid('mg'), 0, 100);
+const gt = await trade(G, 'moon_rock', 'buy', 1);
+check(gt?.ok === false && gt?.login === true && /Log in with NEAR/.test(gt?.why), 'a guest cannot trade (login required)', JSON.stringify(gt));
+G.send({ t: 'cupJoin' });
+const gc = await until(G, 'cupJoined');
+check(gc?.ok === false && gc?.login === true, 'a guest cannot join the Market Cup', JSON.stringify(gc));
+G.ws.close();
+const loginAs = async (c) => {
+  const l = await get(`/api/near/test-link?k=${KEY}&pid=${c.pid}`);
+  c.bonus = l.bonus;
+  return c;
+};
+const A = await loginAs(await client(pid('ma'), 0, 60));
+check(A.bonus === 50, 'the first login of an account gives the +50 Leaves bonus', String(A.bonus));
+const again = await get(`/api/near/test-link?k=${KEY}&pid=${A.pid}`);
+check(again.bonus === 0, 'logging in again gives no second bonus', JSON.stringify(again));
 check((await trade(A, 'moon_rock', 'buy', 1))?.why?.includes('PumpHall'), 'trading outside PumpHall is refused');
 await go(A, 0, 96);
-const B = await client(pid('mb'), 2, 98);
+const B = await loginAs(await client(pid('mb'), 2, 98));
 
 // --- buying moves the price up, everyone sees it; the spread is a sink
 const before = (await me(A)).leaves;
@@ -59,7 +76,7 @@ check((await trade(A, 'moon_rock', 'sell', 5))?.why === 'You do not have that ma
 check((await trade(A, 'moon_rock', 'buy', 999))?.ok === false, 'a 999-unit trade is refused');
 
 // --- 30 net buys push the price up; it decays back toward base with no trades
-const C = await client(pid('mc'), 0, 100);
+const C = await loginAs(await client(pid('mc'), 0, 100));
 await sitFor(C, 62); // 10 welcome + 60 sit + 2 streak = 72 Leaves
 const q1 = quote((await get('/api/near/market')).quotes, 'moon_rock');
 await trade(C, 'moon_rock', 'buy', 20);
@@ -80,7 +97,7 @@ const meC = await me(C);
 check((meC.today.market_sell ?? 0) <= 60, 'market sales never pass 60 Leaves a day', JSON.stringify({ sold: meC.today.market_sell, s1, cBal }));
 
 // --- the Market Cup
-const D = await client(pid('md'), 0, 100);
+const D = await loginAs(await client(pid('md'), 0, 100));
 D.send({ t: 'cupJoin' });
 check((await until(D, 'cupJoined'))?.why?.startsWith('Sit for a minute'), 'joining the Cup needs one paid sit minute');
 await go(D, 0, 40);
@@ -108,7 +125,7 @@ check((await trade(A, 'copium_shroom', 'sell', 9, true))?.ok === false, 'cannot 
 await trade(B, 'moon_rock', 'buy', 3, true);
 const board = await get(`/api/near/market?pid=${A.pid}`);
 check(board.cup.round === round && board.cup.entrants === 3 && board.cup.me?.rank >= 1, 'live board shows the round, 3 entrants and my rank', JSON.stringify(board.cup));
-check(board.cup.top.every((t) => /^[0-9a-f]{64}$/.test(t.owner)), 'the board shows owner ids, never visitor ids');
+check(board.cup.top.every((t) => ![A, B, C].some((c) => c.pid === t.owner) && (/^[0-9a-f]{64}$/.test(t.owner) || t.owner.endsWith('.testnet'))), 'the board shows NEAR accounts, never visitor ids', JSON.stringify(board.cup.top));
 
 // --- settlement after the round ends: Leaves prizes, results hash, commit/settle/trophy jobs
 const leavesBefore = await Promise.all([A, B, C].map(async (c) => (await me(c)).leaves));

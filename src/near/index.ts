@@ -10,7 +10,7 @@ import { CUP, KETTLE, MARKET, TRADE_ZONE } from '../market';
 import { LOOKOUT, COURT, PLACES, TEASERS } from '../layout';
 import { BADGES } from '../badges';
 import { PREVIEWS } from './previews';
-import { loginWithNear, type LoginNetwork } from './login';
+import { loginWithNear, type LoginNetwork, type LoginUi } from './login';
 import { NEAR_MARK } from '../near-mark';
 
 /** the NEAR mark for login buttons (white on black, unaltered) */
@@ -151,6 +151,13 @@ export function setupNear(h: NearHost) {
     document.getElementById('near-login-welcome-box')?.classList.toggle('hidden', !!econ.near);
     // guests can explore, rescue and trade; PumpHall up/down needs a NEAR login
     document.body.classList.toggle('near-guest', !econ.near);
+    // guests get a small "Quick join" under the login; logged in, the big "Enter the hall" is back
+    const enter = document.getElementById('btn-enter');
+    if (enter) {
+      enter.textContent = econ.near ? 'Enter the hall' : 'Quick join as guest →';
+      enter.classList.toggle('near-quick', !econ.near);
+      enter.classList.toggle('primary', !!econ.near);
+    }
   }
 
   // ---------- 3D: the valley ----------
@@ -417,6 +424,7 @@ export function setupNear(h: NearHost) {
     const left = cup ? cup.end - Date.now() : 0;
     const top = (cup?.top ?? []).map((t, i) => `<li>${i + 1}. <code>${esc(short(t.owner))}</code> <b>${t.score}</b></li>`).join('');
     body().innerHTML = `<h2>🛒 Market</h2>
+      ${econ.near ? '' : `<button id="near-market-login" class="near-login-btn near-lock">🔒 <span>Log in with NEAR to buy and sell · +${LOGIN_BONUS} 🍃</span></button>`}
       <div class="chips near-mode"><button data-mode="leaves" class="${cupMode ? '' : 'on'}">🍃 Leaves (${econ.leaves})</button><button data-mode="cup" class="${cupMode ? 'on' : ''}">🏆 Cup${inCup ? ` (${cup!.me!.chips} chips)` : ''}</button></div>
       <div class="chips near-qty">${[1, 5, 10].map((n) => `<button data-qty="${n}" class="${tradeQty === n ? 'on' : ''}">×${n}</button>`).join('')}</div>
       ${cupMode && !inCup ? `<p class="small">Market Cup round ${esc(cup?.round ?? '')}: ${mmss(left)} left · ${cup?.entrants ?? 0} entrants. Free: 200 play chips, prizes in Leaves.</p><button class="primary" id="near-cup-join">Join this round</button>` : rows}
@@ -425,14 +433,17 @@ export function setupNear(h: NearHost) {
       <p class="near-foot">Play money. No cash value. Free to enter.</p>`;
     body()
       .querySelectorAll<HTMLButtonElement>('button[data-side]')
-      .forEach((b) => b.addEventListener('click', () => h.send({ t: 'trade', item: b.dataset.item, side: b.dataset.side, n: tradeQty, cup: cupMode })));
+      .forEach((b) =>
+        b.addEventListener('click', () => (econ.near ? h.send({ t: 'trade', item: b.dataset.item, side: b.dataset.side, n: tradeQty, cup: cupMode }) : openLoginPerks('Buying and selling needs a login'))),
+      );
+    document.getElementById('near-market-login')?.addEventListener('click', () => openLoginPerks('Buying and selling needs a login'));
     body()
       .querySelectorAll<HTMLButtonElement>('button[data-qty]')
       .forEach((b) => b.addEventListener('click', () => ((tradeQty = Number(b.dataset.qty)), renderMarket(hist))));
     body()
       .querySelectorAll<HTMLButtonElement>('button[data-mode]')
       .forEach((b) => b.addEventListener('click', () => ((cupMode = b.dataset.mode === 'cup'), renderMarket(hist))));
-    document.getElementById('near-cup-join')?.addEventListener('click', () => h.send({ t: 'cupJoin' }));
+    document.getElementById('near-cup-join')?.addEventListener('click', () => (econ.near ? h.send({ t: 'cupJoin' }) : openLoginPerks('The Market Cup needs a login')));
   }
   function openPreviews() {
     show(`<h2>🔭 Coming next</h2><p class="near-banner">Preview: sample data</p>
@@ -456,22 +467,78 @@ export function setupNear(h: NearHost) {
       <p class="near-foot">Logging in signed a message only: no transaction, no fee, nothing moved.</p>`);
     body().dataset.kind = 'login';
   }
+  /** what logging in unlocks: shown when a guest reaches for one of these, and on the welcome card */
+  const LOGIN_BONUS = 50;
+  const PERKS = [
+    `🍃 <b>+${LOGIN_BONUS} Leaves</b> the first time you log in`,
+    '📈 Play PumpHall: Bitcoin and NEAR up/down, duels, your history',
+    '🛒 Buy and sell at the Market, and enter the Market Cup',
+    '📱 Keep your Leaves, bag and frens on any phone',
+    '🏷️ Your NEAR name in the hall and on the boards',
+  ];
+  /** a guest tried something that needs a login: say what it unlocks and offer the button */
+  function openLoginPerks(what: string) {
+    show(`<h2>🔒 ${esc(what)}</h2><p class="small">Quick join is for looking around. Log in with NEAR to play for real:</p>
+      <ul class="near-needs">${PERKS.map((p) => `<li class="have">${p}</li>`).join('')}</ul>
+      <button id="near-perks-login" class="near-login-btn">${nearIcon(20)}<span>Log in with NEAR</span></button>
+      <p class="near-foot">One free signature: no transaction, no fee, nothing moved. <a href="#" id="near-perks-testnet">Testnet account?</a></p>`);
+    body().dataset.kind = 'perks';
+    $('near-perks-login').addEventListener('click', () => (close(), void startLogin()));
+    $('near-perks-testnet').addEventListener('click', (e) => (e.preventDefault(), close(), void startLogin('testnet')));
+  }
+
+  // a small bar while the wallet is open: NEAR Connect says nothing when an extension window is just closed,
+  // so the player always has Cancel, and gets "Try again" once they are back in the game without an answer
+  const wait = document.createElement('div');
+  wait.id = 'near-login-wait';
+  wait.className = 'hidden';
+  document.body.appendChild(wait);
+  let cancelLogin: (() => void) | null = null;
+  const loginUi = (network: LoginNetwork): LoginUi => ({
+    waiting(name, cancel) {
+      cancelLogin = cancel;
+      wait.innerHTML = `<span class="near-spin"></span><span>Approve the signature in <b>${esc(name)}</b></span><button data-a="cancel">Cancel</button>`;
+      wait.classList.remove('hidden');
+      wait.querySelector('[data-a="cancel"]')!.addEventListener('click', () => cancelLogin?.());
+    },
+    stalled(name) {
+      wait.innerHTML = `<span>No answer from <b>${esc(name)}</b>. Closed it?</span><button data-a="retry">Try again</button><button data-a="cancel">Cancel</button>`;
+      wait.querySelector('[data-a="cancel"]')!.addEventListener('click', () => cancelLogin?.());
+      wait.querySelector('[data-a="retry"]')!.addEventListener('click', () => {
+        cancelLogin?.();
+        setTimeout(() => void startLogin(network), 0);
+      });
+    },
+    done() {
+      cancelLogin = null;
+      wait.classList.add('hidden');
+    },
+  });
+
   /** "Log in with NEAR": NEAR Connect's standard wallet picker, one free signature (mainnet accounts by default) */
   let loggingIn = false;
   async function startLogin(network: LoginNetwork = 'mainnet') {
     if (econ.near) return showLoggedIn();
     if (loggingIn) return;
     loggingIn = true;
-    h.toast('Pick your wallet, then approve one free signature…', 4000);
     try {
-      const r = await loginWithNear(h.pid, network);
+      const r = await loginWithNear(h.pid, network, loginUi(network));
       if (r.ok) h.toast(`Logged in as ${r.name} ✓`, 3000);
-      else if (!/cancel|closed|reject|user/i.test(r.why ?? '')) h.toast(`Not logged in: ${r.why}`, 6000);
+      else if (r.cancelled) h.toast('Login cancelled.', 2000);
+      else h.toast(`Not logged in: ${r.why}`, 6000);
     } catch (e) {
       h.toast(`Not logged in: ${String((e as Error)?.message ?? e).slice(0, 120)}`, 6000);
     } finally {
       loggingIn = false;
     }
+  }
+  // back from a login (the page reloaded): welcome, and the first-login bonus
+  try {
+    const j = JSON.parse(sessionStorage.getItem('qh.justLoggedIn') ?? 'null') as { name: string; bonus: number } | null;
+    sessionStorage.removeItem('qh.justLoggedIn');
+    if (j) setTimeout(() => h.toast(j.bonus > 0 ? `Logged in as ${j.name} ✓ · +${j.bonus} 🍃 welcome bonus` : `Logged in as ${j.name} ✓`, 5000), 1200);
+  } catch {
+    /* storage blocked */
   }
   $('near-login').addEventListener('click', () => void startLogin());
   {
@@ -481,8 +548,10 @@ export function setupNear(h: NearHost) {
       const box = document.createElement('div');
       box.id = 'near-login-welcome-box';
       box.innerHTML = `<button id="near-login-welcome" class="near-login-btn">${nearIcon(20)}<span>Log in with NEAR</span></button>
-        <p class="small near-login-note">Optional · keep your progress on any device · play PumpHall · <a href="#" id="near-login-testnet">testnet account?</a></p>`;
+        <p class="small near-login-note">+${LOGIN_BONUS} 🍃 bonus · play PumpHall and the Market · keep progress on any phone · <a href="#" id="near-login-testnet">testnet account?</a></p>`;
       lead.after(box);
+      // no "No sign-up" line in this edition: logging in is the way to play
+      document.querySelector('#welcome .card > p.small')?.remove();
       $('near-login-welcome').addEventListener('click', () => void startLogin());
       $('near-login-testnet').addEventListener('click', (e) => (e.preventDefault(), void startLogin('testnet')));
     }
@@ -496,7 +565,17 @@ export function setupNear(h: NearHost) {
       pick.before(cta);
       cta.addEventListener('click', () => void startLogin());
     }
+    const histView = document.getElementById('pump-view-history');
+    if (histView) {
+      const hc = document.createElement('div');
+      hc.id = 'pump-history-cta';
+      hc.innerHTML = `<p class="small">Your picks and results are kept for your NEAR account.</p><button class="near-login-btn">${nearIcon(20)}<span>Log in with NEAR to see your history</span></button>`;
+      histView.prepend(hc);
+      hc.querySelector('button')!.addEventListener('click', () => void startLogin());
+    }
   }
+
+  renderBar();
 
   $('near-bag').addEventListener('click', openBag);
   $('near-book').addEventListener('click', openBook);
@@ -600,6 +679,7 @@ export function setupNear(h: NearHost) {
         if (isOpen('book')) renderBook(m);
         return;
       case 'traded': {
+        if (!m.ok && m.login) return openLoginPerks('Buying and selling needs a login');
         if (!m.ok) return h.toast(String(m.why), 3000);
         if (m.quotes) quotes = m.quotes as Quote[];
         const k = String(m.item);
@@ -622,6 +702,7 @@ export function setupNear(h: NearHost) {
         if (isOpen('market')) renderMarket();
         return;
       case 'cupJoined':
+        if (!m.ok && m.login) return openLoginPerks('The Market Cup needs a login');
         if (!m.ok) return h.toast(String(m.why), 4500);
         h.toast(`You're in the Market Cup with ${CUP.chips} chips. Trade before ${new Date(Number(m.end)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`, 5000);
         cupMode = true;

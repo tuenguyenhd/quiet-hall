@@ -627,15 +627,18 @@ export class Economy extends DurableObject<EconEnv> {
    * Links a verified NEAR account to a visitor. One account ↔ one visitor. If the account is already linked to
    * another visitor (another device), that visitor id is returned so this device can switch to it (progress restored).
    */
-  link(acct: string, account: string): { acct: string; account: string; switched: boolean } {
+  link(acct: string, account: string): { acct: string; account: string; switched: boolean; bonus: number } {
     return this.ctx.storage.transactionSync(() => {
       const prev = this.sql.exec<{ acct: string }>('SELECT acct FROM links WHERE account = ?', account).toArray()[0];
-      if (prev) return { acct: prev.acct, account, switched: prev.acct !== acct };
+      if (prev) return { acct: prev.acct, account, switched: prev.acct !== acct, bonus: 0 };
       const mine = this.sql.exec<{ account: string }>('SELECT account FROM links WHERE acct = ?', acct).toArray()[0];
-      if (mine) return { acct, account: mine.account, switched: false }; // this visitor is already linked to another account
+      if (mine) return { acct, account: mine.account, switched: false, bonus: 0 }; // this visitor is already linked to another account
       this.ensure(acct, Date.now());
-      this.sql.exec('INSERT INTO links(account, acct, at) VALUES (?, ?, ?)', account, acct, Date.now());
-      return { acct, account, switched: false };
+      const now = Date.now();
+      this.sql.exec('INSERT INTO links(account, acct, at) VALUES (?, ?, ?)', account, acct, now);
+      // first login of this wallet account: a one-time bonus (one account links once, so it cannot repeat)
+      const bonus = this.cfg.loginBonus > 0 ? this.write(acct, this.cfg.loginBonus, 'login_bonus', account, now) : 0;
+      return { acct, account, switched: false, bonus };
     });
   }
 

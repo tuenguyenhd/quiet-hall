@@ -3,6 +3,7 @@
 // no model files. Animation is deliberately choppy (8 fps "stop-motion").
 import * as THREE from 'three';
 import { own } from './dispose';
+import { NEAR_BUILD } from './near-mark';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // ---------- traits ----------
@@ -49,11 +50,13 @@ const HAT: W<string> = [
   ['Halo', 5],
   ['Crown', 3],
 ];
+/** the chain hoodie: Solana stripes in the Seeker build, a NEAR one (black, NEAR green band) in the NEAR build */
+const CHAIN_HOODIE = NEAR_BUILD ? 'NEAR Hoodie' : 'Sol Hoodie';
 const TOP: W<string> = [
   ['Hoodie', 40],
   ['Tee', 30],
   ['Robe', 12],
-  ['Sol Hoodie', 10],
+  [CHAIN_HOODIE, 10],
   ['Suit', 6],
 ];
 const ACC: W<string> = [
@@ -173,23 +176,28 @@ export function buildDegen(t: Traits) {
   const parts: G[] = [];
   const S = t.skin;
   // torso (y relative to hips)
-  const top = t.top === 'Sol Hoodie' ? '#14151f' : t.top === 'Suit' ? '#1d1b22' : t.top === 'Robe' ? '#f2a93b' : t.topColor;
+  const top = t.top === CHAIN_HOODIE ? '#14151f' : t.top === 'Suit' ? '#1d1b22' : t.top === 'Robe' ? '#f2a93b' : t.topColor;
   if (t.top === 'Robe') {
     parts.push(cone(0.38, 0.72, top, 0, 0.3, 0, 7));
     parts.push(box(0.6, 0.08, 0.34, '#c0392b', 0, 0.28, 0, 0, 0, 0.5)); // sash
   } else {
     parts.push(box(0.52, 0.56, 0.32, top, 0, 0.3, 0));
   }
-  if (t.top === 'Sol Hoodie') {
-    parts.push(box(0.54, 0.05, 0.33, '#9945ff', 0, 0.42, 0));
-    parts.push(box(0.54, 0.05, 0.33, '#43b4ca', 0, 0.34, 0));
-    parts.push(box(0.54, 0.05, 0.33, '#14f195', 0, 0.26, 0));
+  if (t.top === CHAIN_HOODIE) {
+    if (NEAR_BUILD) {
+      parts.push(box(0.54, 0.08, 0.33, '#00ec97', 0, 0.36, 0));
+      parts.push(box(0.54, 0.02, 0.33, '#ffffff', 0, 0.3, 0));
+    } else {
+      parts.push(box(0.54, 0.05, 0.33, '#9945ff', 0, 0.42, 0));
+      parts.push(box(0.54, 0.05, 0.33, '#43b4ca', 0, 0.34, 0));
+      parts.push(box(0.54, 0.05, 0.33, '#14f195', 0, 0.26, 0));
+    }
   }
   if (t.top === 'Suit') {
     parts.push(box(0.14, 0.4, 0.02, '#f4f0e6', 0, 0.36, 0.165));
     parts.push(box(0.06, 0.3, 0.02, '#e5484d', 0, 0.36, 0.177));
   }
-  if (t.top === 'Hoodie' || t.top === 'Sol Hoodie') parts.push(box(0.4, 0.16, 0.12, top, 0, 0.6, -0.17)); // hood
+  if (t.top === 'Hoodie' || t.top === CHAIN_HOODIE) parts.push(box(0.4, 0.16, 0.12, top, 0, 0.6, -0.17)); // hood
   // arms
   for (const sx of [-1, 1]) {
     parts.push(box(0.14, 0.44, 0.16, top, sx * 0.33, 0.32, 0, 0, 0, sx * 0.12));

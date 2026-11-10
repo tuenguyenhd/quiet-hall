@@ -63,5 +63,17 @@ const cb = 'http://localhost:5174/';
 const withCb = await login({ network: 'testnet', pid: pid3, nonce: ch3.nonce, accountId: cred.account_id, publicKey, callbackUrl: cb, signature: Buffer.from(ed25519.sign(nep413(ch3.message, Buffer.from(ch3.nonce, 'base64'), ch3.recipient, cb), secret)).toString('base64') });
 check(withCb.ok, 'a signature that includes the callbackUrl verifies', JSON.stringify(withCb));
 
+// wallets differ in how they encode the reply (HOT passes its own through): base58 / hex signatures, a bare key
+for (const [label, enc, bareKey] of [
+  ['a base58 signature', (u) => b58e(u), false],
+  ['a hex signature and a key without "ed25519:"', (u) => Buffer.from(u).toString('hex'), true],
+]) {
+  const pidX = ('lx' + label.length + Date.now().toString(36)).slice(0, 16);
+  const chX = await (await fetch(`${BASE}/api/near/login-nonce?pid=${pidX}`)).json();
+  const sigX = ed25519.sign(nep413(chX.message, Buffer.from(chX.nonce, 'base64'), chX.recipient), secret);
+  const r = await login({ network: 'testnet', pid: pidX, nonce: chX.nonce, accountId: cred.account_id, publicKey: bareKey ? publicKey.slice(8) : publicKey, signature: enc(sigX) });
+  check(r.ok, `${label} verifies`, JSON.stringify(r));
+}
+
 console.log(`\n${ok} passed, ${bad} failed`);
 process.exit(bad ? 1 : 0);

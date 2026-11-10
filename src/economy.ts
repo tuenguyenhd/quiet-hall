@@ -19,6 +19,7 @@ export type Reason =
   | 'market_sell'
   | 'cup_prize'
   | 'welcome'
+  | 'login_bonus'
   | 'craft_fee'
   | 'market_buy';
 
@@ -29,6 +30,8 @@ export interface EconomyConfig {
   sitCap: number;
   /** Leaves given once, on the first visit */
   starterLeaves: number;
+  /** Leaves given once per wallet account, the first time it logs in (an incentive to log in) */
+  loginBonus: number;
   /** streak bonus = min(step × days, max) on the first paying sit of a day */
   streakStep: number;
   streakMax: number;
@@ -45,6 +48,7 @@ export const ECONOMY: Record<Edition, EconomyConfig> = {
     minSit: 1,
     sitCap: 60,
     starterLeaves: 10,
+    loginBonus: 50,
     streakStep: 2,
     streakMax: 30,
     caps: { wish: 20, market_sell: 60, world_sit: 20, bell: 15 },
@@ -55,6 +59,7 @@ export const ECONOMY: Record<Edition, EconomyConfig> = {
     minSit: 3,
     sitCap: 60,
     starterLeaves: 0,
+    loginBonus: 0,
     streakStep: 2,
     streakMax: 30,
     caps: { wish: 20, market_sell: 10, world_sit: 20, bell: 15 },
@@ -65,6 +70,7 @@ export const ECONOMY: Record<Edition, EconomyConfig> = {
     minSit: 3,
     sitCap: 60,
     starterLeaves: 0,
+    loginBonus: 0,
     streakStep: 2,
     streakMax: 30,
     caps: { wish: 20, market_sell: 10, world_sit: 20, bell: 15 },

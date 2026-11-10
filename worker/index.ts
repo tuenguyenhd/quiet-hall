@@ -384,10 +384,14 @@ async function nearApi(req: Request, env: Env, path: string): Promise<Response> 
       signature: String(b.signature ?? ''),
       callbackUrl: typeof b.callbackUrl === 'string' ? b.callbackUrl : undefined,
     });
-    if (!v.ok) return json({ ok: false, why: v.why }, 401);
+    if (!v.ok) {
+      // which wallet failed and how (no keys, no signatures): helps when one wallet's login breaks
+      console.log('near login refused', JSON.stringify({ why: v.why, wallet: String(b.wallet ?? '').slice(0, 40), network: b.network, sigLen: String(b.signature ?? '').length, pk: String(b.publicKey ?? '').slice(0, 8) }));
+      return json({ ok: false, why: v.why }, 401);
+    }
     const r = await economy(env).link(p, v.accountId);
     // switched: this NEAR account already belongs to another visitor id (another device) → the client adopts it
-    return json({ ok: true, account: r.account, name: nearName(r.account), pid: r.acct, switched: r.switched });
+    return json({ ok: true, account: r.account, name: nearName(r.account), pid: r.acct, switched: r.switched, bonus: r.bonus });
   }
   if (path === '/api/near/market') {
     const E = economy(env);
@@ -406,6 +410,11 @@ async function nearApi(req: Request, env: Env, path: string): Promise<Response> 
   const key = q.get('k') ?? '';
   if (!env.LOAD_TEST_KEY || key !== env.LOAD_TEST_KEY) return json({ error: 'Not found' }, 404);
   if (path === '/api/near/test-tick') return json(await economy(env).tick());
+  if (path === '/api/near/test-link') {
+    // links a made-up account to a visitor, as a verified login would (tests of logged-in play, no wallet)
+    if (!PID_RE.test(pid)) return json({ error: 'Bad pid' }, 400);
+    return json(await economy(env).link(pid, (q.get('account') ?? `${pid}.testnet`).slice(0, 64)));
+  }
   if (path === '/api/near/test-mint') {
     if (!PID_RE.test(pid)) return json({ error: 'Bad pid' }, 400);
     const owner = await ownerOf(env, pid);
@@ -583,6 +592,7 @@ export class Hall extends DurableObject<Env> {
         return send(ws, { t: 'crafted', ...r });
       }
       case 'trade': {
+        if (!(await this.nearLoggedIn(a))) return send(ws, { t: 'traded', ok: false, why: 'Log in with NEAR to buy and sell.', login: true });
         if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'traded', ok: false, why: 'Trade at the Market stall in PumpHall.' });
         const side = m.side === 'buy' ? 'buy' : m.side === 'sell' ? 'sell' : null;
         if (!side) return;
@@ -593,6 +603,7 @@ export class Hall extends DurableObject<Env> {
         return;
       }
       case 'cupJoin': {
+        if (!(await this.nearLoggedIn(a))) return send(ws, { t: 'cupJoined', ok: false, why: 'Log in with NEAR to join the Market Cup.', login: true });
         if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'cupJoined', ok: false, why: 'Join the Cup at the Market stall in PumpHall.' });
         return send(ws, { t: 'cupJoined', ...(await E.cupJoin(a.pid, a.ip)), chips: CUP.chips });
       }
