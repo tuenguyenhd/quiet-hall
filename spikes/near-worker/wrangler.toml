@@ -1,0 +1,8 @@
+# Spike: prove a Cloudflare Worker can sign and send NEAR transactions (edition-near.md, Nov 11 gate).
+name = "quiet-hall-near-spike"
+main = "index.ts"
+compatibility_date = "2026-11-01"
+
+[vars]
+NEAR_ACCOUNT = "quiethall-b4ac38.testnet"
+NEAR_RPC = "https://test.rpc.fastnear.com"
