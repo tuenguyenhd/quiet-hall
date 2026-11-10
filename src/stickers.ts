@@ -3,6 +3,7 @@
 // No third-party mascots or project logos (those need permission).
 import * as THREE from 'three';
 import { SEEKER_ARC, SEEKER_S, SOLANA_MARK } from './brand-marks';
+import { NEAR_BUILD, NEAR_MARK } from './near-mark';
 
 const INK = '#160d2e';
 const FONT = '"Lilita One", system-ui, sans-serif';
@@ -66,6 +67,21 @@ function seeker(g: CanvasRenderingContext2D, s: number) {
   g.strokeStyle = '#14f195';
   g.lineWidth = 6;
   g.stroke(new Path2D(SEEKER_ARC));
+  g.restore();
+}
+
+/** NEAR edition: the NEAR mark on its own sticker, unaltered (white on black, or black on white) */
+function near(g: CanvasRenderingContext2D, s: number, light: boolean) {
+  sticker(g, () => {
+    g.beginPath();
+    g.roundRect(-s * 0.5, -s * 0.5, s, s, s * 0.22);
+  }, light ? '#ffffff' : '#000000', s);
+  const k = (s * 0.6) / 24;
+  g.save();
+  g.translate(-s * 0.3, -s * 0.3);
+  g.scale(k, k);
+  g.fillStyle = light ? '#000000' : '#ffffff';
+  g.fill(new Path2D(NEAR_MARK));
   g.restore();
 }
 
@@ -211,8 +227,8 @@ export function stickerWallTexture(aspect: number, seed: number, px = 1536) {
         g.translate((x + 0.5 + (R() - 0.5) * 0.5) * (W / cols), (y + 0.5 + (R() - 0.5) * 0.4) * (H / rows));
         g.rotate((R() - 0.5) * 0.7);
         const pick = n++ % 9;
-        if (pick === 0) solana(g, s * 1.1);
-        else if (pick === 4) seeker(g, s);
+        if (pick === 0) (NEAR_BUILD ? near(g, s * 0.9, false) : solana(g, s * 1.1));
+        else if (pick === 4) (NEAR_BUILD ? near(g, s * 0.8, true) : seeker(g, s));
         else if (pick === 1 || pick === 6) fren(g, s, Math.floor(R() * 5));
         else if (pick === 2 || pick === 7) word(g, s * 0.9, WORDS[Math.floor(R() * WORDS.length)], PASTEL[Math.floor(R() * PASTEL.length)]);
         else emoji(g, s * 0.85, EMOJI[Math.floor(R() * EMOJI.length)], PASTEL[Math.floor(R() * PASTEL.length)]);

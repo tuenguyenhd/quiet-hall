@@ -22,7 +22,7 @@ import { setupPwa } from './pwa';
 import { setupChat } from './chat';
 import { setupPump } from './pump';
 import { setupDuel } from './duel';
-import { NEAR, setupNear } from './near';
+import { NEAR, NEAR_PETS, setupNear } from './near';
 
 const $ = (id: string) => document.getElementById(id)!;
 const params = new URLSearchParams(location.search);
@@ -710,6 +710,7 @@ const near = NEAR
         me.setPet(k);
         net.send({ t: 'pet', k });
       },
+      setMarketBoard: (rows) => world.setMarketBoard(rows),
     })
   : null;
 
@@ -797,12 +798,15 @@ function choosePet(i: number) {
   me.setPet(i);
   net.send({ t: 'pet', k: i });
 }
+/** pets offered: every pet, or in the NEAR edition only the frens you can rescue */
+const petPool = NEAR ? [0, ...NEAR_PETS.map((p) => p.k)] : PETS.map((_, i) => i);
+const petName = (i: number) => (NEAR ? NEAR_PETS.find((p) => p.k === i)?.name : undefined) ?? PETS[i].name;
 function renderPets() {
   for (const el of [$('pets'), $('pet-pick')]) {
     const inSheet = el.id === 'pet-pick';
     el.replaceChildren();
     // one scrolling row of tiles: no pet + your pets first, then the ones you can adopt
-    const order = PETS.map((_, i) => i).sort((a, b) => Number(!(a === 0 || myPets.includes(a))) - Number(!(b === 0 || myPets.includes(b))));
+    const order = petPool.slice().sort((a, b) => Number(!(a === 0 || myPets.includes(a))) - Number(!(b === 0 || myPets.includes(b))));
     let selected: HTMLElement | null = null;
     order.forEach((i) => {
       const p = PETS[i];
@@ -811,8 +815,8 @@ function renderPets() {
       b.className = 'pet-tile';
       b.innerHTML = `<span class="e"></span><small></small>${owned ? '' : '<i>🔒</i>'}`;
       b.querySelector('.e')!.textContent = p.emoji;
-      b.querySelector('small')!.textContent = p.name;
-      b.title = owned ? p.name : `${p.name} · tap to try on`;
+      b.querySelector('small')!.textContent = petName(i);
+      b.title = owned ? petName(i) : `${petName(i)} · tap to try on`;
       if (p.legend) b.classList.add('legend');
       if (owned && p.legend && myPetNos[i]) b.querySelector('small')!.textContent = `${p.name} #${myPetNos[i]}`;
       const on = i === (inSheet ? petPick : myPet);
@@ -834,9 +838,14 @@ function renderPets() {
   }
   const own = petPick === 0 || myPets.includes(petPick);
   $('btn-pat').classList.toggle('hidden', !own || !me.pet);
-  $('btn-adopt').classList.toggle('hidden', own);
+  $('btn-adopt').classList.toggle('hidden', own || NEAR);
   $('pet-note').classList.toggle('hidden', own);
-  document.querySelector('#petsheet .paywith')?.classList.toggle('hidden', own);
+  document.querySelector('#petsheet .paywith')?.classList.toggle('hidden', own || NEAR);
+  if (NEAR) {
+    // nothing is sold in the NEAR edition: a fren is yours once you rescue it
+    $('pet-note').textContent = NEAR_PETS.find((p) => p.k === petPick)?.how ?? '';
+    return;
+  }
   const pk = PETS[petPick];
   const kind = 'pet'; // every pet costs the same
   const price = items.price(kind);
@@ -853,7 +862,7 @@ function previewPet() {
   const trying = petPick > 0 && !myPets.includes(petPick);
   $('petsheet').classList.toggle('peek', trying);
   viewLift = trying ? 1 : 0;
-  $('pet-try').textContent = trying ? `Trying on: ${PETS[petPick].name} ✦` : 'Your pet';
+  $('pet-try').textContent = trying ? `Trying on: ${petName(petPick)} ✦` : 'Your pet';
   me.setPet(trying ? petPick : myPet);
   if (trying) setTimeout(() => me.pet?.pat(), 900);
 }

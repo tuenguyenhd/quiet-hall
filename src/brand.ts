@@ -3,6 +3,7 @@
 // each on its own banner (never combined with the Quiet Hall mark). Unlit material so lighting never tints them.
 import * as THREE from 'three';
 import { SEEKER_S, SOLANA_MARK, SOLANA_MOBILE_WORDMARK } from './brand-marks';
+import { NEAR_BUILD, NEAR_MARK } from './near-mark';
 
 const W = 512;
 const H = 1280;
@@ -72,6 +73,33 @@ function drawSeeker(g: CanvasRenderingContext2D) {
   text(g, 'dApp Store', 900, 40, '#b9b2cc');
 }
 
+/** NEAR edition: the NEAR mark, white on the dark field, unaltered and on its own (src/near-mark.ts) */
+function nearMark(g: CanvasRenderingContext2D, y: number, size: number) {
+  const s = size / 24;
+  g.save();
+  g.translate((W - size) / 2, y);
+  g.scale(s, s);
+  g.fillStyle = '#ffffff';
+  g.fill(new Path2D(NEAR_MARK));
+  g.restore();
+}
+
+function drawNearBuilt(g: CanvasRenderingContext2D) {
+  base(g);
+  text(g, 'built on', 210, 64, '#ffffff');
+  nearMark(g, 300, 300);
+  text(g, 'NEAR', 760, 96, '#ffffff');
+  text(g, 'rescues · crafts · trophies', 840, 32, '#b9b2cc');
+}
+
+function drawNearProof(g: CanvasRenderingContext2D) {
+  base(g);
+  text(g, 'checked on', 210, 64, '#ffffff');
+  nearMark(g, 300, 300);
+  text(g, 'NEAR', 760, 96, '#ffffff');
+  text(g, 'prices · Cup proofs', 840, 32, '#b9b2cc');
+}
+
 function bannerTexture(draw: (g: CanvasRenderingContext2D) => void) {
   const c = document.createElement('canvas');
   c.width = W;
@@ -99,7 +127,7 @@ export function addBrandBanners(
   const poleG = new THREE.CylinderGeometry(0.07, 0.08, 5.6, 8);
   const barG = new THREE.CylinderGeometry(0.05, 0.05, 1.8, 6);
   const plane = new THREE.PlaneGeometry(1.5, 3.75);
-  const kinds = [drawSolana, drawSeeker];
+  const kinds = NEAR_BUILD ? [drawNearBuilt, drawNearProof] : [drawSolana, drawSeeker];
   spots.forEach((p, i) => {
     const g = new THREE.Group();
     g.position.set(p.x, groundY(p.x, p.z), p.z);

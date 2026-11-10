@@ -4,7 +4,7 @@ import { add, fbm, mat, mesh, rng, segDist, smoothstep, textTexture } from './bu
 import { addBrandBanners } from './brand';
 import { dressWorld } from './world-assets';
 import { buildTeasers } from './teasers';
-import { buildPumpHall, type BoardData } from './pumphall';
+import { buildPumpHall, type BoardData, type MarketRow } from './pumphall';
 import { PUMP, SPOTS, TEASERS, BELL, BOUNDS, COURT, GARDEN, GROVE, HALL, HALL_CUSHIONS, LAKE, LOOKOUT, PLACES, RIM, TEA, placeAt, type PlaceInfo } from './layout';
 import { buildPlaces, labelSprite } from './places';
 
@@ -60,6 +60,8 @@ export interface World {
   setOwned(kind: 'stone' | 'tree' | 'cushion' | 'banner', owned: Map<number, { name: string; line: string }>): void;
   swingBell(): void;
   setPumpBoard(d: BoardData): void;
+  /** NEAR edition: Kettle's market on the Trading Hall board */
+  setMarketBoard(rows: MarketRow[]): void;
   pumpPos: THREE.Vector3;
   setTheme(theme: Theme): void;
   update(t: number, dt: number, focus: THREE.Vector3): void;
@@ -930,6 +932,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
       swing = 1;
     },
     setPumpBoard: (d) => pumpHall.setBoard(d),
+    setMarketBoard: (rows) => pumpHall.setMarketBoard(rows),
     pumpPos: new THREE.Vector3(PUMP.x, 0, PUMP.z),
     setTheme(theme) {
       const night = theme === 'night';

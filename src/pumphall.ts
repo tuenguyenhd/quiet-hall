@@ -5,6 +5,15 @@ import * as THREE from 'three';
 import { add, mat, mesh } from './build';
 import { PUMP } from './layout';
 import { stickerWallTexture } from './stickers';
+import { NEAR_BUILD } from './near-mark';
+
+/** NEAR edition board rows: Kettle's market quotes (src/market.ts) */
+export interface MarketRow {
+  item: string;
+  label: string;
+  bid: number;
+  ask: number;
+}
 
 type Ctx = {
   scene: THREE.Scene;
@@ -163,7 +172,7 @@ export function buildPumpHall(c: Ctx) {
       c.obstacles.push({ x: PUMP.x + x, z: PUMP.z + gz, r: 0.6 });
     }
     add(mesh(new THREE.BoxGeometry(12, 1.5, 0.5), frame, 0, 7.4, gz), g);
-    const sign = mesh(new THREE.PlaneGeometry(10.8, 1.69), new THREE.MeshBasicMaterial({ map: pop('PUMPHALL'), toneMapped: false }), 0, 7.4, gz - 0.26);
+    const sign = mesh(new THREE.PlaneGeometry(10.8, 1.69), new THREE.MeshBasicMaterial({ map: pop(NEAR_BUILD ? 'TRADING HALL' : 'PUMPHALL'), toneMapped: false }), 0, 7.4, gz - 0.26);
     sign.rotation.y = Math.PI;
     g.add(sign);
     g.add(mesh(new THREE.BoxGeometry(12.2, 0.12, 0.12), neonG, 0, 6.6, gz - 0.3), mesh(new THREE.BoxGeometry(12.2, 0.12, 0.12), neonR, 0, 8.2, gz - 0.3));
@@ -217,7 +226,13 @@ export function buildPumpHall(c: Ctx) {
     f.fillStyle = grad;
     f.fillRect(0, 0, 128, 128);
     f.fillStyle = '#0c0820';
-    for (const [y, dx] of [
+    // NEAR edition: Leaf coins (the game's play money), not a token
+    if (NEAR_BUILD) {
+      f.font = '84px system-ui, sans-serif';
+      f.textAlign = 'center';
+      f.textBaseline = 'middle';
+      f.fillText('🍃', 64, 70);
+    } else for (const [y, dx] of [
       [36, 8],
       [64, -8],
       [92, 8],
@@ -374,11 +389,49 @@ export function buildPumpHall(c: Ctx) {
     x.fillText('TAP TO PLAY ✦ no money · no prizes · points + leaderboard', W / 2, H - 40);
     tex.needsUpdate = true;
   }
-  draw(null);
+  /** NEAR edition: the board shows Kettle's Living Market instead of SOL / SKR */
+  function drawMarket(rows: MarketRow[]) {
+    const W = canvas.width;
+    const H = canvas.height;
+    const x = ctx2;
+    x.fillStyle = '#0c0820';
+    x.fillRect(0, 0, W, H);
+    x.textBaseline = 'middle';
+    x.font = '64px "Lilita One", system-ui, sans-serif';
+    x.fillStyle = GREEN;
+    x.textAlign = 'left';
+    x.fillText("KETTLE'S MARKET", 40, 60);
+    x.font = '30px "Lilita One", system-ui, sans-serif';
+    x.fillStyle = '#c8b8ff';
+    x.textAlign = 'right';
+    x.fillText('prices moved by players', W - 40, 62);
+    const rowH = Math.min(96, (H - 200) / Math.max(1, rows.length));
+    rows.forEach((r, i) => {
+      const y = 160 + i * rowH;
+      x.textAlign = 'left';
+      x.font = '48px "Lilita One", system-ui, sans-serif';
+      x.fillStyle = '#ffffff';
+      x.fillText(r.label, 40, y);
+      x.textAlign = 'right';
+      x.fillStyle = GREEN;
+      x.fillText(`sell ${r.bid}`, W - 300, y);
+      x.fillStyle = '#ffe14d';
+      x.fillText(`buy ${r.ask}`, W - 40, y);
+    });
+    x.textAlign = 'center';
+    x.font = '30px "Lilita One", system-ui, sans-serif';
+    x.fillStyle = '#ffe14d';
+    x.fillText('🍃 play money · prices posted on NEAR hourly · tap Kettle to trade', W / 2, H - 40);
+    tex.needsUpdate = true;
+  }
+  if (NEAR_BUILD) drawMarket([]);
+  else draw(null);
 
   return {
     /** redraw the board (call ~1×/s while near) */
-    setBoard: draw,
+    setBoard: (d: BoardData | null) => (NEAR_BUILD ? undefined : draw(d)),
+    /** NEAR edition: redraw the market board */
+    setMarketBoard: (rows: MarketRow[]) => (NEAR_BUILD ? drawMarket(rows) : undefined),
     update(t: number) {
       for (const o of spin) o.rotation.y = t * 1.4;
       for (const b of bob) b.o.position.y = b.y + Math.sin(t * 1.1 + b.ph) * 0.35;

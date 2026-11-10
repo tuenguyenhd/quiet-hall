@@ -7,10 +7,14 @@ import './near.css';
 import { Pet } from '../pets';
 import { CAVES, FRENS, GATE, ITEMS, NODES, POND, RECIPES, VALLEY, WORKBENCH, GATHER, dist, type Item } from '../valley';
 import { CUP, KETTLE, MARKET, TRADE_ZONE } from '../market';
-import { LOOKOUT, COURT, PLACES } from '../layout';
+import { LOOKOUT, COURT, PLACES, TEASERS } from '../layout';
+import { BADGES } from '../badges';
 import { PREVIEWS } from './previews';
 
 export const NEAR = import.meta.env.VITE_EDITION === 'near';
+
+/** NEAR edition pets: only frens you can rescue (no pets are sold in this edition). Indices into PETS. */
+export const NEAR_PETS = FRENS.map((f) => ({ k: f.pet, name: f.name, how: `Rescue ${f.name} in Meme Valley (north-east, past the Tea House) and ${f.name} follows you.` }));
 
 type Msg = Record<string, unknown> & { t: string };
 export interface NearHost {
@@ -29,6 +33,8 @@ export interface NearHost {
   sitting(): boolean;
   /** wear a rescued fren as your pet */
   setPet(k: number): void;
+  /** the big board in the Trading Hall */
+  setMarketBoard(rows: { item: string; label: string; bid: number; ask: number }[]): void;
 }
 
 interface Econ {
@@ -66,6 +72,19 @@ export function setupNear(h: NearHost) {
     }
     if (p.id === 'court') p.hint = 'North: the Quiet Hall (sit). South: the Trading Hall. North-east past the Tea House: Meme Valley.';
   }
+  // the Patron banner avenue is a paid (SOL) rental: nothing is sold in this edition, so the stands are hidden
+  h.scene.traverse((o) => {
+    if (o.userData.action === 'spot' && o.userData.kind === 'banner' && o.parent) {
+      o.parent.visible = false;
+      const i = h.clickables.indexOf(o);
+      if (i >= 0) h.clickables.splice(i, 1);
+    }
+  });
+  // no Seeker-only badge and no Solana wording in this edition
+  const seekerBadge = BADGES.findIndex((b) => b.id === 'seeker-lotus');
+  if (seekerBadge >= 0) BADGES.splice(seekerBadge, 1);
+  const market = (TEASERS as unknown as { id: string; text: string }[]).find((t) => t.id === 'market');
+  if (market) market.text = 'The Night Market is being set up: a Sitting Bazaar where people sit on mats and offer what they made. Peek through the telescope at the Lookout.';
   if (!PLACES.some((p) => p.id === 'valley')) {
     PLACES.push({ id: 'valley', name: 'Meme Valley', x: VALLEY.x, z: VALLEY.z, r: VALLEY.r, hint: 'Gather rocks and shrooms, and sit with a lost fren to bring them home.', view: [GATE.x - 6, GATE.z + 10], look: [VALLEY.x, VALLEY.z] });
   }
@@ -103,6 +122,17 @@ export function setupNear(h: NearHost) {
     overlay.classList.remove('hidden');
   };
   const isOpen = (kind: string) => !overlay.classList.contains('hidden') && body().dataset.kind === kind;
+
+  /** the Trading Hall board mirrors Kettle's quotes */
+  function pushBoard() {
+    if (!quotes.length) return;
+    h.setMarketBoard(quotes.map((q) => ({ item: q.item, label: itemLabel(q.item), bid: q.bid, ask: q.ask })));
+  }
+  setInterval(() => {
+    // refresh the board every 20 s while you are near the Trading Hall
+    if (dist(h.me().position, TRADE_ZONE) < 80) void loadMarket().then(pushBoard);
+  }, 20_000);
+  setTimeout(() => void loadMarket().then(pushBoard), 3000);
 
   function renderBar() {
     $('near-leaves').querySelector('b')!.textContent = String(econ.leaves);
@@ -160,6 +190,8 @@ export function setupNear(h: NearHost) {
   kettle.position.set(0, 1.4, 0);
   stall.add(counter, roof, kettle, makeSign(["🫖 Kettle's market", 'buy · sell · Cup'], 3.6, 2.4));
   stall.position.set(KETTLE.x, y(KETTLE.x, KETTLE.z), KETTLE.z);
+  // face the entrance (north edge of the hall), so the sign reads the right way round as you walk in
+  stall.rotation.y = Math.atan2(TRADE_ZONE.x - KETTLE.x, TRADE_ZONE.z - TRADE_ZONE.r - KETTLE.z);
   tap(stall, 'kettle', 'kettle');
   root.add(stall);
   // the telescope at the Lookout: the "Coming next" door to the preview screens
@@ -518,6 +550,7 @@ export function setupNear(h: NearHost) {
       }
       case 'quotes':
         quotes = m.q as Quote[];
+        pushBoard();
         if (isOpen('market')) renderMarket();
         return;
       case 'cupJoined':

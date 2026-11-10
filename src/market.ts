@@ -3,8 +3,8 @@
 import { PUMP } from './layout';
 import type { Item } from './valley';
 
-/** Kettle's stall inside the Trading Hall (the PumpHall building in the other editions) */
-export const KETTLE = { x: PUMP.x, z: PUMP.z - 8 };
+/** Kettle's stall inside the Trading Hall (the PumpHall building in the other editions): left side, clear of the board */
+export const KETTLE = { x: PUMP.x - 9, z: PUMP.z - 2 };
 /** trading is allowed anywhere inside the Trading Hall */
 export const TRADE_ZONE = { x: PUMP.x, z: PUMP.z, r: PUMP.r + 2 };
 
