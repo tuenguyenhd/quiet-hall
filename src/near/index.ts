@@ -436,13 +436,14 @@ export function setupNear(h: NearHost) {
         <div class="near-btns"><button data-side="sell" data-item="${m.item}">Sell</button><button data-side="buy" data-item="${m.item}">Buy</button></div></div>`;
     }).join('');
     const left = cup ? cup.end - Date.now() : 0;
-    const top = (cup?.top ?? []).map((t, i) => `<li>${i + 1}. <code>${esc(short(t.owner))}</code> <b>${t.score}</b></li>`).join('');
+    const top = (cup?.top ?? []).map((t) => `<li><code>${esc(short(t.owner))}</code> <b>${t.score}</b></li>`).join('');
+    const leftTxt = left > 3600000 ? `${Math.floor(left / 3600000)} h ${Math.floor((left % 3600000) / 60000)} min` : mmss(left);
     body().innerHTML = `<h2>🛒 Market</h2>
       ${econ.near ? '' : `<button id="near-market-login" class="near-login-btn near-lock">🔒 <span>Log in with NEAR to buy and sell · +${LOGIN_BONUS} 🍃</span></button>`}
       <div class="chips near-mode"><button data-mode="leaves" class="${cupMode ? '' : 'on'}">🍃 Leaves (${econ.leaves})</button><button data-mode="cup" class="${cupMode ? 'on' : ''}">🏆 Cup${inCup ? ` (${cup!.me!.chips} chips)` : ''}</button></div>
       <div class="chips near-qty">${[1, 5, 10].map((n) => `<button data-qty="${n}" class="${tradeQty === n ? 'on' : ''}">×${n}</button>`).join('')}</div>
-      ${cupMode && !inCup ? `<p class="small">Market Cup round ${esc(cup?.round ?? '')}: ${mmss(left)} left · ${cup?.entrants ?? 0} entrants. Free: 200 play chips, prizes in Leaves.</p><button class="primary" id="near-cup-join">Join this round</button>` : rows}
-      ${cupMode ? `<div class="label">Live top 10 ${inCup ? `· you: #${cup!.me!.rank}, score ${cup!.me!.score}` : ''}</div><ol class="near-top">${top || '<li class="small">No entrants yet</li>'}</ol>
+      ${cupMode && !inCup ? `<p class="small">This Market Cup round ends in ${leftTxt} · ${cup?.entrants ?? 0} entrants. Free: 200 play chips, prizes in Leaves.</p><button class="primary" id="near-cup-join">Join this round</button>` : rows}
+      ${cupMode ? `<div class="label">Live top 10 ${inCup ? `· you: #${cup!.me!.rank}, score ${cup!.me!.score}` : ''}</div>${top ? `<ol class="near-top">${top}</ol>` : '<p class="small">No entrants yet: be the first.</p>'}
         <p class="small">Each round is committed on NEAR before it starts and settled after it ends, so anyone can check it.</p>` : `<p class="small">Prices move with every player's trades. The Market buys up to 60 Leaves' worth from you a day (today: ${econ.today.market_sell ?? 0}).</p>`}
       <p class="near-foot">Play money. No cash value. Free to enter.</p>`;
     body()
@@ -537,13 +538,24 @@ export function setupNear(h: NearHost) {
    */
   function logout() {
     try {
-      for (const k of ['qh.pid', 'qh.name', 'qh.near.autoname2']) localStorage.removeItem(k);
+      for (const k of ['qh.pid', 'qh.name', 'qh.near.autoname2', 'qh.pets', 'qh.pet', 'qh.seed', 'qh.pump.told']) localStorage.removeItem(k);
       sessionStorage.removeItem('qh.justLoggedIn');
     } catch {
       /* storage blocked: nothing kept to forget */
     }
     location.reload();
   }
+  // duels need a login: a guest tapping ⚔ gets the login card straight away (before picking a side)
+  document.addEventListener(
+    'click',
+    (e) => {
+      if (econ.near || !(e.target as Element).closest?.('#duel-bubble')) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      openLoginPerks('Duels need a login');
+    },
+    true,
+  );
   let justLoggedIn = false;
   /** the name picked on the welcome card (sent again once the hall connects, in case it raced the hello) */
   let chosenName = '';

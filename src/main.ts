@@ -1236,7 +1236,10 @@ function stepMe(dt: number) {
       moveTarget = null;
       stuck = 0;
       if (pending && after < 2) arrive();
-      else pending = null;
+      else {
+        pending = null;
+        if (after > 3) toast('Something is in the way. Tap a spot beside it to walk around.', 3000);
+      }
     }
   }
   me.root.rotation.y = lerpAngle(me.root.rotation.y, Math.atan2(dir.x, dir.y), 1 - Math.exp(-dt * 12));

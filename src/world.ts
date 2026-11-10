@@ -614,7 +614,8 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
     scene.add(g);
     obstacles.push({ x, z, r: 0.45 });
   };
-  for (let z = COURT.z + 30; z > HZ + HD + 3; z -= 4.6) for (const sx of [-1, 1]) lantern(sx * 2.6, z);
+  // from the courtyard's south edge north to the hall (none on the PumpHall road: they filled the view south)
+  for (let z = COURT.z + COURT.r - 4; z > HZ + HD + 3; z -= 4.6) for (const sx of [-1, 1]) lantern(sx * 2.6, z);
 
   // ---------- bell pavilion ----------
   const pav = new THREE.Group();

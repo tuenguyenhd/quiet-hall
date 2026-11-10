@@ -32,8 +32,14 @@ body.edition-near #btn-lantern {
   right: 12px;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
   z-index: 5;
+}
+@media (max-width: 480px) {
+  #near-bar { gap: 6px; }
+  #near-bar .pill { min-height: 36px; min-width: 40px; padding: 4px 10px; }
+  #near-bar .near-login-btn.small-btn { min-height: 36px; max-width: 112px; padding: 6px 10px; font-size: 13px; }
 }
 #near-bar .pill {
   min-width: 44px;

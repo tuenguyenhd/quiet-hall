@@ -43,12 +43,13 @@ export class Net {
         /* ignore malformed */
       }
     };
-    ws.onclose = () => {
+    ws.onclose = (e) => {
       clearInterval(this.ping);
       this.ws = null;
       this.online = false;
       this.onStatus(false);
-      this.schedule();
+      // 4009: this visitor opened the hall in another tab or reloaded; that one is the live one now
+      if (e.code !== 4009) this.schedule();
     };
     ws.onerror = () => {
       try {

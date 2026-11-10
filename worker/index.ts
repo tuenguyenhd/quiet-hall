@@ -1040,6 +1040,20 @@ export class Hall extends DurableObject<Env> {
           a.hs = 0;
         }
         if (typeof m.pid === 'string' && PID_RE.test(m.pid)) a.pid = m.pid;
+        // the same visitor again (a reload, or a dead connection the server never saw close): the old one goes,
+        // so nobody sees a ghost of them. Code 4009 tells the old tab not to reconnect (no tab ping-pong).
+        if (a.pid)
+          for (const w of this.ctx.getWebSockets()) {
+            const b = w !== ws ? att(w) : null;
+            if (b?.hello && b.pid === a.pid) {
+              await this.drop(w);
+              try {
+                w.close(4009, 'replaced');
+              } catch {
+                /* already closed */
+              }
+            }
+          }
         a.dq = m.dq !== false;
         a.nm = cleanPlayerName(m.name) || defaultName(a.sd);
         a.inv = a.pid ? await inviteId(a.pid) : '';

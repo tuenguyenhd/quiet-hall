@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { apiGet } from './api';
 import { haptic } from './audio';
 import { BADGES, applyEvent, badge, daysLeft, isActive, type BadgeEvent, type BadgeStore } from './badges';
+import { NEAR_BUILD } from './near-mark';
 import { BANNER_DAYS, LINES, PRICE_SOL, SPOTS, WISHES, cleanName, type SpotKind } from './layout';
 import { Lanterns, describe, type LanternData } from './lanterns';
 import type { Msg } from './net';
@@ -150,6 +151,7 @@ export function setupItems(h: ItemsHooks) {
 
   // ---------- stones + trees ----------
   async function loadSpots() {
+    if (NEAR_BUILD) return; // the NEAR edition sells nothing for SOL: no spots to load
     try {
       spots = await apiGet<SpotsResp>('/api/spots');
     } catch {

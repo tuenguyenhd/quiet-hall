@@ -85,8 +85,11 @@ check(ended?.why === 'hidden' && r4?.minutes === 2, 'hidden longer than 1 game m
 // --- two sessions on one account do not double pay
 const pidB = pid('nb');
 const B1 = await client(pidB);
+const b1Closed = new Promise((r) => B1.ws.addEventListener('close', (e) => r(e.code)));
 const B2 = await client(pidB);
 await wait(300);
+// the same visitor connecting again replaces the old connection (no ghost avatar), with code 4009 so it stays closed
+check((await Promise.race([b1Closed, wait(2000).then(() => 'open')])) === 4009, 'a second connection replaces the first (code 4009, no ghost)');
 B1.send({ t: 'state', s: 'sit' });
 B2.send({ t: 'state', s: 'sit' });
 await wait(3 * MIN + 80);
