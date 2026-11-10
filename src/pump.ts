@@ -42,6 +42,9 @@ interface State {
   week_board: Row[];
   all_board: Row[];
   me: { name: string; tag: string; pts: number; wpts: number; wins: number; losses: number; streak: number; best: number; rank: number | null; wrank: number | null } | null;
+  duels: { id: string; m: PumpMarket; dir: Dir; opp: string | null; oppTag: string | null; endAt: number; rated: boolean; status: string; res: string | null; won: number | null; pts: number; r0: number | null; r1: number | null; verifyClose: string }[];
+  duel_board: (Row & { rating: number })[];
+  duel_me: { rating: number; rated: number; wins: number; losses: number; draws: number; streak: number; best: number; pts: number; wpts: number } | null;
 }
 
 interface Host {
@@ -52,6 +55,8 @@ interface Host {
   setBoard: (d: BoardData) => void;
   /** is the player near PumpHall (keep the board live) */
   near: () => boolean;
+  duelOpen: () => boolean;
+  setDuelOpen: (on: boolean) => void;
 }
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -68,7 +73,7 @@ export function setupPump(h: Host) {
   let st: State | null = null;
   let got = 0; // performance.now() when st arrived (server clock = st.now + elapsed)
   let market: PumpMarket = 'SOL';
-  let board: 'week' | 'all' = 'week';
+  let board: 'week' | 'all' | 'duel' = 'week';
   let busy = false;
   let timer = 0;
   const sheet = $('pumpsheet');
@@ -185,6 +190,27 @@ export function setupPump(h: Host) {
           .join('')
       : '<li>No finished rounds yet. Be the first!</li>';
     // leaderboard
+    ($('opt-duel') as HTMLInputElement).checked = h.duelOpen();
+    const myDuels = $('pump-myduels');
+    myDuels.classList.toggle('hidden', board !== 'duel');
+    if (board === 'duel') {
+      const rows = st.duel_board ?? [];
+      $('pump-board').innerHTML = rows.length
+        ? rows.map((r, i) => `<li class="${r.you ? 'you' : ''}"><span>${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span> ${esc(r.name)} <small>#${r.tag} · ${r.rating}</small><b>${r.pts}</b></li>`).join('')
+        : '<li>No duel points yet this week. Bump into someone here and tap ⚔.</li>';
+      const dm = st.duel_me;
+      $('pump-me').textContent = dm ? `You: rating ${dm.rating} · ${dm.wpts} duel pts this week · ${dm.wins}W ${dm.losses}L ${dm.draws}D · streak ${dm.streak} (best ${dm.best})` : 'No duels yet.';
+      myDuels.innerHTML = (st.duels ?? [])
+        .map((d) => {
+          const vs = `${d.m} ${d.dir === 'up' ? '⬆' : '⬇'} vs ${esc(d.opp ?? 'someone')}`;
+          if (d.status !== 'done') return `<li>⏳ ${vs} · result ${hhmm(d.endAt + 30000)}</li>`;
+          const r = d.won === 1 ? `<b class="up">won${d.pts ? ` +${d.pts}` : ''}</b>` : d.won === 0 ? '<b class="down">lost</b>' : 'draw';
+          const rt = d.r0 != null && d.r1 != null && d.r1 !== d.r0 ? ` · ${d.r1 > d.r0 ? '+' : ''}${d.r1 - d.r0}` : d.rated ? '' : ' · unrated';
+          return `<li>${hhmm(d.endAt)} ${vs} · ${r}${rt} <a href="${d.verifyClose}" target="_blank" rel="noopener">verify</a></li>`;
+        })
+        .join('');
+      return;
+    }
     const rows = board === 'week' ? st.week_board : st.all_board;
     $('pump-board').innerHTML = rows.length
       ? rows.map((r, i) => `<li class="${r.you ? 'you' : ''}"><span>${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span> ${esc(r.name)} <small>#${r.tag}</small><b>${r.pts}</b></li>`).join('')
@@ -218,9 +244,10 @@ export function setupPump(h: Host) {
     });
   for (const b of document.querySelectorAll<HTMLElement>('#pump-boards button'))
     b.addEventListener('click', () => {
-      board = b.dataset.b as 'week' | 'all';
+      board = b.dataset.b as 'week' | 'all' | 'duel';
       render();
     });
+  $('opt-duel').addEventListener('change', (e) => h.setDuelOpen((e.target as HTMLInputElement).checked));
 
   // refresh: every 5 s while the sheet is open or you're at PumpHall; the board + timers tick every second
   let lastLoad = 0;

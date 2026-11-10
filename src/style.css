@@ -1671,3 +1671,91 @@ body:has(.fren-mini:not(.hidden)) .chat {
   background: #ffe14d;
   color: #160d2e;
 }
+
+/* ---------- PvP duels ---------- */
+.duel-bubble {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 12;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: #ffe14d;
+  box-shadow: 2px 2px 0 var(--ink);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink);
+  cursor: pointer;
+  animation: duel-pop 0.25s ease-out;
+}
+@keyframes duel-pop {
+  from {
+    scale: 0.4;
+  }
+}
+.duel-chip {
+  margin: 6px auto 0;
+  width: fit-content;
+  max-width: calc(100vw - 24px);
+  padding: 5px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #fff3b0;
+  box-shadow: 2px 2px 0 var(--ink);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.3;
+  pointer-events: auto;
+}
+.duel-chip button {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+}
+.duel-chip .up,
+.duel-sub .up {
+  color: #0a7a4f;
+}
+.duel-chip .down {
+  color: #c2183b;
+}
+.duel-sub {
+  margin: 2px 2px 8px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+.duel-opts {
+  margin-bottom: 6px;
+}
+.fm-row .duel-opts button.on,
+.duel-opts button.on {
+  background: #ffe14d;
+}
+.fm-row button.go.up {
+  background: #14f195;
+}
+.fm-row button.go.down {
+  background: #ff8fa3;
+}
+.fm-row button.duel {
+  background: #ffe14d;
+}
+.duel-open {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 10px 0 4px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.duel-open input {
+  margin-top: 2px;
+  flex: none;
+}

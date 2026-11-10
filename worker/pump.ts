@@ -6,7 +6,7 @@
 // (the last trade before T). Coinbase candles are public history, so anyone can re-check every result with
 // the `verify` URL we store. Rounds settle on an alarm ~30 s after they end (candles need a few seconds).
 import { DurableObject } from 'cloudflare:workers';
-import { PUMP_CLOSE_MS, PUMP_MARKETS, cleanPlayerName, defaultName, pumpPoints, type PumpMarket } from '../src/layout';
+import { DUEL, PUMP_CLOSE_MS, PUMP_MARKETS, cleanPlayerName, defaultName, duelLockAt, duelPoints, eloNext, pumpPoints, type PumpMarket } from '../src/layout';
 
 const MARKETS = Object.keys(PUMP_MARKETS) as PumpMarket[];
 const len = (m: PumpMarket) => PUMP_MARKETS[m].roundMin * 60000;
@@ -58,6 +58,10 @@ export class Pump extends DurableObject {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS picks (m TEXT, k INTEGER, pid TEXT, ip TEXT, dir TEXT, at INTEGER, won INTEGER, pts INTEGER DEFAULT 0, PRIMARY KEY (m, k, pid))`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS players (pid TEXT PRIMARY KEY, name TEXT, tag TEXT, pts INTEGER DEFAULT 0, wins INTEGER DEFAULT 0, losses INTEGER DEFAULT 0, streak INTEGER DEFAULT 0, best INTEGER DEFAULT 0, wk TEXT DEFAULT '', wpts INTEGER DEFAULT 0)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS picks_ip ON picks (m, k, ip)`);
+    // PvP duels (points only). a = challenger, b = opponent; b always holds the opposite call.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS duels (id TEXT PRIMARY KEY, m TEXT, a TEXT, b TEXT, adir TEXT, len INTEGER, lock_at INTEGER, end_at INTEGER, rated INTEGER, status TEXT, lock REAL, close REAL, res TEXT, apts INTEGER DEFAULT 0, bpts INTEGER DEFAULT 0, ra0 INTEGER, rb0 INTEGER, ra1 INTEGER, rb1 INTEGER, created INTEGER)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS duels_open ON duels (status, end_at)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS dplayers (pid TEXT PRIMARY KEY, rating INTEGER DEFAULT ${DUEL.ratingStart}, rated INTEGER DEFAULT 0, wins INTEGER DEFAULT 0, losses INTEGER DEFAULT 0, draws INTEGER DEFAULT 0, streak INTEGER DEFAULT 0, best INTEGER DEFAULT 0, pts INTEGER DEFAULT 0, wk TEXT DEFAULT '', wpts INTEGER DEFAULT 0, first_at INTEGER)`);
   }
 
   // ---------- prices ----------
@@ -130,7 +134,196 @@ export class Pump extends DurableObject {
       }
       this.finish(m, k, lock, close, close > lock ? 'up' : close < lock ? 'down' : 'flat');
     }
+    // duels: same oracle, their own clock
+    const open = this.sql.exec<{ id: string; m: PumpMarket; lock_at: number; end_at: number }>(`SELECT id, m, lock_at, end_at FROM duels WHERE status = 'on' ORDER BY end_at`).toArray();
+    for (const d of open) {
+      const due = d.end_at + SETTLE_AFTER;
+      if (now < due) {
+        next = next ? Math.min(next, due) : due;
+        continue;
+      }
+      const lock = PUMP_MARKETS[d.m] ? await this.priceAt(d.m, d.lock_at) : null;
+      const close = PUMP_MARKETS[d.m] ? await this.priceAt(d.m, d.end_at) : null;
+      if (lock == null || close == null) {
+        if (now > d.end_at + VOID_AFTER) this.finishDuel(d.id, lock, close, 'void');
+        else next = next ? Math.min(next, now + 30000) : now + 30000;
+        continue;
+      }
+      this.finishDuel(d.id, lock, close, close > lock ? 'up' : close < lock ? 'down' : 'flat');
+    }
     return next;
+  }
+
+  // ---------- duels ----------
+  private dplayer(pid: string, now = Date.now()) {
+    this.sql.exec(`INSERT INTO dplayers (pid, first_at) VALUES (?, ?) ON CONFLICT(pid) DO NOTHING`, pid, now);
+    return this.sql.exec<{ rating: number; rated: number; streak: number; wk: string; wpts: number; first_at: number }>(`SELECT rating, rated, streak, wk, wpts, first_at FROM dplayers WHERE pid = ?`, pid).one();
+  }
+
+  /** Rated unless: same network, this pair already had DUEL.pairRatedPerDay rated duels today (UTC), or either player is brand new. */
+  private ratedFor(a: string, b: string, sameIp: boolean, now = Date.now()) {
+    if (sameIp) return { rated: false, why: 'same network' };
+    const day = now - (now % 86400000);
+    const n = this.sql.exec<{ n: number }>(`SELECT COUNT(*) AS n FROM duels WHERE rated = 1 AND status != 'cancel' AND created >= ? AND ((a = ? AND b = ?) OR (a = ? AND b = ?))`, day, a, b, b, a).one().n;
+    if (n >= DUEL.pairRatedPerDay) return { rated: false, why: 'daily limit for this pair' };
+    const firsts = this.sql.exec<{ first_at: number }>(`SELECT first_at FROM dplayers WHERE pid IN (?, ?)`, a, b).toArray();
+    const youngest = firsts.length < 2 ? now : Math.max(...firsts.map((f) => f.first_at ?? now));
+    if (now - youngest < DUEL.newAccountMs) return { rated: false, why: 'new player' };
+    return { rated: true, why: '' };
+  }
+
+  /** invite preview (no writes besides first-seen) */
+  async duelPreview(a: string, b: string, sameIp: boolean) {
+    if (!PID_RE.test(a) || !PID_RE.test(b) || a === b) return { rated: false, why: 'no visitor id' };
+    const now = Date.now();
+    this.dplayer(a, now);
+    this.dplayer(b, now);
+    return this.ratedFor(a, b, sameIp, now);
+  }
+
+  async createDuel(o: { a: string; an: unknown; as: number; b: string; bn: unknown; bs: number; adir: Dir; m: PumpMarket; lenMin: number; sameIp: boolean }) {
+    if (!PID_RE.test(o.a) || !PID_RE.test(o.b) || o.a === o.b) return { error: 'Both players need a visitor id' };
+    if (!PUMP_MARKETS[o.m]) return { error: 'Unknown market' };
+    if (o.adir !== 'up' && o.adir !== 'down') return { error: 'Call up or down' };
+    if (!DUEL.lens.includes(o.lenMin)) return { error: 'Unknown round length' };
+    const now = Date.now();
+    const busy = this.sql.exec<{ n: number }>(`SELECT COUNT(*) AS n FROM duels WHERE status = 'on' AND end_at > ? AND (a IN (?, ?) OR b IN (?, ?))`, now - SETTLE_AFTER, o.a, o.b, o.a, o.b).one().n;
+    if (busy) return { error: 'One of you is already in a duel' };
+    const lockAt = duelLockAt(now);
+    const endAt = lockAt + o.lenMin * 60000;
+    const id = crypto.randomUUID().slice(0, 8);
+    let rated = false;
+    this.ctx.storage.transactionSync(() => {
+      for (const [pid, n, sd] of [[o.a, o.an, o.as], [o.b, o.bn, o.bs]] as const) {
+        this.sql.exec(`INSERT INTO players (pid, name, tag) VALUES (?, ?, '') ON CONFLICT(pid) DO UPDATE SET name = excluded.name`, pid, cleanPlayerName(n) || defaultName(sd));
+        this.dplayer(pid, now);
+      }
+      rated = this.ratedFor(o.a, o.b, o.sameIp, now).rated;
+      this.sql.exec(`INSERT INTO duels (id, m, a, b, adir, len, lock_at, end_at, rated, status, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'on', ?)`, id, o.m, o.a, o.b, o.adir, o.lenMin * 60000, lockAt, endAt, rated ? 1 : 0, now);
+    });
+    // tags for players created here (the pick path sets them too)
+    for (const pid of [o.a, o.b]) this.sql.exec(`UPDATE players SET tag = ? WHERE pid = ? AND tag = ''`, await tagOf(pid), pid);
+    await this.wake(endAt + SETTLE_AFTER);
+    return { id, lockAt, endAt, rated };
+  }
+
+  /** before the lock only; after it, a duel always stands */
+  async cancelDuel(id: string, pid: string) {
+    const d = this.sql.exec<{ a: string; b: string; lock_at: number; status: string }>(`SELECT a, b, lock_at, status FROM duels WHERE id = ?`, id).toArray()[0];
+    if (!d || d.status !== 'on' || (pid !== d.a && pid !== d.b)) return { ok: false };
+    if (Date.now() >= d.lock_at) return { ok: false, locked: true };
+    this.sql.exec(`UPDATE duels SET status = 'cancel' WHERE id = ?`, id);
+    return { ok: true };
+  }
+
+  private finishDuel(id: string, lock: number | null, close: number | null, res: Res) {
+    this.ctx.storage.transactionSync(() => {
+      const d = this.sql.exec<{ a: string; b: string; adir: Dir; rated: number; end_at: number }>(`SELECT a, b, adir, rated, end_at FROM duels WHERE id = ? AND status = 'on'`, id).toArray()[0];
+      if (!d) return;
+      const wk = weekKey(d.end_at);
+      const pa = this.dplayer(d.a);
+      const pb = this.dplayer(d.b);
+      const decided = res === 'up' || res === 'down';
+      const aWon = decided && d.adir === res;
+      const bWon = decided && !aWon;
+      const rated = d.rated === 1;
+      const apts = rated && aWon ? duelPoints(pa.streak) : 0;
+      const bpts = rated && bWon ? duelPoints(pb.streak) : 0;
+      let ra1 = pa.rating;
+      let rb1 = pb.rating;
+      if (rated && res !== 'void') {
+        const s = res === 'flat' ? 0.5 : aWon ? 1 : 0;
+        ra1 = eloNext(pa.rating, pb.rating, s, pa.rated);
+        rb1 = eloNext(pb.rating, pa.rating, 1 - s, pb.rated);
+      }
+      const upd = (pid: string, p: typeof pa, won: boolean, lost: boolean, pts: number, r1: number) => {
+        const sameWeek = p.wk === wk;
+        const streak = !rated ? p.streak : won ? p.streak + 1 : decided ? 0 : p.streak;
+        this.sql.exec(
+          `UPDATE dplayers SET rating = ?, rated = rated + ?, wins = wins + ?, losses = losses + ?, draws = draws + ?, streak = ?, best = MAX(best, ?), pts = pts + ?, wk = ?, wpts = ? WHERE pid = ?`,
+          r1,
+          rated && res !== 'void' ? 1 : 0,
+          won ? 1 : 0,
+          lost ? 1 : 0,
+          decided ? 0 : 1,
+          streak,
+          streak,
+          pts,
+          wk,
+          (sameWeek ? p.wpts : 0) + pts,
+          pid,
+        );
+      };
+      upd(d.a, pa, aWon, bWon, apts, ra1);
+      upd(d.b, pb, bWon, aWon, bpts, rb1);
+      this.sql.exec(`UPDATE duels SET status = 'done', lock = ?, close = ?, res = ?, apts = ?, bpts = ?, ra0 = ?, rb0 = ?, ra1 = ?, rb1 = ? WHERE id = ?`, lock, close, res, apts, bpts, pa.rating, pb.rating, ra1, rb1, id);
+    });
+  }
+
+  /** my recent duels, from my side */
+  private myDuels(pid: string) {
+    if (!PID_RE.test(pid)) return [];
+    const rows = this.sql
+      .exec<{ id: string; m: PumpMarket; a: string; b: string; adir: Dir; len: number; lock_at: number; end_at: number; rated: number; status: string; lock: number | null; close: number | null; res: Res | null; apts: number; bpts: number; ra0: number | null; rb0: number | null; ra1: number | null; rb1: number | null; an: string | null; at: string | null; bn: string | null; bt: string | null }>(
+        `SELECT d.*, pa.name AS an, pa.tag AS at, pb.name AS bn, pb.tag AS bt FROM duels d LEFT JOIN players pa ON pa.pid = d.a LEFT JOIN players pb ON pb.pid = d.b WHERE (d.a = ? OR d.b = ?) AND d.status != 'cancel' ORDER BY d.created DESC LIMIT 10`,
+        pid,
+        pid,
+      )
+      .toArray();
+    return rows.map((d) => {
+      const isA = d.a === pid;
+      const dir: Dir = isA ? d.adir : d.adir === 'up' ? 'down' : 'up';
+      const decided = d.res === 'up' || d.res === 'down';
+      return {
+        id: d.id,
+        m: d.m,
+        dir,
+        opp: isA ? d.bn : d.an,
+        oppTag: isA ? d.bt : d.at,
+        lockAt: d.lock_at,
+        endAt: d.end_at,
+        rated: d.rated === 1,
+        status: d.status,
+        lock: d.lock,
+        close: d.close,
+        res: d.res,
+        won: d.status !== 'done' ? null : decided ? (dir === d.res ? 1 : 0) : -1,
+        pts: isA ? d.apts : d.bpts,
+        r0: isA ? d.ra0 : d.rb0,
+        r1: isA ? d.ra1 : d.rb1,
+        verifyLock: verifyUrl(d.m, d.lock_at),
+        verifyClose: verifyUrl(d.m, d.end_at),
+      };
+    });
+  }
+
+  private duelBoard(pid: string, wk: string) {
+    const rows = this.sql
+      .exec<{ pid: string; name: string; tag: string; wpts: number; rating: number; wins: number; losses: number }>(
+        `SELECT d.pid, p.name, p.tag, d.wpts, d.rating, d.wins, d.losses FROM dplayers d JOIN players p ON p.pid = d.pid WHERE d.wk = ? AND d.wpts > 0 ORDER BY d.wpts DESC, d.rating DESC LIMIT 20`,
+        wk,
+      )
+      .toArray();
+    const me = PID_RE.test(pid)
+      ? this.sql.exec<{ rating: number; rated: number; wins: number; losses: number; draws: number; streak: number; best: number; pts: number; wk: string; wpts: number }>(`SELECT rating, rated, wins, losses, draws, streak, best, pts, wk, wpts FROM dplayers WHERE pid = ?`, pid).toArray()[0]
+      : undefined;
+    return {
+      duel_board: rows.map(({ pid: p, ...r }) => ({ name: r.name, tag: r.tag, pts: r.wpts, rating: r.rating, wins: r.wins, losses: r.losses, you: p === pid })),
+      duel_me: me ? { ...me, wpts: me.wk === wk ? me.wpts : 0 } : null,
+    };
+  }
+
+  /** test hook (test rooms only): settle a duel now with given prices */
+  async testSettleDuel(id: string, lock: number, close: number, rated = false) {
+    if (rated) this.sql.exec(`UPDATE duels SET rated = 1 WHERE id = ?`, id); // local tests share one IP
+    this.finishDuel(id, lock, close, close > lock ? 'up' : close < lock ? 'down' : 'flat');
+    return { ok: true };
+  }
+
+  /** test hook (test rooms only): age every player past the new-player window */
+  async testAgePlayers() {
+    this.sql.exec(`UPDATE dplayers SET first_at = ?`, Date.now() - DUEL.newAccountMs - 1000);
+    return { ok: true };
   }
 
   private finish(m: PumpMarket, k: number, lock: number | null, close: number | null, res: Res) {
@@ -259,6 +452,8 @@ export class Pump extends DurableObject {
       week_board: board('wpts', 'AND wk = ?', wk),
       all_board: board('pts', ''),
       me: me ? { name: me.name, tag: me.tag, pts: me.pts, wpts, wins: me.wins, losses: me.losses, streak: me.streak, best: me.best, rank: rank('pts', me.pts), wrank: rank('wpts', wpts, 'AND wk = ?', wk) } : null,
+      duels: this.myDuels(pid),
+      ...this.duelBoard(pid, wk),
     };
   }
 

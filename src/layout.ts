@@ -237,6 +237,47 @@ export const PUMP_CLOSE_MS = 30000;
 /** points: a right call earns 10, plus 2 per win in a row before it (max +10). Wrong or flat: 0. Never negative. */
 export const pumpPoints = (streakBefore: number) => 10 + Math.min(10, 2 * streakBefore);
 
+// ---------- PvP prediction duels (design/gdd/pvp-prediction-duel.md) ----------
+/** Tuning knobs. Points only: no stakes, no prizes (constitution §7). */
+export const DUEL = {
+  touchR: 1.8, // m: walking this close shows the ⚔ bubble (1.2 was too tight: tapping a player opens their menu, so you stop ~1.3 m away)
+  lagTol: 1.5, // m: server tolerance for position lag
+  menuR: 6, // m: player menu "⚔ Duel" range
+  bubbleMs: 4000,
+  inviteMs: 15000,
+  leadMs: 20000, // shortest gap from accept to lock
+  lens: [1, 5] as readonly number[], // round length options (min)
+  winPts: 15,
+  streakStep: 3,
+  streakCap: 15,
+  k: 24,
+  kNew: 40, // first 10 rated duels
+  kNewCount: 10,
+  ratingStart: 1000,
+  ratingFloor: 600,
+  pairRatedPerDay: 3,
+  newAccountMs: 10 * 60000,
+  invitesPerMin: 3,
+  reinviteMs: 2 * 60000,
+} as const;
+/** server distance check for an invite (touch or menu, plus lag) */
+export const DUEL_MAX_D = DUEL.menuR + DUEL.lagTol;
+/** PumpHall circle + the south avenue from the courtyard. Duels only happen here (never in calm places). */
+export function inDuelZone(x: number, z: number) {
+  if (Math.hypot(x - PUMP.x, z - PUMP.z) <= PUMP.r + 6) return true;
+  return Math.abs(x - PUMP.x) <= 8 && z >= COURT.z + COURT.r - 2 && z <= PUMP.z;
+}
+/** lock at the first minute boundary at least `leadMs` from now */
+export const duelLockAt = (now: number) => Math.ceil((now + DUEL.leadMs) / 60000) * 60000;
+/** win: 15 + 3 per duel win in a row before it (max +15). Loss / draw / void / unrated: 0. Never negative. */
+export const duelPoints = (streakBefore: number) => DUEL.winPts + Math.min(DUEL.streakCap, DUEL.streakStep * streakBefore);
+/** Elo: returns A's new rating. s = 1 win, 0 loss, 0.5 draw. */
+export function eloNext(ra: number, rb: number, s: number, ratedGames: number) {
+  const e = 1 / (1 + 10 ** ((rb - ra) / 400));
+  const k = ratedGames < DUEL.kNewCount ? DUEL.kNew : DUEL.k;
+  return Math.max(DUEL.ratingFloor, Math.round(ra + k * (s - e)));
+}
+
 // ---------- chat ----------
 export const CHAT_MAX = 120;
 const BAD = /\b(f+u+c+k+\w*|sh+i+t+\w*|bitch\w*|cunt\w*|n+i+g+g+\w*|fag+\w*|retard\w*|whore\w*|slut\w*|dick\w*|pussy\w*|rape\w*)\b/giu;

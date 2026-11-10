@@ -43,6 +43,14 @@ Later phases wrap the same web app as a Trusted Web Activity for the Seeker dApp
 - Local RPC: the Worker uses `/rpc/devnet` and `/rpc/mainnet` on the Vite server because Solana's public RPC
   blocks Cloudflare Workers. Live needs a keyed RPC (see specs/006 T230).
 
+## PvP prediction duels (design/gdd/pvp-prediction-duel.md)
+- In PumpHall (and its avenue), bump into someone and tap the ⚔ bubble over their head, or use ⚔ Duel in the player menu.
+  Call SOL or SKR up or down for the next 1- or 5-minute round; they take the other side if they accept.
+- Settled by the same Coinbase candles as PumpHall. Points only (win 15, +3 per duel win in a row, max +15), Elo rating,
+  weekly ⚔ Duels board. Same network / new player / 4th duel of a pair in a day = unrated. Never in calm places or during a sit.
+- Opt out with "Open to duels" in the PumpHall sheet. Tuning knobs: `DUEL` in `src/layout.ts`.
+- Test: `node scripts/duel-test.mjs [baseUrl] [loadTestKey]` (test rooms; settles duels through a test hook).
+
 ## Live (devnet)
 - Web: https://quiet-hall.vercel.app (Vercel project `quiet-hall`)
 - Hall server + API: https://quiet-hall.ted-233.workers.dev (Cloudflare Worker `quiet-hall`; also serves the app)

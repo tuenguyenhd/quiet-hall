@@ -21,6 +21,7 @@ import { inviteUrl, makeCard, shareCard, shareInvite } from './share';
 import { setupPwa } from './pwa';
 import { setupChat } from './chat';
 import { setupPump } from './pump';
+import { setupDuel } from './duel';
 
 const $ = (id: string) => document.getElementById(id)!;
 const params = new URLSearchParams(location.search);
@@ -202,6 +203,7 @@ net.hello = () => ({
   s: me.state,
   pid,
   name: myName(),
+  dq: store.get('duel') !== '0',
   session: acct?.session()?.token,
   // only ask to be placed next to the inviter on the first connection
   ...(invitedBy && !friendGreeted ? { with: invitedBy } : {}),
@@ -210,6 +212,7 @@ net.onStatus = () => renderStats();
 net.onMessage = (m: Msg) => {
   items.onMessage(m);
   chat.onMessage(m);
+  duel.onMessage(m);
   switch (m.t) {
     case 'welcome': {
       clockOffset = (m.now as number) - Date.now();
@@ -641,10 +644,32 @@ const chat = setupChat({
   store,
   toast,
 });
+const duel = setupDuel({
+  pid,
+  scene,
+  camera,
+  myId: () => myId,
+  meRoot: () => me.root,
+  canPlay: () => entered && !med.active,
+  sitting: () => med.active,
+  others: () => others,
+  name: (id) => names.get(id) ?? 'Someone',
+  isMuted: (id) => chat.isMuted(id),
+  send: (m) => net.send(m),
+  toast,
+  haptic,
+  store,
+});
+duel.onMute((id) => {
+  chat.mute(id, true);
+  toast(`Muted ${names.get(id) ?? 'them'} (until you leave)`, 2200);
+});
 const pump = setupPump({
   pid,
   seed: mySeed,
   name: myName,
+  duelOpen: duel.isOpen,
+  setDuelOpen: duel.setOpen,
   toast,
   setBoard: (d) => world.setPumpBoard(d),
   near: () => entered && Math.hypot(me.root.position.x - world.pumpPos.x, me.root.position.z - world.pumpPos.z) < 60,
@@ -852,7 +877,12 @@ function openPlayer(id: string) {
   const pk = a.pet ? PETS[a.pet.kind]?.name : '';
   $('pl-desc').textContent = [a.state === 'sit' ? 'sitting quietly 🧘' : '', pk ? `walks with ${pk}` : ''].filter(Boolean).join(' · ');
   $('btn-pl-mute').textContent = chat.isMuted(id) ? '🔊 Unmute' : '🔇 Mute';
+  $('btn-pl-duel').classList.toggle('hidden', !duel.canChallenge(id));
 }
+$('btn-pl-duel').addEventListener('click', () => {
+  $('playersheet').classList.add('hidden');
+  duel.challenge(plId);
+});
 function faceOther() {
   const a = others.get(plId);
   if (!a) return;
@@ -1268,6 +1298,7 @@ function frame(now: number) {
   for (const a of lineup) a.update(dt, t);
   for (const lp of lineupPets) lp.pet.update(dt, lp.sit, true);
   chat.update();
+  duel.update();
   // the player menu closes when they walk away
   if (plId && !$('playersheet').classList.contains('hidden')) {
     const a = others.get(plId);

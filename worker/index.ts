@@ -3,7 +3,7 @@ import { b64, decodeText, parseSiws, readSession, signSession, verifySignature }
 import { Ledger, priceTable, type SpotOwner } from './ledger';
 import { Pump } from './pump';
 import { serverRpc } from './solana';
-import { PUMP_MARKETS, cleanChat, cleanPlayerName, defaultName, type PumpMarket } from '../src/layout';
+import { DUEL, DUEL_MAX_D, PUMP_MARKETS, cleanChat, cleanPlayerName, defaultName, inDuelZone, type PumpMarket } from '../src/layout';
 import { SPOTS, BLESS, BLESS_FREE_MS, BLESS_PAID_MS, BOUNDS, FREE_SEEKER_MS, LAKE, LANTERN_FREE_MS, LIGHT_COUNT, PETS, SPECIES, WISHES, cleanName } from '../src/layout';
 
 export { Ledger, Pump };
@@ -77,6 +77,12 @@ interface Att {
   cw: number; // chat window start (ms)
   cc: number; // chat lines in the window
   lx: string; // last chat line (no copy-paste spam)
+  dq: boolean; // open to duels
+  dk: string; // current duel id ('' = none)
+  dl: number; // its lock time (ms)
+  de: number; // its end time (ms)
+  dw: number; // duel invite window start (ms)
+  dn: number; // invites sent in the window
 }
 
 const MAX_ROOM = 400; // sockets per hall
@@ -119,7 +125,7 @@ async function inviteId(pid: string) {
   return [...h.slice(0, 6)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-const pub = (a: Att) => ({ id: a.id, color: a.c, sd: a.sd, pt: a.pt, ...(a.bu > Date.now() ? { bl: a.bl, bu: a.bu } : {}), x: r2(a.x), z: r2(a.z), ry: r2(a.ry), s: a.s, g: a.g, sp: a.sp, nm: a.nm });
+const pub = (a: Att) => ({ id: a.id, color: a.c, sd: a.sd, pt: a.pt, ...(a.bu > Date.now() ? { bl: a.bl, bu: a.bu } : {}), x: r2(a.x), z: r2(a.z), ry: r2(a.ry), s: a.s, g: a.g, sp: a.sp, nm: a.nm, dq: a.dq });
 const ledger = (env: Env) => env.LEDGER.get(env.LEDGER.idFromName('main'));
 /** PumpHall: one board for everyone; "t<id>" rooms are isolated boards for automated tests */
 const pumpRoom = (v: unknown) => (typeof v === 'string' && /^t[a-z0-9]{4,16}$/.test(v) ? v : 'main');
@@ -220,6 +226,13 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     const room = pumpRoom(body.room);
     if (room === 'main' || !env.LOAD_TEST_KEY || body.key !== env.LOAD_TEST_KEY) return json({ error: 'Not found' }, 404);
     return json(await pump(env, room).testSettle(String(body.m) as PumpMarket, Math.floor(num(body.k)), num(body.lock), num(body.close)));
+  }
+  if (path === '/api/pump/test-duel') {
+    // automated tests only (test rooms + the load-test key): settle a duel now, or age players past the new-player window
+    const room = pumpRoom(body.room);
+    if (room === 'main' || !env.LOAD_TEST_KEY || body.key !== env.LOAD_TEST_KEY) return json({ error: 'Not found' }, 404);
+    if (body.age) return json(await pump(env, room).testAgePlayers());
+    return json(await pump(env, room).testSettleDuel(String(body.id), num(body.lock), num(body.close), body.rated === true));
   }
   if (path === '/api/verify') {
     // Sign-In-With-Solana: the wallet signed a message containing our one-time nonce and this site's domain.
@@ -470,6 +483,116 @@ export class Hall extends DurableObject<Env> {
     this.broadcast({ t: 'bl', id: a.id, f: a.bl, u: a.bu });
   }
 
+  // ---------- PvP duels (points only; design/gdd/pvp-prediction-duel.md) ----------
+  /** pending invites (memory only: they last 15 s, so losing them on hibernation is fine) */
+  private invites = new Map<string, { from: string; to: string; m: PumpMarket; dir: 'up' | 'down'; len: number; at: number }>();
+  /** "not now" cooldowns: `${fromPid}>${toPid}` -> until (ms) */
+  private noAgain = new Map<string, number>();
+
+  private sockById(id: string) {
+    return this.ctx.getWebSockets().find((w) => att(w)?.hello && att(w)?.id === id);
+  }
+
+  private pumpRoomName() {
+    return pumpRoom(this.room);
+  }
+
+  /** why these two can't duel right now ('' = they can) */
+  private duelBlock(a: Att, b: Att, now: number) {
+    if (!a.pid || !b.pid) return 'Duels need a saved visitor id. Reload the page.';
+    if (a.id === b.id || a.pid === b.pid) return "You can't duel yourself.";
+    if (!inDuelZone(a.x, a.z) || !inDuelZone(b.x, b.z)) return 'Duels happen in PumpHall only.';
+    if (a.s === 'sit' || b.s === 'sit') return 'They are sitting quietly.';
+    if (!a.dq || !b.dq) return 'They are not open to duels right now.';
+    if ((a.dk && now < a.de + 30000) || (b.dk && now < b.de + 30000)) return 'One of you is already in a duel.';
+    if (Math.hypot(a.x - b.x, a.z - b.z) > DUEL_MAX_D) return 'Walk closer to challenge them.';
+    return '';
+  }
+
+  private async duelAsk(ws: WebSocket, a: Att, m: Record<string, unknown>) {
+    const now = Date.now();
+    const mk = String(m.m ?? '') as PumpMarket;
+    const dir = m.dir === 'up' || m.dir === 'down' ? m.dir : null;
+    const len = Math.floor(num(m.len, 1));
+    if (!(mk in PUMP_MARKETS) || !dir || !DUEL.lens.includes(len)) return send(ws, { t: 'duel_no', why: 'Pick a market and up or down.' });
+    if (now - a.dw > 60000) {
+      a.dw = now;
+      a.dn = 0;
+    }
+    if (a.dn >= DUEL.invitesPerMin) return send(ws, { t: 'duel_no', why: `Slow down: try again in ${Math.ceil((a.dw + 60000 - now) / 1000)} s.` });
+    const to = this.sockById(String(m.to ?? ''));
+    const b = to && att(to);
+    if (!to || !b) return send(ws, { t: 'duel_no', why: 'They left.' });
+    const why = this.duelBlock(a, b, now);
+    if (why) return send(ws, { t: 'duel_no', why });
+    const cool = this.noAgain.get(`${a.pid}>${b.pid}`) ?? 0;
+    if (now < cool) return send(ws, { t: 'duel_no', why: 'They said not now. Give them a couple of minutes.' });
+    for (const [k, v] of this.invites) if (now - v.at > DUEL.inviteMs || v.from === a.id || v.to === a.id) this.invites.delete(k);
+    if ([...this.invites.values()].some((v) => v.to === b.id || v.from === b.id)) return send(ws, { t: 'duel_no', why: 'They are answering another challenge.' });
+    a.dn++;
+    const id = crypto.randomUUID().slice(0, 8);
+    this.invites.set(id, { from: a.id, to: b.id, m: mk, dir, len, at: now });
+    const pv = await pump(this.env, this.pumpRoomName()).duelPreview(a.pid, b.pid, a.ip === b.ip);
+    send(to, { t: 'duel_inv', id, from: a.id, n: a.nm, m: mk, dir, len, rated: pv.rated, why: pv.why, ms: DUEL.inviteMs });
+    send(ws, { t: 'duel_sent', id, to: b.id, n: b.nm, rated: pv.rated, why: pv.why, ms: DUEL.inviteMs });
+  }
+
+  private async duelAns(ws: WebSocket, b: Att, m: Record<string, unknown>) {
+    const now = Date.now();
+    const id = String(m.id ?? '');
+    const inv = this.invites.get(id);
+    if (!inv || inv.to !== b.id) return send(ws, { t: 'duel_no', why: 'That challenge is gone.' });
+    this.invites.delete(id);
+    const from = this.sockById(inv.from);
+    const a = from && att(from);
+    if (!from || !a) return send(ws, { t: 'duel_no', why: 'They left.' });
+    if (m.ok !== true) {
+      this.noAgain.set(`${a.pid}>${b.pid}`, now + DUEL.reinviteMs);
+      if (this.noAgain.size > 500) this.noAgain.clear();
+      return send(from, { t: 'duel_no', id, why: `${b.nm} said not now.` });
+    }
+    if (now - inv.at > DUEL.inviteMs + 2000) {
+      send(from, { t: 'duel_no', id, why: 'No answer.' });
+      return send(ws, { t: 'duel_no', id, why: 'Too late, that challenge expired.' });
+    }
+    const why = this.duelBlock(a, b, now);
+    if (why) {
+      send(from, { t: 'duel_no', id, why });
+      return send(ws, { t: 'duel_no', id, why });
+    }
+    const r = await pump(this.env, this.pumpRoomName()).createDuel({ a: a.pid, an: a.nm, as: a.sd, b: b.pid, bn: b.nm, bs: b.sd, adir: inv.dir, m: inv.m, lenMin: inv.len, sameIp: a.ip === b.ip });
+    if ('error' in r) {
+      send(from, { t: 'duel_no', id, why: r.error });
+      return send(ws, { t: 'duel_no', id, why: r.error });
+    }
+    for (const [w, x] of [[from, a], [ws, b]] as const) {
+      x.dk = r.id;
+      x.dl = r.lockAt;
+      x.de = r.endAt;
+      w.serializeAttachment(x);
+    }
+    // everyone gets it: the two players run it, people nearby draw the ring between them
+    this.broadcast({ t: 'duel_on', id: r.id, a: a.id, an: a.nm, b: b.id, bn: b.nm, m: inv.m, adir: inv.dir, lockAt: r.lockAt, endAt: r.endAt, rated: r.rated });
+  }
+
+  /** cancel this player's duel if it hasn't locked yet (sit, leave, ✕). After the lock it always stands. */
+  private async duelDrop(a: Att, why: 'sit' | 'left' | 'cancel') {
+    for (const [k, v] of this.invites) if (v.from === a.id || v.to === a.id) this.invites.delete(k);
+    if (!a.dk || Date.now() >= a.dl) return;
+    const id = a.dk;
+    const r = await pump(this.env, this.pumpRoomName()).cancelDuel(id, a.pid);
+    if (!r.ok) return;
+    a.dk = '';
+    for (const w of this.ctx.getWebSockets()) {
+      const x = att(w);
+      if (x?.dk === id) {
+        x.dk = '';
+        w.serializeAttachment(x);
+      }
+    }
+    this.broadcast({ t: 'duel_off', id, why, by: a.id });
+  }
+
   private live(except?: WebSocket): Att[] {
     const out: Att[] = [];
     for (const w of this.ctx.getWebSockets()) {
@@ -553,6 +676,12 @@ export class Hall extends DurableObject<Env> {
       cw: 0,
       cc: 0,
       lx: '',
+      dq: true,
+      dk: '',
+      dl: 0,
+      de: 0,
+      dw: 0,
+      dn: 0,
     };
     server.serializeAttachment(a);
     return new Response(null, { status: 101, webSocket: client });
@@ -591,6 +720,7 @@ export class Hall extends DurableObject<Env> {
           a.since = now;
         }
         if (typeof m.pid === 'string' && PID_RE.test(m.pid)) a.pid = m.pid;
+        a.dq = m.dq !== false;
         a.nm = cleanPlayerName(m.name) || defaultName(a.sd);
         a.inv = a.pid ? await inviteId(a.pid) : '';
         const b = a.pid ? await this.ctx.storage.get<{ f: number; u: number }>(`bless:${a.pid}`) : undefined;
@@ -660,6 +790,7 @@ export class Hall extends DurableObject<Env> {
         a.s = s;
         a.since = s === 'sit' ? now : 0;
         if (s === 'sit') await this.maybeWorld(now, a.pid || a.id);
+        if (s === 'sit') await this.duelDrop(a, 'sit'); // a sit cancels a duel that hasn't locked yet
         ws.serializeAttachment(a);
         this.broadcast({ t: 's', id: a.id, s }, ws);
         this.broadcast({ t: 'stats', ...this.stats() });
@@ -759,6 +890,30 @@ export class Hall extends DurableObject<Env> {
         this.broadcast(c);
         return;
       }
+      case 'dq': {
+        if (!a.hello) return;
+        a.dq = !!m.on;
+        ws.serializeAttachment(a);
+        this.broadcast({ t: 'dq', id: a.id, on: a.dq }, ws);
+        return;
+      }
+      case 'duel_ask': {
+        if (!a.hello) return;
+        await this.duelAsk(ws, a, m);
+        ws.serializeAttachment(a); // keep the invite counter
+        return;
+      }
+      case 'duel_ans': {
+        if (!a.hello) return;
+        await this.duelAns(ws, a, m);
+        return;
+      }
+      case 'duel_cancel': {
+        if (!a.hello) return;
+        await this.duelDrop(a, 'cancel');
+        ws.serializeAttachment(a);
+        return;
+      }
       case 'ring': {
         if (!a.hello || now - a.ring < 5000) return;
         a.ring = now;
@@ -786,6 +941,7 @@ export class Hall extends DurableObject<Env> {
     const a = att(ws);
     if (!a?.hello) return;
     if (a.s === 'sit') await this.addSit(Date.now() - a.since);
+    await this.duelDrop(a, 'left');
     a.hello = false;
     a.s = 'idle';
     try {

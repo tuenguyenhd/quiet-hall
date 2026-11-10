@@ -42,7 +42,9 @@
         <button class="pill" id="btn-badges" aria-label="Badges">🏅 <b id="badge-count">0</b></button>
       </div>
       <div class="sub hidden" id="today"></div>
+      <div class="duel-chip hidden" id="duel-chip" aria-live="polite"></div>
     </div>
+    <button id="duel-bubble" class="duel-bubble hidden" aria-label="Challenge to a duel">⚔</button>
 
     <div id="actions" class="hidden">
       <button class="act" id="btn-bow"><span class="ico">⌒</span><span>Bow</span></button>
@@ -237,6 +239,42 @@
           <button id="btn-pl-wave">👋 Wave</button>
           <button id="btn-pl-bow">⌒ Bow</button>
           <button id="btn-pl-mute">🔇 Mute</button>
+          <button id="btn-pl-duel" class="duel hidden">⚔ Duel</button>
+        </div>
+      </div>
+    </section>
+    <section id="duelsheet" class="fren-mini hidden" aria-label="Duel">
+      <div class="fm-card">
+        <div class="fm-head">
+          <b id="duel-to">⚔ Duel</b>
+          <small>just for fun · no money · points only</small>
+          <button class="fm-x" id="btn-duel-x" data-close="duelsheet" aria-label="Close">✕</button>
+        </div>
+        <div class="fm-row duel-opts">
+          <button data-dm="SOL">SOL</button>
+          <button data-dm="SKR">SKR</button>
+          <button data-dl="1">1 min</button>
+          <button data-dl="5">5 min</button>
+        </div>
+        <p class="duel-sub" id="duel-sub"></p>
+        <div class="fm-row">
+          <button class="go up" id="btn-duel-up">⬆ I call UP</button>
+          <button class="go down" id="btn-duel-down">⬇ I call DOWN</button>
+        </div>
+      </div>
+    </section>
+    <section id="duelinv" class="fren-mini hidden" aria-label="Duel challenge">
+      <div class="fm-card">
+        <div class="fm-head">
+          <b id="duelinv-head">⚔ Challenge</b>
+          <small></small>
+          <button class="fm-x" id="btn-duelinv-x" data-close="duelinv" aria-label="Close">✕</button>
+        </div>
+        <p class="duel-sub" id="duelinv-sub"></p>
+        <div class="fm-row">
+          <button class="go" id="btn-duelinv-ok">⚔ Accept</button>
+          <button id="btn-duelinv-no">Not now</button>
+          <button id="btn-duelinv-mute">🔇 Mute</button>
         </div>
       </div>
     </section>
@@ -266,10 +304,13 @@
         <div class="chips" id="pump-boards">
           <button data-b="week" class="on">This week</button>
           <button data-b="all">All time</button>
+          <button data-b="duel">⚔ Duels</button>
         </div>
         <ol class="pump-list board" id="pump-board"></ol>
         <p class="small" id="pump-me"></p>
-        <p class="small fine">Right call = 10 pts, +2 per win in a row (max +10). Wrong or flat = 0, never minus. Prices: Coinbase public 1-minute candles (close of the last minute before the round starts / ends); tap verify to check. Not financial advice.</p>
+        <ul class="pump-list hidden" id="pump-myduels"></ul>
+        <label class="duel-open"><input type="checkbox" id="opt-duel" checked /> Open to duels: bump into someone here and tap ⚔ to call SOL or SKR against them. Points only.</label>
+        <p class="small fine">Right call = 10 pts, +2 per win in a row (max +10). Wrong or flat = 0, never minus. Prices: Coinbase public 1-minute candles (close of the last minute before the round starts / ends); tap verify to check. Duels: a win = 15 duel pts, +3 per duel win in a row (max +15); loss or draw = 0; rated duels move your rating (Elo). Not financial advice.</p>
         <button class="ghost" data-close="pumpsheet">Close</button>
       </div>
     </section>
