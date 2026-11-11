@@ -3,6 +3,8 @@
 #   .dev.vars.near must point at the TEST contract (NEAR_ACCOUNT=quiethall-b4ac38.testnet + its key).
 #   Never put the production key in a local file: two Workers writing one contract collide on round commits.
 # Secrets (production only, wrangler secret put -c wrangler.near.toml): NEAR_PRIVATE_KEY, OWNER_SECRET, SESSION_SECRET
+# Sponsored drops (MCP, POST /api/near/mcp) secrets: CAMPAIGN_ADMIN_KEY (issues sponsor keys via POST /api/near/sponsor-key,
+#   header x-admin-key), NEARAI_API_KEY (NEAR AI Cloud, prompt → campaign drafts; unset = keyword parser).
 name = "quiet-hall-near"
 main = "worker/index.ts"
 compatibility_date = "2025-09-01"
@@ -53,3 +55,8 @@ SOLANA_RPC = "https://api.devnet.solana.com"
 MAINNET_RPC = "https://api.mainnet-beta.solana.com"
 TIP_RECIPIENT = ""
 USDC_MINT = ""
+# Sponsored drops: prompt → campaign drafts on NEAR AI Cloud (OpenAI-compatible). Needs the NEARAI_API_KEY secret;
+# LLM_MODE = "mock" never calls it. LLM_DAILY_CAP = most drafts per UTC day.
+LLM_BASE_URL = "https://cloud-api.near.ai/v1"
+LLM_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8"
+LLM_DAILY_CAP = "300"

@@ -19,7 +19,16 @@ export interface MirrorEnv {
   NEAR_MIRROR_MODE?: string;
 }
 
-export type JobMethod = 'mint_fren' | 'mint_drip' | 'mint_trophy' | 'post_prices' | 'commit_round' | 'settle_round';
+export type JobMethod =
+  | 'mint_fren'
+  | 'mint_drip'
+  | 'mint_trophy'
+  | 'post_prices'
+  | 'commit_round'
+  | 'settle_round'
+  /** sponsored drops: mint_badge(owner, campaign_id, badge, serial, job_id), commit_campaign(campaign_id, config_hash, job_id) */
+  | 'mint_badge'
+  | 'commit_campaign';
 export interface Job {
   job: string;
   method: JobMethod;

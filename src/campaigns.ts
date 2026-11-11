@@ -9,8 +9,11 @@
 //
 // Socket messages (NEAR edition):
 //   client → server  { t: 'cpick', c: <campaign id>, d: <drop index> }
-//   server → client  { t: 'cpicked', c, d, ok, why?, got, goal, done?, serial?, claim?: { url?, code? }, login? }
+//   client → server  { t: 'cclaim', c }      after a NEAR login: completes a drop whose goal was reached as a guest
+//   server → client  { t: 'cpicked', c, d, ok, why?, got, goal, done?, serial?, badge?, claim?: { url?, code? }, login? }
+//                    (the answer to cclaim is a 'cpicked' with d = -1; badge + claim come only with done: true)
 //   server → all     { t: 'camps', list: PublicCampaign[] }        (on create / end; also in 'welcome' as `camps`)
+//   'welcome' also has `cmine`: { [campaign id]: { d: number[] (picked), serial?, badge?, claim? } } (this player only)
 // HTTP:  GET /api/near/campaigns → { list: PublicCampaign[] }      POST /api/near/mcp (MCP, x-api-key)
 import { BAZAAR, COURT, PUMP, cleanChat } from './layout';
 import { VALLEY } from './valley';
@@ -59,7 +62,12 @@ export interface Campaign {
 }
 
 /** what every player may see: no claim link or code */
-export type PublicCampaign = Omit<Campaign, 'reward'> & { reward: { badge: string; hasClaim: boolean }; completions: number };
+export type PublicCampaign = Omit<Campaign, 'reward'> & {
+  reward: { badge: string; hasClaim: boolean };
+  completions: number;
+  /** sha256 of canonicalCampaign, as committed on NEAR (set by the server's lists) */
+  configHash?: string;
+};
 
 export function publicCampaign(c: Campaign, completions: number): PublicCampaign {
   return { ...c, reward: { badge: c.reward.badge, hasClaim: !!(c.reward.claimUrl || c.reward.code) }, completions };
