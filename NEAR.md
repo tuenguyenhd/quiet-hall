@@ -24,6 +24,7 @@
 | **Rescue, craft and trophy receipts** | NEP-171 NFTs (`fren:shibby:214`, `drip:moon_collar:7`, `trophy:<round>:1`) minted to an owner id the server derives for each player (a real implicit account id from HKDF + ed25519). **The player never creates an account or signs anything.** Tokens are bound: `nft_transfer` always fails. |
 | **The market's prices** | Every hour the current bids and asks are posted to the contract (`post_prices`) and emitted as events. |
 | **Cup fairness** | Before a round opens, the hash of its setup (starting prices, market-maker seed) is committed (`commit_round`). At the end, the setup is revealed and the hash of the full results file is recorded (`settle_round`); the contract rejects a setup that doesn't match the commitment. |
+| **Sponsored drops** | A campaign's terms are committed before it goes live (`commit_campaign`: the sha256 of its config, emitted as a `campaign_committed` event). A player who completes it gets a bound badge `badge:<campaign_id>:<serial>` (`mint_badge`, event `badge_minted`); the sponsor's own reward is a claim link or code handed out off chain. |
 | **Safe retries** | Every write carries a one-use `job_id`; the contract rejects a reused one, so a retried transaction can never mint twice. |
 
 **Check a round yourself:**
@@ -42,7 +43,7 @@ The game server (a Cloudflare Worker) holds the game account's key and is the tr
 
 - **Client:** Vite + Three.js (one-thumb, phone-first). NEAR UI in `src/near/`; valley and market as data in `src/valley.ts`, `src/market.ts`, `src/economy.ts`.
 - **Server:** Cloudflare Worker + Durable Objects: `Hall` (live presence, server-timed sits, reach checks), `Economy` (Leaves + bag + market + Cup in one SQLite store, every change one transaction with an audit row), `Mirror` (the only chain writer: one transaction in flight, batched calls, one-use job ids, retries, RPC fallbacks; a failing action parks only its own job).
-- **Contract:** Rust, `near-sdk` 5.30 + `near-contract-standards` (NEP-171), in `contracts/items/` (10 unit tests).
+- **Contract:** Rust, `near-sdk` 5.30 + `near-contract-standards` (NEP-171), in `contracts/items/` (26 unit tests).
 - **Chain access:** `near-api-js` 7 signing inside the Workers runtime; FastNEAR testnet RPC.
 
 ## Run it locally (no secrets needed)
@@ -63,9 +64,9 @@ Without a `NEAR_PRIVATE_KEY` the Mirror runs in **mock mode**: everything works 
 node scripts/near-economy-test.mjs  http://127.0.0.1:8788   # sit pay, caps, hidden time, no double pay, mirror
 node scripts/near-valley-test.mjs   http://127.0.0.1:8788   # personal stock, reach, co-rescue, crafting, receipts
 node scripts/near-market-test.mjs   http://127.0.0.1:8788   # market, Cup, settlement, hashes
-cd contracts/items && cargo test                             # 10 contract tests (rustup installs Rust 1.95 for this folder)
+cd contracts/items && cargo test                             # 26 contract tests (rustup installs Rust 1.95 for this folder)
 ```
-From a fresh clone (no secrets) 72 checks run and pass (economy 23, valley 23, market 26). With a `LOAD_TEST_KEY` passed as a second argument, 5 more test-hook checks run: 77, plus 10 contract tests. The market suite also passes with the live testnet mirror. Screenshots: `docs/qa/near-2026-11-10/`.
+From a fresh clone (no secrets) 72 checks run and pass (economy 23, valley 23, market 26). With a `LOAD_TEST_KEY` passed as a second argument, 5 more test-hook checks run: 77, plus 26 contract tests. The market suite also passes with the live testnet mirror. Screenshots: `docs/qa/near-2026-11-10/`.
 
 ## What existed before the hackathon, and what was built for it
 
