@@ -37,6 +37,8 @@ export interface QuestHost {
   /** has the player entered the hall (welcome card gone)? */
   entered(): boolean;
   login(): void;
+  /** sponsored drops (campaigns.ts): their section at the top of this sheet and the chip's count */
+  drops?: { sheet(): string; wire(el: HTMLElement): void; open(): number; sig(): string };
 }
 
 /** Season 2 previews: sample text only, nothing here is playable or stored. */
@@ -103,7 +105,7 @@ export function setupQuest(h: QuestHost) {
   chip.id = 'near-quest-chip';
   chip.className = 'pill';
   chip.title = 'Quest: Lost frens of Meme Valley';
-  chip.innerHTML = '<span class="q-ico">🐾</span><span class="q-txt"></span>';
+  chip.innerHTML = '<span class="q-ico">🐾</span><span class="q-txt"></span><span class="q-drop-n hidden"></span>';
   document.getElementById('hud')?.appendChild(chip);
   chip.addEventListener('click', () => open());
   let lastChip = '';
@@ -111,9 +113,15 @@ export function setupQuest(h: QuestHost) {
     const done = FRENS.filter((f) => rescued(f)).length;
     const n = next();
     const txt = allDone() ? '✓' : done === 0 && !mem.seen && !inValley() ? 'Rescue a fren' : `${n.short} · ${done}/${FRENS.length}`;
-    if (txt === lastChip) return;
-    lastChip = txt;
+    // a live sponsored drop not finished yet: a 🎁 count on the chip
+    const dn = h.drops?.open() ?? 0;
+    if (txt + dn === lastChip) return;
+    lastChip = txt + dn;
     chip.querySelector('.q-txt')!.textContent = txt;
+    const dEl = chip.querySelector('.q-drop-n')!;
+    dEl.textContent = `🎁 ${dn}`;
+    dEl.classList.toggle('hidden', !dn);
+    chip.title = dn ? `Quest: Lost frens of Meme Valley · ${dn} sponsored drop${dn > 1 ? 's' : ''} live` : 'Quest: Lost frens of Meme Valley';
     chip.classList.toggle('done', allDone());
   }
 
@@ -147,7 +155,7 @@ export function setupQuest(h: QuestHost) {
     const s3 = allDone() ? 'done' : anyHas || w ? 'now' : 'todo';
     const s4 = done > 0 ? 'done' : 'todo';
     const g = target();
-    h.body().innerHTML = `<h2>🐾 Lost frens of Meme Valley</h2>
+    h.body().innerHTML = `${h.drops?.sheet() ?? ''}<h2>🐾 Lost frens of Meme Valley</h2>
       <p class="small q-lead">Pets aren't sold here. Two frens are lost in Meme Valley: help one home and it follows you as your pet. +10 🍃 each.</p>
       <div class="near-pbar"><div style="width:${(done / FRENS.length) * 100}%"></div><span>${done}/${FRENS.length} frens rescued</span></div>
       ${allDone() ? '' : `<p class="q-next"><b>Next:</b> ${esc(n.long)}</p>${n.go ? `<button class="primary" id="q-go">${esc(n.go)} →</button>` : ''}`}
@@ -173,6 +181,7 @@ export function setupQuest(h: QuestHost) {
       <button class="ghost" id="q-close">Close</button>`;
     h.body().dataset.kind = 'quest';
     lastSig = sig();
+    h.drops?.wire(h.body());
     document.getElementById('q-go')?.addEventListener('click', go);
     document.getElementById('q-close')?.addEventListener('click', h.close);
     document.getElementById('q-login')?.addEventListener('click', (ev) => (ev.preventDefault(), h.close(), h.login()));
@@ -186,7 +195,7 @@ export function setupQuest(h: QuestHost) {
       );
   }
   let lastSig = '';
-  const sig = () => JSON.stringify([h.econ().bag, h.econ().frens.length, h.econ().near, h.wishFren(), inValley(), mem.seen]);
+  const sig = () => JSON.stringify([h.econ().bag, h.econ().frens.length, h.econ().near, h.wishFren(), inValley(), mem.seen, h.drops?.sig()]);
   function open() {
     h.show('', 'quest');
     render();
@@ -197,8 +206,22 @@ export function setupQuest(h: QuestHost) {
   let trailOn = false;
   let bestD = Infinity;
   let stall = 0;
+  /**
+   * Walk somewhere far. Into Meme Valley: along the lantern trail to the Gate, then to `to`. Anywhere else (a sponsored
+   * drop's zone): through the courtyard (the hub every road leaves from) unless already close, then to `to`.
+   */
   function walkRoute(to: XZ) {
     const me = h.me();
+    if ((dist(to, VALLEY) > VALLEY.r + 2 && dist(to, GATE) > 14) || inValley(me)) {
+      route = [];
+      const viaCourt = dist(me, COURT) > COURT.r && dist(to, COURT) > COURT.r && dist(me, to) > 30;
+      if (viaCourt) route.push({ x: COURT.x, z: COURT.z });
+      route.push(to);
+      bestD = Infinity;
+      stall = 0;
+      h.walkTo(route[0]);
+      return;
+    }
     const pts = h.trail();
     // join the trail at the point nearest to you that is still ahead (closer to the Gate than you are)
     const ahead = pts.filter((p) => dist(p, GATE) < dist(me, GATE));
@@ -339,5 +362,10 @@ export function setupQuest(h: QuestHost) {
       el.querySelectorAll<HTMLElement>('[data-quest]').forEach((a) => a.addEventListener('click', (ev) => (ev.preventDefault(), open())));
     },
     guide: go,
+    /** "Show me the way" to any point (sponsored drop zones); into the valley it follows the lanterns */
+    guideTo(to: XZ) {
+      if (dist(h.me(), to) < 6) return;
+      walkRoute(to);
+    },
   };
 }

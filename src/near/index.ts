@@ -15,6 +15,7 @@ import { NEAR_MARK } from '../near-mark';
 import { degenName } from './names';
 import { setupMocks } from './mocks';
 import { setupQuest } from './quest';
+import { setupDrops } from './campaigns';
 
 /** the NEAR mark for login buttons (white on black, unaltered) */
 const nearIcon = (size: number) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="${NEAR_MARK}"/></svg>`;
@@ -310,6 +311,7 @@ export function setupNear(h: NearHost) {
     const d = o.userData.near as { kind: string; id: string };
     if (d.kind === 'scope') return openPreviews();
     if (d.kind === 'mock') return mocks.open(d.id);
+    if (d.kind === 'drop') return drops.tap(d.id);
     approach(d.kind, d.id);
   }
   /** walk up to a valley thing (node, fren, bench, kettle), then act on arrival */
@@ -390,8 +392,9 @@ export function setupNear(h: NearHost) {
       return `<li class="${got ? 'have' : 'miss'}">${f.pet === 1 ? '🐕' : '🐸'} <b>${esc(f.name)}</b> ${got ? `#${got.serial} · rescued ${got.rescues}× ${rec(`fren-${f.id}-${got.serial}`)}` : `<span class="small">not yet</span> ${quest.link()}`}</li>`;
     }).join('');
     const dl = drips.map((d) => `<li class="have">${itemLabel(d.kind)} #${d.serial} ${rec(`drip-${d.kind}-${d.serial}`)}</li>`).join('');
+    const badges = drops.book(receipts, rec);
     setTimeout(() => document.getElementById('near-book-login')?.addEventListener('click', (e) => (e.preventDefault(), void startLogin())), 0);
-    body().innerHTML = `<h2>📖 Rescue Book</h2><ul class="near-needs">${tiles}</ul>${dl ? `<div class="label">Drip</div><ul class="near-needs">${dl}</ul>` : ''}
+    body().innerHTML = `<h2>📖 Rescue Book</h2><ul class="near-needs">${tiles}</ul>${dl ? `<div class="label">Drip</div><ul class="near-needs">${dl}</ul>` : ''}${badges}
       <p class="small">${
         econ.near
           ? `Your frens and drip are recorded on NEAR testnet to your account <b>${esc(econ.near)}</b>.`
@@ -399,6 +402,7 @@ export function setupNear(h: NearHost) {
       }</p>
       <p class="near-foot">Receipts are bound to you and cannot be sold.</p>`;
     quest.wire(body());
+    drops.wire(body());
   }
 
   async function loadMarket() {
@@ -494,8 +498,8 @@ export function setupNear(h: NearHost) {
     '🏷️ Your NEAR name in the hall and on the boards',
   ];
   /** a guest tried something that needs a login: say what it unlocks and offer the button */
-  function openLoginPerks(what: string) {
-    show(`<h2>🔒 ${esc(what)}</h2><p class="small">Quick join is for looking around. Log in with NEAR to play for real:</p>
+  function openLoginPerks(what: string, lead?: string) {
+    show(`<h2>🔒 ${esc(what)}</h2><p class="small">${lead ?? 'Quick join is for looking around. Log in with NEAR to play for real:'}</p>
       <ul class="near-needs">${PERKS.map((p) => `<li class="have">${p}</li>`).join('')}</ul>
       <button id="near-perks-login" class="near-login-btn">${nearIcon(20)}<span>Log in with NEAR</span></button>
       <p class="near-foot">One free signature: no transaction, no fee, nothing moved. <a href="#" id="near-perks-testnet">Testnet account?</a></p>`);
@@ -690,6 +694,26 @@ export function setupNear(h: NearHost) {
     }
   }
 
+  // sponsored drops: an advertiser's airdrop in the world (campaigns.ts); its section lives in the quest sheet
+  const drops = setupDrops({
+    scene: h.scene,
+    heightAt: h.heightAt,
+    tap,
+    untap: (o) => {
+      const i = h.clickables.indexOf(o);
+      if (i >= 0) h.clickables.splice(i, 1);
+    },
+    me: () => h.me().position,
+    walkTo: (p) => h.walkTo(new THREE.Vector3(p.x, 0, p.z)),
+    send: h.send,
+    toast: h.toast,
+    pid: h.pid,
+    loggedIn: () => !!econ.near,
+    loginPerks: openLoginPerks,
+    guide: (to) => quest.guideTo(to),
+    close,
+  });
+
   // the pet quest: HUD chip + sheet, and its pointers from the welcome card, pet sheet, bag and book (quest.ts)
   const quest = setupQuest({
     econ: () => econ,
@@ -707,7 +731,9 @@ export function setupNear(h: NearHost) {
     toast: h.toast,
     entered: () => $('welcome').classList.contains('hidden'),
     login: () => void startLogin(),
+    drops,
   });
+  drops.onChange = () => quest.refresh();
 
   renderBar();
   // the hall connection only starts on Enter, so ask now whether this visitor is logged in: the welcome card
@@ -741,6 +767,7 @@ export function setupNear(h: NearHost) {
 
   // ---------- messages ----------
   function onMessage(m: Msg) {
+    if (drops.onMessage(m)) return;
     switch (m.t) {
       case 'econ':
         econ = { ...econ, ...(m as unknown as Econ) };
@@ -752,6 +779,7 @@ export function setupNear(h: NearHost) {
           }
           h.setVerifiedName(econ.nick || (/^[0-9a-f]{64}$/.test(econ.near) ? short(econ.near) : econ.near.slice(0, 32)));
         }
+        if (econ.near) drops.loggedIn();
         firstSitDone = econ.frens.length > 0 || (econ.today.sit ?? 0) > 0;
         syncTrail();
         renderBar();
@@ -879,6 +907,7 @@ export function setupNear(h: NearHost) {
   function update(dt: number) {
     t += dt;
     mocks.update(dt);
+    drops.update(dt);
     for (const fp of frenPets) {
       fp.pet.update(dt, true, true);
       fp.ring.rotation.z += dt * 0.5;
@@ -911,7 +940,7 @@ export function setupNear(h: NearHost) {
     if (kind === 'previews') return openPreviews();
     if (kind.startsWith('mock:')) return mocks.open(kind.slice(5));
     if (kind === 'login') return void startLogin();
-    if (kind === 'quest') return quest.open();
+    if (kind === 'quest' || kind === 'drops') return quest.open();
   }
 
   return { onMessage, tap: tapObj, update, open, isNear: true };
