@@ -6,6 +6,7 @@
 > **Branch / deploy**: `near-hackathon` (from `main`) · separate Vercel project + Worker `quiet-hall-near` · NEAR **testnet**
 > **Target**: NEAR Hackathon, submissions close **2026-11-14 23:59 UTC**. Track: **Games With Real Economies** only.
 > **Shared design**: `master-gdd.md` and the system GDDs. This doc says what the NEAR edition includes, cuts and adds.
+> **Update 2026-11-11**: the NEAR edition no longer has Leaves (no currency). The player journey, tutorial, plain-word names and AI characters are in **`near-player-journey.md`**, which wins where this doc differs.
 
 ## Summary
 
