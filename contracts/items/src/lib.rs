@@ -96,6 +96,19 @@ fn sha256_hex(data: &[u8]) -> String {
     env::sha256(data).iter().map(|b| format!("{:02x}", b)).collect()
 }
 
+/// A sponsored campaign id: `cmp-` then lowercase letters or digits, at most 40 characters.
+fn valid_campaign_id(id: &str) -> bool {
+    id.len() <= 40
+        && id.len() > 4
+        && id.starts_with("cmp-")
+        && id[4..].bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+}
+
+/// 64 lowercase hex characters (a sha256 digest).
+fn is_hex64_lower(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
 fn emit(event: &str, data: serde_json::Value) {
     let log = json!({
         "standard": EVENT_STANDARD,
@@ -150,10 +163,17 @@ impl Contract {
         require!(self.jobs.insert(&job_id.to_string()), "job_id already used");
     }
 
-    fn mint(&mut self, token_id: TokenId, owner: AccountId, title: String, extra: String) -> Token {
+    fn mint(
+        &mut self,
+        token_id: TokenId,
+        owner: AccountId,
+        title: String,
+        description: Option<String>,
+        extra: String,
+    ) -> Token {
         let metadata = TokenMetadata {
             title: Some(title),
-            description: None,
+            description,
             media: None,
             media_hash: None,
             copies: Some(1),
@@ -179,7 +199,7 @@ impl Contract {
         self.use_job(&job_id);
         let token_id = format!("fren:{}:{}", species, serial);
         let extra = json!({ "kind": "fren", "species": species, "serial": serial }).to_string();
-        self.mint(token_id, owner, format!("{} #{}", species, serial), extra)
+        self.mint(token_id, owner, format!("{} #{}", species, serial), None, extra)
     }
 
     /// A crafted drip item: `drip:<kind>:<serial>`, bound to `owner`.
@@ -188,7 +208,7 @@ impl Contract {
         self.use_job(&job_id);
         let token_id = format!("drip:{}:{}", kind, serial);
         let extra = json!({ "kind": "drip", "drip": kind, "serial": serial }).to_string();
-        self.mint(token_id, owner, format!("{} #{}", kind, serial), extra)
+        self.mint(token_id, owner, format!("{} #{}", kind, serial), None, extra)
     }
 
     /// A Market Cup trophy for places 1 to 3: `trophy:<round_id>:<place>`.
@@ -202,7 +222,36 @@ impl Contract {
         self.use_job(&job_id);
         let token_id = format!("trophy:{}:{}", round_id, place);
         let extra = json!({ "kind": "trophy", "round": round_id, "place": place }).to_string();
-        self.mint(token_id, owner, format!("Market Cup {} place {}", round_id, place), extra)
+        self.mint(token_id, owner, format!("Market Cup {} place {}", round_id, place), None, extra)
+    }
+
+    /// A sponsored-campaign badge: `badge:<campaign_id>:<serial>`, bound to
+    /// `owner`. Proof that the player completed the campaign; the sponsor's own
+    /// reward (claim link or code) is handed out off chain.
+    pub fn mint_badge(
+        &mut self,
+        owner: AccountId,
+        campaign_id: String,
+        badge: String,
+        serial: u64,
+        job_id: String,
+    ) -> Token {
+        self.assert_owner();
+        require!(valid_campaign_id(&campaign_id), "Bad campaign_id");
+        let badge_len = badge.chars().count();
+        require!(badge_len >= 1 && badge_len <= 40, "badge must be 1 to 40 characters");
+        require!(serial >= 1, "serial starts at 1");
+        let token_id = format!("badge:{}:{}", campaign_id, serial);
+        require!(self.tokens.owner_by_id.get(&token_id).is_none(), "Badge already minted");
+        self.use_job(&job_id);
+        let extra = json!({ "kind": "badge", "campaign": campaign_id, "badge": badge, "serial": serial }).to_string();
+        let description = format!("Completed the Quiet Hall sponsored campaign {}", campaign_id);
+        emit(
+            "badge_minted",
+            json!({ "owner": owner, "campaign": campaign_id, "badge": badge, "serial": serial, "token_id": token_id }),
+        );
+        let title = format!("{} #{}", badge, serial);
+        self.mint(token_id, owner, title, Some(description), extra)
     }
 
     // ---------- economy record (owner only) ----------
@@ -257,6 +306,18 @@ impl Contract {
             json!({ "round": round_id, "setup_hash": round.setup_hash, "results_hash": round.results_hash }),
         );
         self.rounds.insert(&round_id, &round);
+    }
+
+    /// Commits a sponsored campaign's terms: the sha256 (hex) of its config.
+    /// Event-only (nothing is stored beyond the used job id), so the record
+    /// lives in the chain's logs; the server uses job id `camp-<campaign_id>`,
+    /// which makes a second commitment for the same campaign impossible.
+    pub fn commit_campaign(&mut self, campaign_id: String, config_hash: String, job_id: String) {
+        self.assert_owner();
+        require!(valid_campaign_id(&campaign_id), "Bad campaign_id");
+        require!(is_hex64_lower(&config_hash), "config_hash must be 64 lowercase hex characters");
+        self.use_job(&job_id);
+        emit("campaign_committed", json!({ "campaign": campaign_id, "config_hash": config_hash }));
     }
 
     // ---------- views ----------
@@ -473,5 +534,145 @@ mod tests {
         let mut c = setup();
         c.commit_round("r1".into(), sha256_hex(b"x"), "c-1".into());
         c.mint_trophy(player(), "r1".into(), 1, "t-1".into());
+    }
+
+    // ---------- sponsored campaigns ----------
+
+    const CAMP: &str = "cmp-bonk01";
+
+    #[test]
+    fn mints_a_bound_badge_with_campaign_metadata() {
+        let mut c = setup();
+        let t = c.mint_badge(player(), CAMP.into(), "Bonk Hunter".into(), 1, "badge-cmp-bonk01-1".into());
+        assert_eq!(t.token_id, "badge:cmp-bonk01:1");
+        assert_eq!(t.owner_id, player());
+        let m = t.metadata.unwrap();
+        assert_eq!(m.title.as_deref(), Some("Bonk Hunter #1"));
+        assert!(m.description.unwrap().contains(CAMP));
+        assert!(m.extra.unwrap().contains("\"kind\":\"badge\""));
+        assert!(c.job_used("badge-cmp-bonk01-1".into()));
+        assert_eq!(c.nft_supply_for_owner(player()), U128(1));
+        assert!(c.nft_token("badge:cmp-bonk01:1".into()).is_some());
+    }
+
+    #[test]
+    #[should_panic(expected = "Only the game account")]
+    fn only_the_game_account_can_mint_a_badge() {
+        let mut c = setup();
+        testing_env!(ctx(accounts(2)).build());
+        c.mint_badge(player(), CAMP.into(), "Bonk Hunter".into(), 1, "b-1".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "job_id already used")]
+    fn a_badge_job_id_can_be_used_once() {
+        let mut c = setup();
+        c.mint_badge(player(), CAMP.into(), "Bonk Hunter".into(), 1, "b-1".into());
+        c.mint_badge(player(), CAMP.into(), "Bonk Hunter".into(), 2, "b-1".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "Badge already minted")]
+    fn a_badge_serial_is_minted_once() {
+        let mut c = setup();
+        c.mint_badge(player(), CAMP.into(), "Bonk Hunter".into(), 1, "b-1".into());
+        c.mint_badge(accounts(3), CAMP.into(), "Bonk Hunter".into(), 1, "b-2".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "bound to their owner")]
+    fn badges_cannot_be_transferred() {
+        let mut c = setup();
+        c.mint_badge(player(), CAMP.into(), "Bonk Hunter".into(), 1, "b-1".into());
+        testing_env!(ctx(player()).attached_deposit(near_sdk::NearToken::from_yoctonear(1)).build());
+        c.nft_transfer(accounts(3), "badge:cmp-bonk01:1".into(), None, None);
+    }
+
+    #[test]
+    fn bad_campaign_ids_are_rejected() {
+        for bad in ["", "cmp-", "bonk01", "CMP-bonk", "cmp-Bonk", "cmp-bo_nk", "cmp-bonk:1", &format!("cmp-{}", "a".repeat(37))] {
+            assert!(!valid_campaign_id(bad), "{bad:?} should be rejected");
+        }
+        assert!(valid_campaign_id(&format!("cmp-{}", "a".repeat(36))));
+        assert!(valid_campaign_id("cmp-x9"));
+    }
+
+    #[test]
+    #[should_panic(expected = "Bad campaign_id")]
+    fn mint_badge_rejects_a_bad_campaign_id() {
+        let mut c = setup();
+        c.mint_badge(player(), "cmp-Bad".into(), "Bonk Hunter".into(), 1, "b-1".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "badge must be 1 to 40 characters")]
+    fn mint_badge_rejects_a_long_badge_name() {
+        let mut c = setup();
+        c.mint_badge(player(), CAMP.into(), "x".repeat(41), 1, "b-1".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "badge must be 1 to 40 characters")]
+    fn mint_badge_rejects_an_empty_badge_name() {
+        let mut c = setup();
+        c.mint_badge(player(), CAMP.into(), "".into(), 1, "b-1".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "serial starts at 1")]
+    fn mint_badge_rejects_serial_zero() {
+        let mut c = setup();
+        c.mint_badge(player(), CAMP.into(), "Bonk Hunter".into(), 0, "b-1".into());
+    }
+
+    #[test]
+    fn commits_a_campaign_as_an_event() {
+        let mut c = setup();
+        let h = sha256_hex(b"campaign config");
+        c.commit_campaign(CAMP.into(), h.clone(), "camp-cmp-bonk01".into());
+        assert!(c.job_used("camp-cmp-bonk01".into()));
+        let logs = near_sdk::test_utils::get_logs();
+        let last = logs.last().unwrap();
+        assert!(last.starts_with("EVENT_JSON:"));
+        assert!(last.contains("\"event\":\"campaign_committed\""));
+        assert!(last.contains(&h));
+        assert!(last.contains(CAMP));
+    }
+
+    #[test]
+    #[should_panic(expected = "Only the game account")]
+    fn only_the_game_account_can_commit_a_campaign() {
+        let mut c = setup();
+        testing_env!(ctx(accounts(2)).build());
+        c.commit_campaign(CAMP.into(), "a".repeat(64), "camp-1".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "job_id already used")]
+    fn a_campaign_commitment_job_id_can_be_used_once() {
+        let mut c = setup();
+        c.commit_campaign(CAMP.into(), "a".repeat(64), "camp-1".into());
+        c.commit_campaign(CAMP.into(), "b".repeat(64), "camp-1".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "config_hash must be 64 lowercase hex characters")]
+    fn commit_campaign_rejects_uppercase_hex() {
+        let mut c = setup();
+        c.commit_campaign(CAMP.into(), "A".repeat(64), "camp-1".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "config_hash must be 64 lowercase hex characters")]
+    fn commit_campaign_rejects_a_short_hash() {
+        let mut c = setup();
+        c.commit_campaign(CAMP.into(), "a".repeat(63), "camp-1".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "Bad campaign_id")]
+    fn commit_campaign_rejects_a_bad_campaign_id() {
+        let mut c = setup();
+        c.commit_campaign("campaign-1".into(), "a".repeat(64), "camp-1".into());
     }
 }
