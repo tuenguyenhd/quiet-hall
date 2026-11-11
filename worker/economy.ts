@@ -9,6 +9,24 @@ import { APPRENTICES, CUP, MARKET, PRICE, askOf, bidOf, marketItem, midPrice } f
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { ownerId, type Job, type Mirror } from './mirror';
+import { canonicalCampaign, dropsOf, isLive, publicCampaign, type Campaign, type PublicCampaign } from '../src/campaigns';
+
+/** a player's progress in one campaign (cpicked / cmine). `reward` is the full reward: only for the completer. */
+/** stable machine codes for refusals (the client may also match `why`) */
+export type CampCode = 'already' | 'far' | 'too_fast' | 'sold_out' | 'ended' | 'login' | 'unknown_campaign' | 'bad_drop' | 'done' | 'need_more';
+export interface CampPickResult {
+  ok: boolean;
+  why?: string;
+  code?: CampCode;
+  got: number;
+  goal: number;
+  done?: boolean;
+  serial?: number;
+  reward?: Campaign['reward'];
+  login?: boolean;
+}
+/** one second between two drop picks of one player (any campaign) */
+const CAMP_PICK_MS = 1000;
 
 interface EconEnv {
   EDITION?: string;
@@ -83,6 +101,15 @@ export class Economy extends DurableObject<EconEnv> {
         traded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(round, acct, item));
       CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS links(account TEXT PRIMARY KEY, acct TEXT NOT NULL UNIQUE, at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS campaigns(id TEXT PRIMARY KEY, json TEXT NOT NULL, hash TEXT NOT NULL, status TEXT NOT NULL,
+        created INTEGER NOT NULL, completions INTEGER NOT NULL DEFAULT 0, creator TEXT NOT NULL DEFAULT '');
+      CREATE TABLE IF NOT EXISTS camp_picks(campaign TEXT NOT NULL, acct TEXT NOT NULL, drop_i INTEGER NOT NULL, at INTEGER NOT NULL,
+        PRIMARY KEY(campaign, acct, drop_i));
+      CREATE INDEX IF NOT EXISTS camp_picks_by_acct ON camp_picks(acct, at);
+      CREATE TABLE IF NOT EXISTS camp_done(campaign TEXT NOT NULL, acct TEXT NOT NULL, serial INTEGER NOT NULL, at INTEGER NOT NULL,
+        PRIMARY KEY(campaign, acct));
+      CREATE TABLE IF NOT EXISTS sponsor_keys(hash TEXT PRIMARY KEY, sponsor TEXT NOT NULL, created INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS rate(k TEXT PRIMARY KEY, n INTEGER NOT NULL, win INTEGER NOT NULL);
     `);
     // the player's chosen name, shown instead of their NEAR address (added after links shipped)
     try {
@@ -697,4 +724,219 @@ export class Economy extends DurableObject<EconEnv> {
     const negative = this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM accts WHERE leaves < 0').toArray()[0].n;
     return { accounts, mismatched, negative };
   }
+
+  // ---------- sponsored drops (src/campaigns.ts) ----------
+
+  private campRow(id: string) {
+    return this.sql
+      .exec<{ json: string; hash: string; status: string; completions: number; creator: string }>(
+        'SELECT json, hash, status, completions, creator FROM campaigns WHERE id = ?',
+        id,
+      )
+      .toArray()[0];
+  }
+  /** the stored terms, with the status column (the only field that changes) */
+  private campOf(row: { json: string; status: string }): Campaign {
+    return { ...(JSON.parse(row.json) as Campaign), status: row.status === 'ended' ? 'ended' : 'live' };
+  }
+
+  /** Stores an already-validated campaign. configHash = sha256 hex of canonicalCampaign(c) (committed on NEAR). */
+  createCampaign(c: Campaign, creator: string): { id: string; configHash: string } {
+    const hash = bytesToHex(sha256(new TextEncoder().encode(canonicalCampaign(c))));
+    this.sql.exec(
+      'INSERT INTO campaigns(id, json, hash, status, created, completions, creator) VALUES (?, ?, ?, ?, ?, 0, ?)',
+      c.id,
+      JSON.stringify(c),
+      hash,
+      c.status,
+      Date.now(),
+      creator,
+    );
+    return { id: c.id, configHash: hash };
+  }
+
+  /** live campaigns now (optionally: of one creator), for the create limits */
+  liveCampaignCount(creator?: string): number {
+    const now = Date.now();
+    return this.sql
+      .exec<{ json: string; status: string; creator: string }>("SELECT json, status, creator FROM campaigns WHERE status = 'live'")
+      .toArray()
+      .filter((r) => (creator === undefined || r.creator === creator) && isLive(this.campOf(r), now)).length;
+  }
+
+  /** What players may see (no claim link or code), newest first, with configHash. liveOnly: running right now. */
+  listCampaigns(liveOnly = true, creator?: string): (PublicCampaign & { configHash: string })[] {
+    const now = Date.now();
+    const rows = this.sql
+      .exec<{ json: string; hash: string; status: string; completions: number; creator: string }>(
+        'SELECT json, hash, status, completions, creator FROM campaigns ORDER BY created DESC LIMIT 200',
+      )
+      .toArray();
+    const out: (PublicCampaign & { configHash: string })[] = [];
+    for (const r of rows) {
+      if (creator !== undefined && r.creator !== creator) continue;
+      const c = this.campOf(r);
+      if (liveOnly && !isLive(c, now)) continue;
+      out.push({ ...publicCampaign(c, r.completions), configHash: r.hash });
+    }
+    return out;
+  }
+
+  /** the full campaign, claim link and code included: server-side only */
+  getCampaign(id: string): (Campaign & { configHash: string; completions: number; creator: string }) | null {
+    const r = this.campRow(id);
+    return r ? { ...this.campOf(r), configHash: r.hash, completions: r.completions, creator: r.creator } : null;
+  }
+
+  /** Ends a campaign. With `creator`, only the sponsor key that created it may. */
+  endCampaign(id: string, creator?: string): { ok: boolean; why?: string } {
+    const r = this.campRow(id);
+    if (!r) return { ok: false, why: 'No such campaign.' };
+    if (creator !== undefined && r.creator !== creator) return { ok: false, why: 'Only the sponsor that created this campaign can end it.' };
+    if (r.status === 'ended') return { ok: true };
+    this.sql.exec("UPDATE campaigns SET status = 'ended' WHERE id = ?", id);
+    return { ok: true };
+  }
+
+  campaignStats(id: string): {
+    id: string;
+    status: string;
+    live: boolean;
+    picks: number;
+    players: number;
+    completions: number;
+    supply: number;
+    supplyLeft: number;
+    starts: number;
+    ends: number;
+    configHash: string;
+  } | null {
+    const r = this.campRow(id);
+    if (!r) return null;
+    const c = this.campOf(r);
+    const p = this.sql
+      .exec<{ picks: number; players: number }>('SELECT COUNT(*) AS picks, COUNT(DISTINCT acct) AS players FROM camp_picks WHERE campaign = ?', id)
+      .toArray()[0];
+    return {
+      id,
+      status: c.status,
+      live: isLive(c),
+      picks: p.picks,
+      players: p.players,
+      completions: r.completions,
+      supply: c.supply,
+      supplyLeft: Math.max(0, c.supply - r.completions),
+      starts: c.starts,
+      ends: c.ends,
+      configHash: r.hash,
+    };
+  }
+
+  private campGot(id: string, acct: string): number {
+    return this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM camp_picks WHERE campaign = ? AND acct = ?', id, acct).toArray()[0].n;
+  }
+
+  /** completes if picks ≥ goal, logged in and supply left (call inside transactionSync) */
+  private campComplete(acct: string, c: Campaign, completions: number, got: number): CampPickResult {
+    const base = { got, goal: c.goal };
+    if (got < c.goal) return { ok: true, ...base, done: false };
+    if (!this.linkedAccount(acct)) return { ok: true, ...base, done: false, login: true, code: 'login', why: 'Log in with NEAR to claim your reward.' };
+    if (completions >= c.supply) return { ok: false, ...base, done: false, code: 'sold_out', why: 'All rewards of this drop have been claimed.' };
+    const serial = this.next(`camp:${c.id}`);
+    this.sql.exec('INSERT INTO camp_done(campaign, acct, serial, at) VALUES (?, ?, ?, ?)', c.id, acct, serial, Date.now());
+    this.sql.exec('UPDATE campaigns SET completions = completions + 1 WHERE id = ?', c.id);
+    return { ok: true, ...base, done: true, serial, reward: c.reward };
+  }
+
+  /**
+   * One drop pick, all-or-nothing: live window, drop index, reach (server position `at`), not picked before,
+   * 1 s between picks. Reaching `goal` completes it (needs a NEAR login and supply left): serial next('camp:'+id).
+   * A guest keeps their picks and completes on a later pick or campaignClaim once logged in.
+   */
+  campaignPick(acct: string, id: string, d: number, at?: { x: number; z: number }, reach?: number): CampPickResult {
+    return this.ctx.storage.transactionSync(() => {
+      const now = Date.now();
+      const r = this.campRow(id);
+      if (!r) return { ok: false, code: 'unknown_campaign', why: 'This drop is gone.', got: 0, goal: 0 };
+      const c = this.campOf(r);
+      const got0 = this.campGot(id, acct);
+      const fail = (code: CampCode, why: string, extra: Partial<CampPickResult> = {}): CampPickResult => ({ ok: false, code, why, got: got0, goal: c.goal, ...extra });
+      if (!isLive(c, now)) return fail('ended', 'This drop has ended.');
+      const spot = Number.isInteger(d) ? dropsOf(c)[d] : undefined;
+      if (!spot) return fail('bad_drop', 'unknown drop');
+      if (at && reach !== undefined && Math.hypot(at.x - spot.x, at.z - spot.z) > reach) return fail('far', 'too far');
+      const done = this.sql.exec<{ serial: number }>('SELECT serial FROM camp_done WHERE campaign = ? AND acct = ?', id, acct).toArray()[0];
+      if (done) return fail('done', 'You already completed this drop.', { done: true, serial: done.serial });
+      if (r.completions >= c.supply) return fail('sold_out', 'All rewards of this drop have been claimed.');
+      const last = this.sql.exec<{ t: number | null }>('SELECT MAX(at) AS t FROM camp_picks WHERE acct = ?', acct).toArray()[0]?.t ?? 0;
+      if (now - last < CAMP_PICK_MS) return fail('too_fast', 'too fast');
+      if (this.sql.exec('SELECT 1 FROM camp_picks WHERE campaign = ? AND acct = ? AND drop_i = ?', id, acct, d).toArray().length)
+        return fail('already', 'Already picked.');
+      this.sql.exec('INSERT INTO camp_picks(campaign, acct, drop_i, at) VALUES (?, ?, ?, ?)', id, acct, d, now);
+      return this.campComplete(acct, c, r.completions, got0 + 1);
+    });
+  }
+
+  /** after a NEAR login: completes a campaign whose goal was already reached as a guest */
+  campaignClaim(acct: string, id: string): CampPickResult {
+    return this.ctx.storage.transactionSync(() => {
+      const r = this.campRow(id);
+      if (!r) return { ok: false, code: 'unknown_campaign', why: 'This drop is gone.', got: 0, goal: 0 };
+      const c = this.campOf(r);
+      const got = this.campGot(id, acct);
+      const done = this.sql.exec<{ serial: number }>('SELECT serial FROM camp_done WHERE campaign = ? AND acct = ?', id, acct).toArray()[0];
+      if (done) return { ok: false, code: 'done', why: 'You already completed this drop.', got, goal: c.goal, done: true, serial: done.serial };
+      if (!isLive(c)) return { ok: false, code: 'ended', why: 'This drop has ended.', got, goal: c.goal };
+      if (got < c.goal) return { ok: false, code: 'need_more', why: `Collect ${c.goal - got} more first.`, got, goal: c.goal };
+      return this.campComplete(acct, c, r.completions, got);
+    });
+  }
+
+  /** this player's progress in live campaigns: picked drop indexes, and serial + full reward where they completed */
+  campaignMine(acct: string): Record<string, { d: number[]; serial?: number; reward?: Campaign['reward'] }> {
+    const out: Record<string, { d: number[]; serial?: number; reward?: Campaign['reward'] }> = {};
+    const live = new Map(this.listCampaigns(true).map((c) => [c.id, c]));
+    for (const p of this.sql.exec<{ campaign: string; drop_i: number }>('SELECT campaign, drop_i FROM camp_picks WHERE acct = ? ORDER BY at', acct)) {
+      if (!live.has(p.campaign)) continue;
+      (out[p.campaign] ??= { d: [] }).d.push(p.drop_i);
+    }
+    for (const r of this.sql.exec<{ campaign: string; serial: number }>('SELECT campaign, serial FROM camp_done WHERE acct = ?', acct)) {
+      if (!live.has(r.campaign)) continue;
+      const c = this.getCampaign(r.campaign);
+      (out[r.campaign] ??= { d: [] }).serial = r.serial;
+      if (c) out[r.campaign].reward = c.reward;
+    }
+    return out;
+  }
+
+  // ---------- sponsor keys (MCP x-api-key): only sha256(key) is stored ----------
+
+  addSponsorKey(hash: string, sponsor: string): void {
+    this.sql.exec('INSERT INTO sponsor_keys(hash, sponsor, created) VALUES (?, ?, ?)', hash, sponsor, Date.now());
+  }
+  /** the sponsor label of a valid (not revoked) key hash */
+  sponsorOf(hash: string): string | null {
+    return this.sql.exec<{ sponsor: string }>('SELECT sponsor FROM sponsor_keys WHERE hash = ? AND revoked = 0', hash).toArray()[0]?.sponsor ?? null;
+  }
+  revokeSponsorKey(hash: string): boolean {
+    return this.sql.exec('UPDATE sponsor_keys SET revoked = 1 WHERE hash = ?', hash).rowsWritten > 0;
+  }
+
+  /**
+   * At most `max` calls per key per window (default one minute). True = over the limit.
+   * Keys with a longer window must start with 'day:' (old minute windows are swept, those are kept).
+   */
+  rateLimited(key: string, max: number, windowMs = 60_000): boolean {
+    return this.ctx.storage.transactionSync(() => {
+      const now = Date.now();
+      const win = Math.floor(now / windowMs);
+      const r = this.sql.exec<{ n: number; win: number }>('SELECT n, win FROM rate WHERE k = ?', key).toArray()[0];
+      const n = r && r.win === win ? r.n + 1 : 1;
+      this.sql.exec('INSERT OR REPLACE INTO rate(k, n, win) VALUES (?, ?, ?)', key, n, win);
+      // keep the table small: now and then, old minute windows go
+      if (n === 1 && Math.random() < 0.05) this.sql.exec('DELETE FROM rate WHERE win < ? AND k NOT LIKE ?', win - 1, 'day:%');
+      return n > max;
+    });
+  }
+
 }

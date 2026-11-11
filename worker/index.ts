@@ -2,7 +2,8 @@ import { DurableObject } from 'cloudflare:workers';
 import { b64, decodeText, parseSiws, readSession, signSession, verifySignature } from './auth';
 import { Ledger, priceTable, type SpotOwner } from './ledger';
 import { Pump } from './pump';
-import { Economy, minuteMs } from './economy';
+import { Economy, minuteMs, type CampPickResult } from './economy';
+import { handleMcp, newSponsorKey, sponsorKeyHash } from './mcp';
 import { Mirror, ownerId } from './mirror';
 import { LOGIN_MESSAGE, LOGIN_RECIPIENT, loginNonce, verifyLogin } from './nearlogin';
 import { edition, ECONOMY } from '../src/economy';
@@ -66,6 +67,18 @@ export interface Env {
   NEAR_MIRROR_MODE?: string;
   /** mainnet RPCs for checking NEAR logins (comma-separated; default FastNEAR + near.org) */
   NEAR_MAINNET_RPCS?: string;
+  /** Sponsored drops: guards POST /api/near/sponsor-key (header x-admin-key). Secret; unset = no keys can be issued. */
+  CAMPAIGN_ADMIN_KEY?: string;
+  /** NEAR AI Cloud API key for prompt → campaign drafts (secret). Unset = the keyword parser drafts. */
+  NEARAI_API_KEY?: string;
+  /** OpenAI-compatible base URL (var; default https://cloud-api.near.ai/v1) */
+  LLM_BASE_URL?: string;
+  /** model id on that endpoint (var) */
+  LLM_MODEL?: string;
+  /** 'mock' = never call the LLM (tests / demos) */
+  LLM_MODE?: string;
+  /** most LLM drafts per UTC day (var; default 300) */
+  LLM_DAILY_CAP?: string;
 }
 
 type SitState = 'idle' | 'sit';
@@ -171,7 +184,7 @@ const NEAR_API = /^\/api\/(health|config|near\/[a-z-]+|pump\/[a-z-]+)$/;
 /** NEAR edition: socket messages that belong to Solana / money / prediction features */
 const NEAR_BLOCKED_WS = new Set(['spots', 'profile', 'lantern']);
 /** socket messages that exist only in the NEAR edition */
-const NEAR_ONLY_WS = new Set(['pick', 'grant', 'wishDone', 'craft', 'book', 'trade', 'cupJoin']);
+const NEAR_ONLY_WS = new Set(['pick', 'grant', 'wishDone', 'craft', 'book', 'trade', 'cupJoin', 'cpick', 'cclaim']);
 const REACH = GATHER.reach + GATHER.tolerance;
 const CO_REACH = GATHER.coRescueRadius + GATHER.tolerance;
 /** PumpHall: one board for everyone; "t<id>" rooms are isolated boards for automated tests */
@@ -182,7 +195,7 @@ function cors(req: Request, res: Response) {
   const h = new Headers(res.headers);
   h.set('Access-Control-Allow-Origin', req.headers.get('Origin') ?? '*');
   h.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  h.set('Access-Control-Allow-Headers', 'content-type');
+  h.set('Access-Control-Allow-Headers', 'content-type, x-api-key, accept, mcp-protocol-version, mcp-session-id');
   h.set('Vary', 'Origin');
   return new Response(res.body, { status: res.status, headers: h });
 }
@@ -380,6 +393,29 @@ async function nearApi(req: Request, env: Env, path: string): Promise<Response> 
     return json({ ok: true, name: nick });
   }
   if (path === '/api/near/audit') return json(await economy(env).audit());
+  if (path === '/api/near/campaigns') return json({ list: await economy(env).listCampaigns(true) });
+  if (path === '/api/near/mcp') {
+    // tests may also push 'camps' to their own test room (with the load-test key)
+    const room = env.LOAD_TEST_KEY && q.get('k') === env.LOAD_TEST_KEY && /^t[a-z0-9]{4,16}$/.test(q.get('room') ?? '') ? q.get('room')! : undefined;
+    return handleMcp(req, env, {
+      economy: economy(env),
+      commit: async (id, configHash) => {
+        await mirror(env).enqueue([{ job: `camp-${id}`, method: 'commit_campaign', args: { campaign_id: id, config_hash: configHash } }]);
+      },
+      changed: () => campaignsChanged(env, room),
+    });
+  }
+  if (path === '/api/near/sponsor-key' && req.method === 'POST') {
+    // admin only: issues a sponsor key for the MCP server. The key is returned once; only its hash is stored.
+    const given = req.headers.get('x-admin-key') ?? '';
+    if (!env.CAMPAIGN_ADMIN_KEY || !(await sameSecret(given, env.CAMPAIGN_ADMIN_KEY))) return json({ error: 'Not found' }, 404);
+    const b = await readJson(req);
+    const sponsor = cleanChat(b.sponsor).slice(0, 64).trim();
+    if (!sponsor) return json({ error: 'sponsor (a label for who gets the key) is required' }, 400);
+    const key = newSponsorKey();
+    await economy(env).addSponsorKey(await sponsorKeyHash(key), sponsor);
+    return json({ key, sponsor, note: 'Shown once. Send it as the x-api-key header to POST /api/near/mcp.' });
+  }
   if (path === '/api/near/login-nonce') {
     if (!PID_RE.test(pid)) return json({ error: 'Bad pid' }, 400);
     return json({ nonce: await loginNonce(env.SESSION_SECRET || 'dev-only-session-secret', pid), message: LOGIN_MESSAGE, recipient: LOGIN_RECIPIENT });
@@ -433,6 +469,11 @@ async function nearApi(req: Request, env: Env, path: string): Promise<Response> 
     if (!PID_RE.test(pid)) return json({ error: 'Bad pid' }, 400);
     return json(await economy(env).link(pid, (q.get('account') ?? `${pid}.testnet`).slice(0, 64)));
   }
+  if (path === '/api/near/test-jobs') {
+    // Mirror jobs by id (campaign commits have no owner, so they are not in /me receipts)
+    const ids = (q.get('ids') ?? '').split(',').filter((x) => x && x.length <= 64).slice(0, 20);
+    return json({ jobs: await mirror(env).jobs(ids) });
+  }
   if (path === '/api/near/test-mint') {
     if (!PID_RE.test(pid)) return json({ error: 'Bad pid' }, 400);
     const owner = await ownerOf(env, pid);
@@ -442,6 +483,25 @@ async function nearApi(req: Request, env: Env, path: string): Promise<Response> 
     return json({ job, owner, added });
   }
   return json({ error: 'Not found' }, 404);
+}
+
+/** constant-time compare of two secrets (hashes first, so lengths do not leak) */
+async function sameSecret(a: string, b: string): Promise<boolean> {
+  const h = async (s: string) => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
+  const [x, y] = await Promise.all([h(a), h(b)]);
+  let d = 0;
+  for (let i = 0; i < x.length; i++) d |= x[i] ^ y[i];
+  return d === 0;
+}
+
+/** the sponsor's claim for a completer: { url?, code? }, or undefined when the reward is the badge only */
+const claimOf = (r?: { claimUrl?: string; code?: string }) =>
+  r && (r.claimUrl || r.code) ? { ...(r.claimUrl ? { url: r.claimUrl } : {}), ...(r.code ? { code: r.code } : {}) } : undefined;
+
+/** Sponsored drops changed (created / ended): every player in the main hall (and a test room, for tests) gets the live list. */
+async function campaignsChanged(env: Env, room?: string) {
+  const rooms = ['main', ...(room && room !== 'main' ? [room] : [])];
+  await Promise.all(rooms.map((r) => env.HALL.get(env.HALL.idFromName(r)).campaignsChanged()));
 }
 
 function send(ws: WebSocket, msg: unknown) {
@@ -625,11 +685,60 @@ export class Hall extends DurableObject<Env> {
         if (dist(a, TRADE_ZONE) > TRADE_ZONE.r) return send(ws, { t: 'cupJoined', ok: false, why: 'Join the Cup at the Market (south-east of the courtyard).' });
         return send(ws, { t: 'cupJoined', ...(await E.cupJoin(a.pid, a.ip)), chips: CUP.chips });
       }
+      case 'cpick': {
+        // sponsored drop: reach is checked against the player's server position, all else inside one Economy transaction
+        const c = String(m.c ?? '').slice(0, 40);
+        const d = Math.floor(num(m.d, -1));
+        return this.campReply(ws, a, c, d, await E.campaignPick(a.pid, c, d, { x: a.x, z: a.z }, REACH));
+      }
+      case 'cclaim': {
+        // after logging in: completes a drop whose goal was reached as a guest (the reply is a 'cpicked' with d = -1)
+        const c = String(m.c ?? '').slice(0, 40);
+        return this.campReply(ws, a, c, -1, await E.campaignClaim(a.pid, c));
+      }
       case 'book': {
         const owner = await ownerOf(this.env, a.pid);
         return send(ws, { t: 'book', owner, ...(await E.book(a.pid)), receipts: this.env.MIRROR ? await mirror(this.env).receipts(owner) : [] });
       }
     }
+  }
+
+  /**
+   * Answers a drop pick / claim. The claim link or code goes ONLY to this socket and only on completion; the badge
+   * receipt is queued for NEAR first (job badge-<id>-<serial>, to the player's owner id).
+   */
+  private async campReply(ws: WebSocket, a: Att, c: string, d: number, r: CampPickResult) {
+    const { reward, ...rest } = r;
+    if (r.done && r.serial && reward && this.env.MIRROR) {
+      await mirror(this.env).enqueue([
+        { job: `badge-${c}-${r.serial}`, method: 'mint_badge', args: { owner: await ownerOf(this.env, a.pid), campaign_id: c, badge: reward.badge, serial: r.serial } },
+      ]);
+    }
+    const claim = claimOf(reward);
+    send(ws, { t: 'cpicked', c, d, ...rest, ...(r.done && reward ? { badge: reward.badge, ...(claim ? { claim } : {}) } : {}) });
+  }
+
+  /**
+   * a player's own drop progress for 'welcome' (live campaigns only):
+   * { [campaign]: { picks: drop indexes, got, done?, serial?, badge?, claim? } }: claim only where THEY completed
+   */
+  private async campMine(pid: string) {
+    const mine = await economy(this.env).campaignMine(pid);
+    return Object.fromEntries(
+      Object.entries(mine).map(([id, p]) => {
+        const r = p.reward;
+        const claim = claimOf(r);
+        return [id, { picks: p.d, got: p.d.length, ...(p.serial ? { done: true, serial: p.serial, badge: r?.badge, ...(claim ? { claim } : {}) } : {}) }];
+      }),
+    );
+  }
+
+  /** RPC (after a campaign is created or ended): every player here gets the live list */
+  async campaignsChanged(): Promise<number> {
+    if (!isNear(this.env) || !this.env.ECONOMY) return 0;
+    const list = await economy(this.env).listCampaigns(true);
+    this.broadcast({ t: 'camps', list });
+    return list.length;
   }
 
   /** NEAR edition: has this visitor logged in with a NEAR wallet? */
@@ -1078,6 +1187,10 @@ export class Hall extends DurableObject<Env> {
           return;
         }
         const invites = a.pid ? await ledger(this.env).invites(a.pid) : 0;
+        // NEAR: live sponsored drops, and this player's own progress in them (picked drops; serial + claim if completed)
+        const nearCamps = isNear(this.env) && this.env.ECONOMY;
+        const camps = nearCamps ? await economy(this.env).listCampaigns(true) : undefined;
+        const campsMine = nearCamps && a.pid ? await this.campMine(a.pid) : undefined;
         a.hello = true;
         ws.serializeAttachment(a);
         await this.rollDay();
@@ -1092,6 +1205,8 @@ export class Hall extends DurableObject<Env> {
           lanterns: await this.lanterns(),
           chat: this.chatLog.filter((c) => now - c.at < 30 * 60000),
           stats: this.stats(),
+          ...(camps ? { camps } : {}),
+          ...(campsMine ? { campsMine } : {}),
         });
         this.broadcast({ t: 'join', p: pub(a) }, ws);
         if (isNear(this.env) && this.env.ECONOMY && a.pid) {
