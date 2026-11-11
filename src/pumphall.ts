@@ -221,12 +221,12 @@ export function buildPumpHall(c: Ctx) {
     f.fillStyle = grad;
     f.fillRect(0, 0, 128, 128);
     f.fillStyle = '#0c0820';
-    // NEAR edition: Leaf coins (the game's play money), not a token
+    // NEAR edition: plain play coins, not a token
     if (NEAR_BUILD) {
       f.font = '84px system-ui, sans-serif';
       f.textAlign = 'center';
       f.textBaseline = 'middle';
-      f.fillText('🍃', 64, 70);
+      f.fillText('🪙', 64, 70);
     } else for (const [y, dx] of [
       [36, 8],
       [64, -8],

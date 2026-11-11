@@ -59,7 +59,7 @@ const loginAs = async (c) => {
   return c;
 };
 const A = await loginAs(await client(pid('ma'), 0, 60));
-check(A.bonus === 50, 'the first login of an account gives the +50 Leaves bonus', String(A.bonus));
+check(!A.bonus, 'no Leaves bonus on first login (no Leaves in this edition)', String(A.bonus));
 const again = await get(`/api/near/test-link?k=${KEY}&pid=${A.pid}`);
 check(again.bonus === 0, 'logging in again gives no second bonus', JSON.stringify(again));
 check((await trade(A, 'moon_rock', 'buy', 1))?.why?.includes('Market'), 'trading outside the Market is refused');
@@ -68,42 +68,17 @@ check((await trade(A, 'moon_rock', 'buy', 1))?.why?.includes('south-east'), 'tra
 await go(A, MX, MZ - 4);
 const B = await loginAs(await client(pid('mb'), MX + 2, MZ - 2));
 
-// --- buying moves the price up, everyone sees it; the spread is a sink
-const before = (await me(A)).leaves;
-const buy = await trade(A, 'moon_rock', 'buy', 2);
-check(buy?.ok && buy.total >= 2 && buy.balance === before - buy.total, 'A buys 2 Moon Rocks with Leaves', JSON.stringify(buy));
-const seen = await until(B, 'quotes');
-check(!!seen && quote(seen.q, 'moon_rock'), 'B sees the new quotes at once');
-const sell = await trade(A, 'moon_rock', 'sell', 2);
-check(sell?.ok && sell.balance < before, 'buying then selling at once loses Leaves (spread)', JSON.stringify({ before, after: sell?.balance }));
-check((await trade(A, 'moon_rock', 'sell', 5))?.why === 'You do not have that many.', 'cannot sell what you do not have');
-check((await trade(A, 'moon_rock', 'buy', 999))?.ok === false, 'a 999-unit trade is refused');
-
-// --- 30 net buys push the price up; it decays back toward base with no trades
+// --- no Leaves: outside the Cup there is nothing to trade with
+const plain = await trade(A, 'moon_rock', 'buy', 2);
+check(plain?.ok === false && /Market Cup/.test(plain?.why), 'a plain (Leaves) trade is refused: the Market trades in the Cup only', JSON.stringify(plain));
+check((await trade(A, 'moon_rock', 'buy', 999, true))?.ok === false, 'a 999-unit trade is refused');
 const C = await loginAs(await client(pid('mc'), MX, MZ));
-await sitFor(C, 62); // 10 welcome + 60 sit + 2 streak = 72 Leaves
-const q1 = quote((await get('/api/near/market')).quotes, 'moon_rock');
-await trade(C, 'moon_rock', 'buy', 20);
-await trade(C, 'moon_rock', 'buy', 10);
-const q2 = quote((await get('/api/near/market')).quotes, 'moon_rock');
-check(q2.mid > q1.mid, 'net buying raises the mid price', JSON.stringify([q1.mid, q2.mid]));
-await wait(40 * MIN);
-const q3 = quote((await get('/api/near/market')).quotes, 'moon_rock');
-check(q3.mid < q2.mid, 'with no trades the price drifts back toward base', JSON.stringify([q2.mid, q3.mid]));
-
-// --- daily sell cap (60 Leaves to Kettle a day)
-const cBal = (await me(C)).leaves;
-await trade(C, 'moon_collar', 'buy', 1);
-const s1 = await trade(C, 'moon_collar', 'sell', 1);
-await trade(C, 'moon_rock', 'sell', 20);
-await trade(C, 'moon_rock', 'sell', 10);
-const meC = await me(C);
-check((meC.today.market_sell ?? 0) <= 60, 'market sales never pass 60 Leaves a day', JSON.stringify({ sold: meC.today.market_sell, s1, cBal }));
+await sitFor(C, 1);
 
 // --- the Market Cup
 const D = await loginAs(await client(pid('md'), MX, MZ));
 D.send({ t: 'cupJoin' });
-check((await until(D, 'cupJoined'))?.why?.startsWith('Sit for a minute'), 'joining the Cup needs one paid sit minute');
+check((await until(D, 'cupJoined'))?.why?.startsWith('Sit for a minute'), 'joining the Cup needs one full sit minute');
 await go(D, 0, 40);
 D.send({ t: 'cupJoin' });
 check((await until(D, 'cupJoined'))?.why?.includes('Market'), 'joining away from the Market is refused');
@@ -124,14 +99,20 @@ D.send({ t: 'cupJoin' });
 check((await until(D, 'cupJoined'))?.why?.includes('Too many entrants'), 'a 4th entrant from one network address is refused');
 check((await trade(D, 'moon_rock', 'buy', 1, true))?.why === 'Join the Cup first.', 'Cup trades need an entry');
 const cb = await trade(A, 'copium_shroom', 'buy', 5, true);
-check(cb?.ok && cb.chips === 200 - cb.total, 'Cup buy spends chips, not Leaves', JSON.stringify(cb));
+check(cb?.ok && cb.chips === 200 - cb.total, 'Cup buy spends chips', JSON.stringify(cb));
+const seen = await until(B, 'quotes');
+check(!!seen && quote(seen.q, 'copium_shroom'), 'B sees the new quotes at once');
+const q1 = quote((await get('/api/near/market')).quotes, 'moon_rock');
 check((await trade(A, 'copium_shroom', 'sell', 9, true))?.ok === false, 'cannot sell more than you hold in the Cup');
 await trade(B, 'moon_rock', 'buy', 3, true);
+await trade(C, 'moon_rock', 'buy', 10, true);
+const q2 = quote((await get('/api/near/market')).quotes, 'moon_rock');
+check(q2.mid > q1.mid, 'net buying raises the mid price', JSON.stringify([q1.mid, q2.mid]));
 const board = await get(`/api/near/market?pid=${A.pid}`);
 check(board.cup.round === round && board.cup.entrants === 3 && board.cup.me?.rank >= 1, 'live board shows the round, 3 entrants and my rank', JSON.stringify(board.cup));
 check(board.cup.top.every((t) => ![A, B, C].some((c) => c.pid === t.owner) && (/^[0-9a-f]{64}$/.test(t.owner) || t.owner.endsWith('.testnet'))), 'the board shows NEAR accounts, never visitor ids', JSON.stringify(board.cup.top));
 
-// --- settlement after the round ends: Leaves prizes, results hash, commit/settle/trophy jobs
+// --- settlement after the round ends: trophies (no Leaves prizes), results hash, commit/settle/trophy jobs
 const leavesBefore = await Promise.all([A, B, C].map(async (c) => (await me(c)).leaves));
 await wait(Math.max(0, board.cup.end - Date.now()) + 800);
 if (KEY) await get(`/api/near/test-tick?k=${KEY}`);
@@ -140,10 +121,12 @@ const r = await get(`/api/near/round?id=${round}`);
 check(r.status === 'settled' && r.results?.entries?.length === 3, 'the round settles with 3 entries', JSON.stringify({ status: r.status, n: r.results?.entries?.length }));
 check(sha(r.setup) === r.setup_hash, 'sha256(setup) equals the committed setup hash');
 check(sha(JSON.stringify(r.results)) === r.results_hash, 'sha256(results file) equals the results hash');
-check(JSON.stringify(r.results.entries.map((e) => e.prize)) === '[100,60,60]', 'prizes for 3 entrants: 100, 60, 60', JSON.stringify(r.results.entries));
+check(JSON.stringify(r.results.entries.map((e) => e.prize)) === '[0,0,0]', 'no Leaves prizes in the results', JSON.stringify(r.results.entries));
 const leavesAfter = await Promise.all([A, B, C].map(async (c) => (await me(c)).leaves));
 const gained = leavesAfter.map((v, i) => v - leavesBefore[i]).sort((a, b) => b - a);
-check(JSON.stringify(gained) === '[100,60,60]', 'Leaves prizes paid once each', JSON.stringify(gained));
+check(JSON.stringify(gained) === '[0,0,0]', 'nobody is paid Leaves', JSON.stringify(gained));
+const q3 = quote((await get('/api/near/market')).quotes, 'moon_rock');
+check(q3.mid < q2.mid, 'with no trades the price drifts back toward base', JSON.stringify([q2.mid, q3.mid]));
 await wait(2500);
 const methods = (r.chain?.jobs ?? []).map((j) => j.method);
 const r2 = await get(`/api/near/round?id=${round}`);

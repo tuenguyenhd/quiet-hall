@@ -15,7 +15,7 @@ export const BAZAAR_PLACE: PlaceInfo = {
   x: BAZAAR.x,
   z: BAZAAR.z,
   r: BAZAAR.r,
-  hint: "Kettle's stalls: buy and sell what you gather for Leaves, and join the free Market Cup.",
+  hint: "Kettle's stalls: join the free Market Cup, trade on live prices and win trophies.",
   view: [BAZAAR.x - 3, BAZAAR.z - BAZAAR.r - 9],
   look: [BAZAAR.x, BAZAAR.z + 2],
 };
@@ -71,7 +71,7 @@ export function buildBazaar(c: WorldCtx) {
       c.obstacles.push({ x: B.x + sx * 2.6, z: az, r: 0.4 });
     }
     add(mesh(new THREE.BoxGeometry(6.2, 0.3, 0.5), darkWood, 0, 4.05, 0), g);
-    const sign = board(['🛒 Market', 'buy · sell · Market Cup'], 4.4, 1.3);
+    const sign = board(['🛒 Market', 'Market Cup · free play chips'], 4.4, 1.3);
     sign.position.set(0, 3.15, 0);
     add(sign, g);
     for (const sx of [-1, 1]) add(mesh(new THREE.SphereGeometry(0.2, 8, 6), lampM, sx * 2.6, 4.4, 0), g, false, false);
@@ -149,7 +149,7 @@ export function buildBazaar(c: WorldCtx) {
     add(kettle, g);
     add(mesh(new THREE.CylinderGeometry(0.05, 0.09, 0.4, 6), mat('#444a52'), 0.45, 1.45, -0.25), g);
     for (let i = 0; i < 3; i++) add(mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), crateM, -2.6 + (i % 2) * 0.1, 0.3 + (i === 2 ? 0.6 : 0), 0.2 - (i % 2) * 0.7), g);
-    const sign = board(["Kettle's stall", 'tap to buy · sell'], 3, 0.8, '#1f3b33', '#e9fff6');
+    const sign = board(["Kettle's stall", 'tap to play the Cup'], 3, 0.8, '#1f3b33', '#e9fff6');
     sign.position.set(0, 3.25, -0.6);
     sign.rotation.y = Math.PI;
     add(sign, g);
@@ -163,7 +163,7 @@ export function buildBazaar(c: WorldCtx) {
     g.position.set(bx, c.terrain(bx, bz), bz);
     g.rotation.y = Math.PI - 0.35;
     for (const sx of [-1, 1]) add(mesh(new THREE.CylinderGeometry(0.07, 0.08, 1.4, 6), wood, sx * 1.2, 0.7, 0), g);
-    const b = board(['🏆 Market Cup', 'free entry · 200 play chips', 'every 3 h · prizes in Leaves'], 3, 1.5, '#2b2350', '#fff6dc');
+    const b = board(['🏆 Market Cup', 'free entry · 200 play chips', 'every 3 h · trophies on NEAR'], 3, 1.5, '#2b2350', '#fff6dc');
     b.position.y = 2.1;
     add(b, g);
     root.add(g);

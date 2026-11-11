@@ -117,6 +117,12 @@ export class Economy extends DurableObject<EconEnv> {
     } catch {
       /* already there */
     }
+    // has this account ever finished a full sit minute? (the Cup's gate; with no Leaves there is no paid 'sit' row)
+    try {
+      this.sql.exec('ALTER TABLE accts ADD COLUMN sat INTEGER NOT NULL DEFAULT 0');
+    } catch {
+      /* already there */
+    }
   }
 
   // ---------- internals (call only inside transactionSync) ----------
@@ -137,6 +143,8 @@ export class Economy extends DurableObject<EconEnv> {
 
   /** writes one row and moves the balance. Positive deltas respect the pouch cap; returns the delta written. */
   private write(acct: string, delta: number, reason: Reason, ref: string, now: number, day = dayOf(now)): number {
+    // no currency in this edition: nothing is paid or charged, and no row is written
+    if (!this.cfg.currency) return 0;
     if (!Number.isInteger(delta) || delta === 0) return 0;
     const bal = this.balanceOf(acct);
     let d = delta;
@@ -185,6 +193,7 @@ export class Economy extends DurableObject<EconEnv> {
       let paid = 0;
       let streakPaid = 0;
       if (minutes >= this.cfg.minSit && wall > 0) {
+        this.sql.exec('UPDATE accts SET sat = 1 WHERE acct = ?', acct);
         // split at UTC midnights, minutes shared in proportion to wall time in each day
         const parts: { day: string; ms: number }[] = [];
         for (let t = startMs; t < endMs; ) {
@@ -371,7 +380,7 @@ export class Economy extends DurableObject<EconEnv> {
       const now = Date.now();
       this.ensure(acct, now);
       if (!this.has(acct, r.needs)) return { ok: false, why: 'missing' };
-      if (this.balanceOf(acct) < r.fee) return { ok: false, why: `You need ${r.fee} Leaves. A short sit will do it.` };
+      if (this.cfg.currency && this.balanceOf(acct) < r.fee) return { ok: false, why: `You need ${r.fee} Leaves. A short sit will do it.` };
       this.bagTake(acct, r.needs);
       if (!this.bagAdd(acct, r.id, 1)) throw new Error('bag full'); // rolls the whole craft back
       this.write(acct, -r.fee, 'craft_fee', r.id, now);
@@ -464,6 +473,7 @@ export class Economy extends DurableObject<EconEnv> {
       if (now - last < PRICE.tradeGapMin * this.minuteMs) return { ok: false, why: 'too fast' };
       const gap0 = this.gapNow(item, now);
       const { total, gap } = this.walk(item, side, n, gap0);
+      if (!cup && !this.cfg.currency) return { ok: false, why: 'The Market trades in the Market Cup: join a round for free play chips.' };
       if (cup) {
         const r = this.currentRound(now);
         const e = this.sql.exec<{ chips: number }>('SELECT chips FROM cup_entries WHERE round = ? AND acct = ?', r.id, acct).toArray()[0];
@@ -504,14 +514,16 @@ export class Economy extends DurableObject<EconEnv> {
 
   // ---------- the Market Cup ----------
 
-  /** Joins the current round: free, needs one paid sit minute ever, at most 3 entrants per network address. */
+  /** Joins the current round: free, needs one full sit minute ever, at most 3 entrants per network address. */
   async cupJoin(acct: string, ip: string): Promise<{ ok: boolean; why?: string; round?: string; chips?: number; end?: number }> {
     await this.tick();
     const owner = this.linkedAccount(acct) ?? (await ownerId(this.env.OWNER_SECRET || 'dev-only-owner-secret', acct));
     return this.ctx.storage.transactionSync(() => {
       const now = Date.now();
       const r = this.currentRound(now);
-      const sat = this.sql.exec("SELECT 1 FROM rows WHERE acct = ? AND reason = 'sit' AND delta > 0 LIMIT 1", acct).toArray().length;
+      const sat =
+        this.sql.exec('SELECT 1 FROM accts WHERE acct = ? AND sat = 1', acct).toArray().length ||
+        this.sql.exec("SELECT 1 FROM rows WHERE acct = ? AND reason = 'sit' AND delta > 0 LIMIT 1", acct).toArray().length;
       if (!sat) return { ok: false, why: 'Sit for a minute first. The Cup is for people who have sat in the hall.' };
       if (this.sql.exec('SELECT 1 FROM cup_entries WHERE round = ? AND acct = ?', r.id, acct).toArray().length) return { ok: true, round: r.id, end: r.end };
       if (now > r.end - this.joinCloseMs()) return { ok: false, why: 'Joins close 30 minutes before the end. Next round soon.' };
@@ -642,6 +654,8 @@ export class Economy extends DurableObject<EconEnv> {
       const entries = ranked.map((e, i) => {
         let prize = places && i < CUP.prizes.length ? CUP.prizes[i] : 0;
         if (!prize && e.score > CUP.chips) prize = CUP.profitPrize;
+        // no Leaves in this edition: the reward is the trophy (top CUP.trophies), so the results file lists prize 0
+        if (!this.cfg.currency) prize = 0;
         // one prize per player per UTC day: only the part above what they already won today is paid
         const already = this.earnedOn(e.acct, dayOf(now), 'cup_prize');
         const paid = prize > already ? this.write(e.acct, prize - already, 'cup_prize', id, now) : 0;

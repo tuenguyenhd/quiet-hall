@@ -24,6 +24,8 @@ export type Reason =
   | 'market_buy';
 
 export interface EconomyConfig {
+  /** false = no Leaves at all (NEAR edition): nothing pays, crafting is free, the Market trades only in the Cup */
+  currency: boolean;
   /** shortest paying sit, in (game) minutes */
   minSit: number;
   /** daily cap on `sit` Leaves */
@@ -45,10 +47,12 @@ export interface EconomyConfig {
 
 export const ECONOMY: Record<Edition, EconomyConfig> = {
   near: {
+    // no Leaves in this edition: sitting is just sitting, rewards are frens, drip, trophies and sponsor badges
+    currency: false,
     minSit: 1,
     sitCap: 60,
-    starterLeaves: 10,
-    loginBonus: 50,
+    starterLeaves: 0,
+    loginBonus: 0,
     streakStep: 2,
     streakMax: 30,
     caps: { wish: 20, market_sell: 60, world_sit: 20, bell: 15 },
@@ -56,6 +60,7 @@ export const ECONOMY: Record<Edition, EconomyConfig> = {
     hideEndsSitMin: 1,
   },
   seeker: {
+    currency: true,
     minSit: 3,
     sitCap: 60,
     starterLeaves: 0,
@@ -67,6 +72,7 @@ export const ECONOMY: Record<Edition, EconomyConfig> = {
     hideEndsSitMin: 1,
   },
   web3: {
+    currency: true,
     minSit: 3,
     sitCap: 60,
     starterLeaves: 0,

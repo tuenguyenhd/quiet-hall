@@ -13,7 +13,7 @@ export interface LoginResult {
   name?: string;
   pid?: string;
   switched?: boolean;
-  /** Leaves given for this account's first login */
+  /** unused in this edition (no Leaves); kept for the server's reply shape */
   bonus?: number;
   /** the player closed the picker or the wallet, or tapped Cancel */
   cancelled?: boolean;

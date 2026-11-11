@@ -1,4 +1,4 @@
-// NEAR edition: edition gating, sit → Leaves, hidden time, no double pay, daily cap, Mirror queue, audit.
+// NEAR edition: edition gating, sits are timed but pay nothing (no Leaves in this edition), hidden time, no double pay, daily cap, Mirror queue, audit.
 // Design: design/gdd/edition-near.md, design/gdd/leaves-economy.md (Acceptance Criteria).
 //
 // Start the NEAR Worker with a fast clock (1 game minute = 200 ms) and the mirror in mock mode:
@@ -48,15 +48,15 @@ for (const p of ['/api/spots', '/api/tip/order', '/api/verify', '/api/me', '/api
   check((await get(p)).status === 404, `NEAR edition has no ${p}`);
 }
 
-// --- sit pays Leaves (welcome 10 on first visit, streak +2 on the first paying sit of the day)
+// --- no Leaves: no welcome Leaves, a sit is timed (minutes) but pays nothing
 const A = await client(pid('na'));
 await wait(300);
 check(!!(await until(A.msgs, (m) => m.t === 'welcome')), 'welcome received');
 const econ = await until(A.msgs, (m) => m.t === 'econ');
-check(econ?.leaves === 10, 'first visit: 10 welcome Leaves on connect', JSON.stringify(econ));
+check(econ?.leaves === 0, 'first visit: no welcome Leaves', JSON.stringify(econ));
 const r1 = await sit(A, 3 * MIN + 80);
 check(r1?.minutes === 3, 'a 3-minute sit counts 3 minutes', JSON.stringify(r1));
-check(r1?.paid === 3 + 2 && r1?.balance === 15, 'pays 3 + streak 2, balance 15', JSON.stringify(r1));
+check(r1?.paid === 0 && r1?.balance === 0, 'a sit pays nothing (no Leaves, no streak bonus)', JSON.stringify(r1));
 
 // --- under MIN_SIT pays nothing
 const r2 = await sit(A, MIN / 2);
@@ -70,7 +70,7 @@ const r3 = await sit(A, 0, async () => {
   A.send({ t: 'vis', h: false });
   await wait(2 * MIN + 80);
 });
-check(r3?.minutes === 4 && r3?.paid === 4, '~4.8 minutes with 0.8 hidden pays 4, not 5 (and no second streak)', JSON.stringify(r3));
+check(r3?.minutes === 4 && r3?.paid === 0, '~4.8 minutes with 0.8 hidden counts 4, not 5', JSON.stringify(r3));
 
 // --- a long hidden stretch ends the sit at the moment it was hidden
 A.send({ t: 'state', s: 'sit' });
@@ -80,7 +80,7 @@ await wait(1.5 * MIN);
 A.send({ t: 'vis', h: false });
 const ended = await until(A.msgs, (m) => m.t === 'sitEnded');
 const r4 = await until(A.msgs, (m) => m.t === 'leaves');
-check(ended?.why === 'hidden' && r4?.minutes === 2, 'hidden longer than 1 game minute ends the sit; only the visible 2 minutes pay', JSON.stringify(r4));
+check(ended?.why === 'hidden' && r4?.minutes === 2, 'hidden longer than 1 game minute ends the sit; only the visible 2 minutes count', JSON.stringify(r4));
 
 // --- two sessions on one account do not double pay
 const pidB = pid('nb');
@@ -97,15 +97,15 @@ B1.send({ t: 'state', s: 'idle' });
 B2.send({ t: 'state', s: 'idle' });
 const b1 = await until(B1.msgs, (m) => m.t === 'leaves');
 const b2 = await until(B2.msgs, (m) => m.t === 'leaves');
-check((b1?.minutes ?? 0) + (b2?.minutes ?? 0) <= 3, 'two devices sitting together are paid once', JSON.stringify([b1?.minutes, b2?.minutes]));
+check((b1?.minutes ?? 0) + (b2?.minutes ?? 0) <= 3, 'two devices sitting together are counted once', JSON.stringify([b1?.minutes, b2?.minutes]));
 
-// --- daily sit cap (60): a 62-minute sit pays 60 sit Leaves (+ streak)
+// --- a long sit still pays nothing
 const C = await client(pid('nc'));
 await wait(300);
 const rc = await sit(C, 62 * MIN + 80);
-check(rc?.minutes >= 62 && rc?.paid === 60 + 2, 'a 62-minute sit is capped at 60 (+2 streak)', JSON.stringify(rc));
+check(rc?.minutes >= 62 && rc?.paid === 0, 'a 62-minute sit pays nothing', JSON.stringify(rc));
 const rc2 = await sit(C, 3 * MIN + 80);
-check(rc2?.paid === 0, 'after the cap, more sitting pays 0 today', JSON.stringify(rc2));
+check(rc2?.paid === 0 && rc2?.balance === 0, 'more sitting still pays nothing; balance stays 0', JSON.stringify(rc2));
 
 // --- blocked socket messages in the NEAR edition
 A.send({ t: 'lantern', wish: 0 });
@@ -125,7 +125,7 @@ await wait(300);
 await sit(M, 1 * MIN + 80);
 const me = await get(`/api/near/me?pid=${pidM}`);
 check(/^[0-9a-f]{64}$/.test(me.body?.owner ?? ''), 'owner id is a 64-hex implicit account id', me.body?.owner);
-check(me.body?.leaves === 10 + 1 + 2 && me.body?.today?.sit === 1, '/api/near/me shows balance and today', JSON.stringify(me.body));
+check(me.body?.leaves === 0 && !me.body?.today?.sit, '/api/near/me: no Leaves earned', JSON.stringify(me.body));
 const me2 = await get(`/api/near/me?pid=${pidM}`);
 check(me2.body?.owner === me.body?.owner, 'owner id is stable for the same visitor');
 check((await get(`/api/near/test-mint?pid=${pidM}`)).status === 404, 'test hook is closed without the key');
@@ -162,7 +162,7 @@ if (KEY) {
 
 // --- audit: every balance equals its rows; none negative
 const audit = await get('/api/near/audit');
-check(audit.body?.mismatched === 0 && audit.body?.negative === 0 && audit.body?.accounts >= 4, 'audit: balances equal their rows, none negative', JSON.stringify(audit.body));
+check(audit.body?.mismatched === 0 && audit.body?.negative === 0 && audit.body?.accounts >= 4, 'audit: no Leaves rows, none negative', JSON.stringify(audit.body));
 
 for (const c of [A, B1, B2, C, M]) c.ws.close();
 console.log(`\n${ok} passed, ${bad} failed`);

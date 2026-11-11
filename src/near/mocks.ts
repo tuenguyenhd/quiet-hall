@@ -1,6 +1,6 @@
 // "Coming Soon" district (NEAR edition only): small walk-in mock-ups of features that are not built yet,
 // south-west of the courtyard. Each site has a sign with a PREVIEW ribbon; tapping it (or walking up to it)
-// opens an explainer with mock screens filled with SAMPLE DATA. Nothing here reads or writes Leaves, the bag,
+// opens an explainer with mock screens filled with SAMPLE DATA. Nothing here reads or writes the bag,
 // the Cup or the chain. Design: design/gdd/edition-near.md (Preview tier), saga-and-long-term.md (Cabals,
 // events), vault-whisperer-npc.md (Coldwall). The short versions live in ./previews.ts (Lookout telescope).
 import * as THREE from 'three';
@@ -79,7 +79,7 @@ const bar = (pct: number, label: string) => `<div class="near-pbar"><div style="
 const screen = (title: string, html: string) => `<div class="mk-screen"><div class="mk-screen-t">Mock screen · ${esc(title)}</div>${html}</div>`;
 const table = (head: string[], rows: (string | number)[][]) =>
   `<table class="mk-table"><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-const PLAY = 'Leaves and points are play money: no cash value, nothing to buy or cash out.';
+const PLAY = 'Points and play chips have no cash value: nothing to buy or cash out.';
 
 /** explainer tabs per site: [tab label, html]. Every sample name and number below is made up. */
 const TABS: Record<SiteId, [string, string][]> = {
@@ -138,7 +138,7 @@ const TABS: Record<SiteId, [string, string][]> = {
       'Why NEAR',
       `<ul class="near-needs"><li class="have">🏷️ <b>Readable names:</b> the roster shows NEAR account names like <b>kai.near</b>, not long addresses, so you know who is in your Cabal.</li>
       <li class="have">🧾 <b>Receipts:</b> founding a Cabal, joining it and Team Cup results would be written as receipts to members' accounts, the way rescues and crafts are on NEAR testnet today. Anyone can check them.</li>
-      <li class="have">🗳️ <b>Later:</b> Cabal votes (banner, decor, next village project) through a NEAR DAO. Votes only: Leaves stay in the game.</li></ul>`,
+      <li class="have">🗳️ <b>Later:</b> Cabal votes (banner, decor, next village project) through a NEAR DAO. Votes only: no tokens involved.</li></ul>`,
     ],
   ],
   arena: [
@@ -174,9 +174,9 @@ const TABS: Record<SiteId, [string, string][]> = {
         table(
           ['Place', 'Reward'],
           [
-            ['🥇 1st Cabal', '300 🍃 shared + gold trophy'],
-            ['🥈 2nd', '150 🍃 shared + silver trophy'],
-            ['🥉 3rd', '75 🍃 shared + bronze trophy'],
+            ['🥇 1st Cabal', 'gold trophy + Cabal banner'],
+            ['🥈 2nd', 'silver trophy'],
+            ['🥉 3rd', 'bronze trophy'],
             ['Everyone who played', 'Arena stamp in the Rescue Book'],
           ],
         ) + `<p class="small">Free to enter. Trophies are bound to your account (cannot be sold). ${PLAY}</p>`,
@@ -184,20 +184,20 @@ const TABS: Record<SiteId, [string, string][]> = {
     ],
     [
       'Trade Fair',
-      `<p><b>Intents Trade Fair:</b> once a season the Arena turns into a fair. Instead of picking a price, you post what you want, an <i>intent</i> ("sell 5 Moon Rocks for at least 3 🍃 each"), and solvers compete to fill it: Kettle, apprentice bots and Agent Cup agents.</p>
+      `<p><b>Intents Trade Fair:</b> once a season the Arena turns into a fair. Instead of picking a price, you post what you want, an <i>intent</i> ("swap 5 Moon Rocks for at least 2 Copium Shrooms"), and solvers compete to fill it: Kettle, apprentice bots and Agent Cup agents.</p>
       ${screen(
         'Intent board',
         table(
           ['Intent', 'Best offer', ''],
           [
-            ['mira: sell 5 🪨 ≥ 3 🍃', '3.4 🍃 · Kettle', '✓ filled'],
-            ['kai: buy 2 🍄 ≤ 6 🍃', '5.5 🍃 · 🤖 agent', '✓ filled'],
+            ['mira: swap 5 🪨 → ≥ 2 🍄', '3 🍄 · Kettle', '✓ filled'],
+            ['kai: get 2 🍄 for ≤ 6 🧶', '5 🧶 · 🤖 agent', '✓ filled'],
             ['lotus: swap 3 🧶 → 1 📿', '2 solvers bidding', '⏳ 0:42'],
           ],
         ),
       )}
       <ul class="near-needs"><li class="have">🌉 <b>Visitors from other chains:</b> the plan is that people who hold tokens on other chains can come in through <b>NEAR Intents</b>, where solvers handle the cross-chain step, for example to pay for a fixed-price cosmetic with a token they already hold.</li>
-      <li class="have">🍃 The fair's trading itself stays in Leaves, which never leave the game and cannot be bought.</li>
+      <li class="have">🔁 The fair's trading itself is item for item: no currency, nothing to cash out.</li>
       <li class="miss">Not integrated yet: today this board is our own intent-style design, inspired by NEAR Intents.</li></ul>`,
     ],
     [
@@ -219,29 +219,29 @@ const TABS: Record<SiteId, [string, string][]> = {
       screen(
         'Bazaar · 6 mats · 3 open',
         table(
-          ['Seller', 'Offer', 'Price', 'Sitting'],
+          ['Seller', 'Offer', 'Wants', 'Sitting'],
           [
-            ['🧘 mira', '📿 Moon Collar', '38 🍃', '24 min'],
-            ['🧘 mira', '🍄 Copium Shroom ×3', '12 🍃', ''],
-            ['🧘 degen_dao', '🧶 Rug Yarn ×5', '17 🍃', '9 min'],
-            ['🧘 froggo_fan', '🪨 Moon Rock ×10', '14 🍃', '51 min'],
+            ['🧘 mira', '📿 Moon Collar', '🪨×6 🍄×2', '24 min'],
+            ['🧘 mira', '🍄 Copium Shroom ×3', '🧶×4', ''],
+            ['🧘 degen_dao', '🧶 Rug Yarn ×5', '🪨×5', '9 min'],
+            ['🧘 froggo_fan', '🪨 Moon Rock ×10', '🍄×3', '51 min'],
           ],
         ) + `<p class="small">Caravan stall: when 3 or more Cabal members sit side by side, they share one stall of 6 items.</p>`,
       ),
     ],
     [
-      'Buy sheet',
+      'Swap sheet',
       screen(
-        'Buy from mira',
-        `<div class="near-row"><div><b>📿 Moon Collar</b><div class="small">crafted by mira.near · 2 days ago</div></div><b>38 🍃</b></div>
-        <p class="small">Fair band today: 30–45 🍃 (from Kettle's market price). Offers outside the band are not allowed, so Leaves cannot be moved between accounts through silly prices.</p>
-        <button class="mk-off" disabled>Buy · not live yet</button>`,
+        'Swap with mira',
+        `<div class="near-row"><div><b>📿 Moon Collar</b><div class="small">crafted by mira.near · 2 days ago</div></div><b>🪨×6 🍄×2</b></div>
+        <p class="small">Item for item, no currency. A swap must be fair against Kettle's market prices, so silly swaps cannot be used to move things between accounts.</p>
+        <button class="mk-off" disabled>Swap · not live yet</button>`,
       ),
     ],
     [
       'Why NEAR',
       `<ul class="near-needs"><li class="have">🏷️ You see who you buy from: <b>mira.near</b>, a real account, not a guest.</li>
-      <li class="have">🧾 Each sale writes a receipt to both accounts on NEAR testnet, so the history of a crafted item can be checked.</li>
+      <li class="have">🧾 Each swap writes a receipt to both accounts on NEAR testnet, so the history of a crafted item can be checked.</li>
       <li class="have">🔐 Only logged-in NEAR accounts can open a stall, after a few days of play (the trade gate), which keeps bots and throwaway accounts out.</li></ul>`,
     ],
   ],
@@ -249,7 +249,7 @@ const TABS: Record<SiteId, [string, string][]> = {
     [
       'What',
       `<p>At the bottom of the Copium Caves a stone golem named <b>Coldwall</b> guards the old Dev's vault. He is an <b>AI character</b>: each day he wakes with a new mood and a new rule, and you get 3 messages to talk him into opening it.</p>
-      <ul class="near-needs"><li class="have">🗝️ Crack it and you get a relic and your name on the cave wall. No Leaves, no money.</li>
+      <ul class="near-needs"><li class="have">🗝️ Crack it and you get a relic and your name on the cave wall. No money involved.</li>
       <li class="have">🕰️ No prize for being first, so your time zone does not matter.</li>
       <li class="have">🧱 Players can publish their attempts on the wall; winning lines stay hidden for a week.</li></ul>`,
     ],
@@ -543,7 +543,7 @@ export function setupMocks(h: MockHost, show: (html: string) => void, body: () =
     const g = new THREE.Group();
     g.position.set(s.x, y(s.x, s.z), s.z);
     const mats = ['#7a5cf0', '#e5484d', '#4f8a5b', '#ffb347', '#3f7f8c', '#b892ff'];
-    const offers = ['📿 38 🍃', '', '🧶×5 17 🍃', '', '🪨×10 14 🍃', ''];
+    const offers = ['📿 ⇄ 🪨×6', '', '🧶×5 ⇄ 🪨×5', '', '🪨×10 ⇄ 🍄×3', ''];
     mats.forEach((c, i) => {
       const mx = -8 + i * 3.2;
       add(mesh(new THREE.BoxGeometry(1.7, 0.06, 1.2), mat(c), mx, 0.05, 0), g, false);

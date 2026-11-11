@@ -53,7 +53,7 @@ export interface Env {
   WORLD_SIT?: string;
   /** 'seeker' (default), 'near' or 'web3'. design/gdd/edition-*.md */
   EDITION?: string;
-  /** NEAR edition: Leaves + bag (worker/economy.ts) and the only chain writer (worker/mirror.ts) */
+  /** NEAR edition: the bag, frens, the Market Cup (worker/economy.ts; no Leaves in this edition) and the only chain writer (worker/mirror.ts) */
   ECONOMY?: DurableObjectNamespace<Economy>;
   MIRROR?: DurableObjectNamespace<Mirror>;
   /** test hook: one "game minute" in ms (default 60000) */
@@ -592,7 +592,7 @@ export class Hall extends DurableObject<Env> {
     }
   }
 
-  /** NEAR edition: Meme Valley actions. Positions and timing are checked here, items and Leaves in the Economy store. */
+  /** NEAR edition: Meme Valley actions. Positions and timing are checked here, items in the Economy store. */
   private async valley(ws: WebSocket, a: Att, m: Record<string, unknown>, now: number) {
     const E = economy(this.env);
     const minute = minuteMs(this.env.MINUTE_MS);
@@ -763,7 +763,7 @@ export class Hall extends DurableObject<Env> {
   }
 
   /**
-   * A sit ended at `end` (server clock). Updates hall stats; in the NEAR edition also pays Leaves for it.
+   * A sit ended at `end` (server clock). Updates hall stats; the NEAR edition pays nothing for it (no Leaves).
    * The caller sets a.s afterwards. `ws` is null when the socket already closed.
    */
   private async endSit(ws: WebSocket | null, a: Att, end: number) {

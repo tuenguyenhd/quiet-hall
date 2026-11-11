@@ -156,7 +156,7 @@ export function setupQuest(h: QuestHost) {
     const s4 = done > 0 ? 'done' : 'todo';
     const g = target();
     h.body().innerHTML = `${h.drops?.sheet() ?? ''}<h2>🐾 Lost frens of Meme Valley</h2>
-      <p class="small q-lead">Pets aren't sold here. Two frens are lost in Meme Valley: help one home and it follows you as your pet. +10 🍃 each.</p>
+      <p class="small q-lead">Pets aren't sold here. Two frens are lost in Meme Valley: help one home and it follows you as your pet.</p>
       <div class="near-pbar"><div style="width:${(done / FRENS.length) * 100}%"></div><span>${done}/${FRENS.length} frens rescued</span></div>
       ${allDone() ? '' : `<p class="q-next"><b>Next:</b> ${esc(n.long)}</p>${n.go ? `<button class="primary" id="q-go">${esc(n.go)} →</button>` : ''}`}
       <ol class="q-steps">

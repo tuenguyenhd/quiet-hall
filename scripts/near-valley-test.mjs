@@ -70,8 +70,8 @@ await wait(MIN + 100);
 A.send({ t: 'wishDone' });
 const ra = await until(A, 'rescued');
 const rb = await until(B, 'rescued');
-check(ra?.first && ra.serial >= 1 && ra.paid === 10 && ra.helped === 1, 'A rescues Shibby: first, serial, +10 Leaves, helped 1', JSON.stringify(ra));
-check(rb?.co && rb.first && rb.serial === ra.serial + 1 && rb.paid === 10, 'B is co-rescued: own serial, +10, no materials', JSON.stringify(rb));
+check(ra?.first && ra.serial >= 1 && ra.paid === 0 && ra.helped === 1, 'A rescues Shibby: first, serial, no Leaves, helped 1', JSON.stringify(ra));
+check(rb?.co && rb.first && rb.serial === ra.serial + 1 && rb.paid === 0, 'B is co-rescued: own serial, no materials', JSON.stringify(rb));
 const meA = await me(A);
 check(meA.bag?.moon_rock === 1, 'A used 2 of 3 Moon Rocks', JSON.stringify(meA.bag));
 const meB = await me(B);
@@ -96,7 +96,7 @@ check(cancelled?.why === 'stood up' && (await me(C)).bag?.moon_rock === 2, 'stan
 C.send({ t: 'grant', fren: 'froggo' });
 check((await until(C, 'wish'))?.why === 'too far', 'granting a fren 17 m away is refused');
 
-// --- crafting a Moon Collar (3 Moon Rock + 1 Rug Yarn + 10 Leaves) at the workbench
+// --- crafting a Moon Collar (3 Moon Rock + 1 Rug Yarn, no fee) at the workbench
 await go(A, 81, -72);
 await pick(A, 'gate-rock-2');
 await pick(A, 'gate-rock-2');
@@ -109,7 +109,7 @@ await go(A, 80, -78);
 const before = (await me(A)).leaves;
 A.send({ t: 'craft', r: 'moon_collar' });
 const cr = await until(A, 'crafted');
-check(cr?.ok && cr.kind === 'moon_collar' && cr.serial >= 1 && cr.balance === before - 10, 'Moon Collar crafted, 10 Leaves fee', JSON.stringify(cr));
+check(cr?.ok && cr.kind === 'moon_collar' && cr.serial >= 1 && cr.balance === before && before === 0, 'Moon Collar crafted, no fee (no Leaves)', JSON.stringify(cr));
 const meA2 = await me(A);
 check(meA2.bag?.moon_collar === 1 && !meA2.bag?.moon_rock && !meA2.bag?.rug_yarn, 'materials consumed, collar in the bag', JSON.stringify(meA2.bag));
 A.send({ t: 'craft', r: 'moon_collar' });

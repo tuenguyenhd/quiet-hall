@@ -1,6 +1,6 @@
 # Quiet Hall × NEAR: Meme Valley
 
-**A calm 3D world where your stillness powers the economy.** Sit with strangers to earn Leaves, rescue lost meme frens together in Meme Valley, trade in a market whose prices are moved only by players, and compete in a free 3-hour Market Cup whose fairness anyone can check on NEAR. Nobody needs a wallet.
+**A calm 3D world with no currency to grind.** Sit with strangers just to sit, rescue lost meme frens together in Meme Valley, trade in a market whose prices are moved only by players, and compete in a free 3-hour Market Cup whose fairness anyone can check on NEAR. Nobody needs a wallet.
 
 - **Track:** Games With Real Economies
 - **Live demo:** https://quiet-hall-near.ted-233.workers.dev
@@ -12,9 +12,9 @@
 1. **Sit.** Open the link, tap a cushion, breathe. Every minute you sit (server-timed; hidden time doesn't count) earns 1 Leaf.
 2. **Rescue a fren together.** Follow the lanterns to Meme Valley. Tap Moon Rocks to gather (each player has their own stock, so nobody can take yours). Grant Shibby's wish and sit beside him for a minute: **everyone sitting beside him is rescued too.** He follows you home.
 3. **Craft.** Make a Moon Collar at the workbench.
-4. **Trade.** The Market, its own square south-east of the courtyard (PumpHall is up/down and duels only): prices move with every trade anyone makes (mid = base·e^(k·gap), 10% spread, decays back to base). The Market buys up to 60 Leaves' worth from you a day.
+4. **Trade.** The Market, its own square south-east of the courtyard (PumpHall is up/down and duels only): prices move with every trade anyone makes (mid = base·e^(k·gap), 10% spread, decays back to base). Trading happens in the Market Cup's free play chips: there is no in-game currency.
 5. **Call it.** PumpHall's big board runs live Bitcoin and NEAR prices (Coinbase public candles): guess up or down for the next round, or bump into someone and duel. Points and a leaderboard only, no money.
-6. **Compete.** The Market Cup: every 3 hours, join free with 200 play chips, trade the same live market, top 10 win Leaves.
+6. **Compete.** The Market Cup: every 3 hours, join free with 200 play chips, trade the same live market, the top 3 win trophies recorded on NEAR.
 7. **Look ahead.** The telescope at the Lookout shows six **Preview** screens (sample data, clearly labelled): Cabal Hall, Sitting Bazaar, Whale Order, Calm the FUD Golem, trade feed, Agent Cup.
 
 ## Where NEAR is used
@@ -33,7 +33,7 @@ node scripts/verify-round.mjs <demo-url> <roundId>
 ```
 It recomputes both hashes from what the game published and compares them with the contract's own `round()` view.
 
-Off-chain on purpose: Leaves, the bag, Cup chips and trades. Leaves are play money with no cash value; putting them on-chain would give them a price.
+Off-chain on purpose: the bag, Cup chips and trades. There is no in-game currency (no Leaves in this edition): rewards are frens, drip, trophies and sponsor badges, all bound receipts.
 
 ## Honest security statement
 
@@ -42,7 +42,7 @@ The game server (a Cloudflare Worker) holds the game account's key and is the tr
 ## How it is built
 
 - **Client:** Vite + Three.js (one-thumb, phone-first). NEAR UI in `src/near/`; valley and market as data in `src/valley.ts`, `src/market.ts`, `src/economy.ts`.
-- **Server:** Cloudflare Worker + Durable Objects: `Hall` (live presence, server-timed sits, reach checks), `Economy` (Leaves + bag + market + Cup in one SQLite store, every change one transaction with an audit row), `Mirror` (the only chain writer: one transaction in flight, batched calls, one-use job ids, retries, RPC fallbacks; a failing action parks only its own job).
+- **Server:** Cloudflare Worker + Durable Objects: `Hall` (live presence, server-timed sits, reach checks), `Economy` (bag + market + Cup + sponsored drops in one SQLite store, every change one transaction with an audit row), `Mirror` (the only chain writer: one transaction in flight, batched calls, one-use job ids, retries, RPC fallbacks; a failing action parks only its own job).
 - **Contract:** Rust, `near-sdk` 5.30 + `near-contract-standards` (NEP-171), in `contracts/items/` (26 unit tests).
 - **Chain access:** `near-api-js` 7 signing inside the Workers runtime; FastNEAR testnet RPC.
 
@@ -71,15 +71,15 @@ From a fresh clone (no secrets) 72 checks run and pass (economy 23, valley 23, m
 ## What existed before the hackathon, and what was built for it
 
 - **Before (first commit 2026-11-09):** Quiet Hall, a shared meditation world: the hall, sitting, presence, chat, pets, blessings, and its Solana features (wallet sign-in, tips, collectibles, PumpHall predictions).
-- **Built in the window, on branch `near-hackathon`:** everything NEAR: the items contract, the Mirror, the Economy store (Leaves, bag, market, Cup), Meme Valley (gathering, wishes with co-rescue, crafting), the Living Market, the Market Cup with on-chain commit/settle, the NEAR client UI and previews, the verify script, all NEAR tests. `git log main..near-hackathon` shows the diff.
+- **Built in the window, on branch `near-hackathon`:** everything NEAR: the items contract, the Mirror, the Economy store (bag, market, Cup), Meme Valley (gathering, wishes with co-rescue, crafting), the Living Market, the Market Cup with on-chain commit/settle, the NEAR client UI and previews, the verify script, all NEAR tests. `git log main..near-hackathon` shows the diff.
 - **AI tools:** built with Claude Code (Anthropic) as a coding assistant. Libraries: three.js, near-api-js, near-sdk-rs, near-contract-standards, @noble/curves, @noble/hashes. Fren models are CC0 (Quaternius).
 
 ## Live, Preview, Roadmap
 
 | Tier | |
 |---|---|
-| **Live** | Sit → Leaves · co-rescue · personal-stock gathering · crafting · the Living Market · Market Cup · NEP-171 receipts · hourly price posts · Cup commit/settle · trophies · verify script |
+| **Live** | Server-timed sits · co-rescue · personal-stock gathering · crafting · the Living Market · Market Cup · NEP-171 receipts · hourly price posts · Cup commit/settle · trophies · verify script |
 | **Preview** (sample data, labelled) | Cabal Hall · Sitting Bazaar · Whale Order · Calm the FUD Golem · trade feed and trader card · Agent Cup |
 | **Roadmap** | NEAR Auth social login · OutLayer-proven Cup scoring · AI characters (a market trader you can haggle with, the Vault guard) with limited function-call keys · Shade Agents in an Agent Cup · receipt roots (one Merkle root an hour, mint on claim) · valley shards and regional markets · NEAR Intents for "pay with any token" cosmetics in the other editions |
 
-Never planned: a token, an airdrop, paid odds, or cashing out Leaves.
+Never planned: a token, an airdrop, paid odds, or an in-game currency to cash out.

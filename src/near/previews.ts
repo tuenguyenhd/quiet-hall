@@ -1,5 +1,5 @@
 // Preview screens behind the Lookout telescope (edition-near.md, "Three tiers: Live, Preview, Roadmap").
-// SAMPLE DATA ONLY. Nothing here reads or writes Leaves, the bag, the Cup or the chain.
+// SAMPLE DATA ONLY. Nothing here reads or writes the bag, the Cup or the chain.
 // Every screen is shown under a "Preview: sample data" banner by the caller.
 
 const bar = (pct: number, label: string) =>
@@ -20,14 +20,14 @@ export const PREVIEWS: { emoji: string; title: string; tag: string; html: string
     title: 'Sitting Bazaar',
     tag: 'player market',
     html: `<p class="small">Sit on a market mat and your offers float above you while you meditate. Stand up and your stall closes. Buyers browse like a night market.</p>
-      <ul class="near-needs"><li class="have">🧘 <b>mira</b> is sitting · 📿 Moon Collar <b>38 🍃</b> · 🍄 ×3 <b>12 🍃</b></li><li class="have">🧘 <b>degen_dao</b> is sitting · 🧶 Rug Yarn ×5 <b>17 🍃</b></li><li class="have">🧘 <b>froggo_fan</b> is sitting · 🪨 Moon Rock ×10 <b>14 🍃</b></li></ul>
-      <p class="small">Sellers keep earning sit Leaves. Prices stay within a fair band, so Leaves cannot be passed between accounts.</p>`,
+      <ul class="near-needs"><li class="have">🧘 <b>mira</b> is sitting · 📿 Moon Collar <b>⇄ 🪨×6 🍄×2</b> · 🍄 ×3 <b>⇄ 🧶×4</b></li><li class="have">🧘 <b>degen_dao</b> is sitting · 🧶 Rug Yarn ×5 <b>⇄ 🪨×5</b></li><li class="have">🧘 <b>froggo_fan</b> is sitting · 🪨 Moon Rock ×10 <b>⇄ 🍄×3</b></li></ul>
+      <p class="small">Item for item, no currency. Swaps must be fair against Kettle's prices.</p>`,
   },
   {
     emoji: '🐋',
     title: 'Whale Order',
     tag: 'community event',
-    html: `<p class="small">The Market posts one giant order. Everyone chips in; if it fills, every contributor gets a share of a fixed Leaves pool and a trophy.</p>
+    html: `<p class="small">The Market posts one giant order. Everyone chips in; if it fills, every contributor gets a trophy and the top Cabal a banner.</p>
       <div class="near-row"><div><b>2,000 Moon Rocks in 48 hours</b><div class="small">31 h left</div></div><span>🐋</span></div>
       ${bar(64, '1,284 / 2,000')}
       <ol class="near-top"><li>☾ The Quiet Apes <b>312</b></li><li>🌿 Copium Club <b>207</b></li><li>🧘 solo sitters <b>765</b></li></ol>`,

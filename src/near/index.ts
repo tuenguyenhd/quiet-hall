@@ -1,4 +1,4 @@
-// NEAR edition client: Meme Valley, Leaves, Kettle's Living Market, the Market Cup, the Rescue Book with NEAR
+// NEAR edition client: Meme Valley (no Leaves currency), Kettle's Living Market, the Market Cup, the Rescue Book with NEAR
 // receipts, and the labelled preview screens. Design: design/gdd/edition-near.md, meme-valley.md.
 // Only loaded when built with VITE_EDITION=near. Everything here talks to the server over the hall socket
 // (pick, grant, wishDone, craft, book, trade, cupJoin) and reads /api/near/* for boards.
@@ -115,7 +115,8 @@ export function setupNear(h: NearHost) {
   let pending: { kind: 'node' | 'fren' | 'bench' | 'kettle'; id: string; at: THREE.Vector3; reach: number } | null = null;
   let wish: { fren: string; until: number; sent: boolean } | null = null;
   let tradeQty = 1;
-  let cupMode = false;
+  /** no Leaves in this edition: the Market trades only in the Market Cup's play chips */
+  const cupMode = true;
   let cupState: { round: string; end: number; entrants: number; top: { owner: string; score: number }[]; me?: { chips: number; bag: Record<string, number>; score: number; rank: number } } | null =
     null;
   let firstSitDone = econ.frens.length > 0;
@@ -124,7 +125,6 @@ export function setupNear(h: NearHost) {
   const bar = document.createElement('div');
   bar.id = 'near-bar';
   bar.innerHTML = `
-    <button class="pill" id="near-leaves" title="Leaves: earned by sitting. Play money, no cash value.">🍃 <b>0</b></button>
     <button class="pill" id="near-bag" title="Your bag">🎒</button>
     <button class="pill" id="near-book" title="Rescue Book">📖</button>
     <button class="pill" id="near-market" title="Market and Market Cup">🛒</button>
@@ -149,7 +149,6 @@ export function setupNear(h: NearHost) {
   const isOpen = (kind: string) => !overlay.classList.contains('hidden') && body().dataset.kind === kind;
 
   function renderBar() {
-    $('near-leaves').querySelector('b')!.textContent = String(econ.leaves);
     const lg = $('near-login');
     const addr = econ.near ? (/^[0-9a-f]{64}$/.test(econ.near) ? short(econ.near) : econ.near.replace(/\.(testnet|near)$/, '')) : '';
     // the hall button shows the name they chose; the welcome card says which account it is
@@ -340,7 +339,7 @@ export function setupNear(h: NearHost) {
     const helped = econ.frens.find((x) => x.fren === id);
     show(`<div data-kind="wish"></div><h2>${esc(f.name)}</h2><p class="small">“${esc(f.line)}”</p>
       <ul class="near-needs">${need(f.wish)}<li>🧘 sit beside ${esc(f.name)} for ${f.sitMin} min</li></ul>
-      ${helped ? `<p class="small">You rescued ${esc(f.name)} before (#${helped.serial}). Helping again gives hearts and Leaves.</p>` : ''}
+      ${helped ? `<p class="small">You rescued ${esc(f.name)} before (#${helped.serial}). Helping again gives them hearts.</p>` : ''}
       <p class="small">Anyone sitting beside ${esc(f.name)} when the wish is granted is rescued too.</p>
       <button class="primary" id="near-grant">Grant the wish</button>
       <button class="ghost" id="near-sitby">Just sit beside (co-rescue)</button>`);
@@ -358,7 +357,7 @@ export function setupNear(h: NearHost) {
   function openBench() {
     const r = RECIPES[0];
     show(`<h2>🔨 Workbench</h2><p class="small">Craft drip for your frens. Every craft gets a receipt on NEAR.</p>
-      <div class="near-row"><div><b>${esc(r.name)}</b><ul class="near-needs">${need(r.needs)}<li>🍃 ${r.fee} Leaves</li></ul></div>
+      <div class="near-row"><div><b>${esc(r.name)}</b><ul class="near-needs">${need(r.needs)}</ul></div>
       <button class="primary" id="near-craft">Craft</button></div>`);
     body().dataset.kind = 'bench';
     $('near-craft').addEventListener('click', () => h.send({ t: 'craft', r: r.id }));
@@ -366,8 +365,7 @@ export function setupNear(h: NearHost) {
   function openBag() {
     const items = Object.entries(econ.bag).filter(([, n]) => n > 0);
     show(`<h2>🎒 Bag</h2>${items.length ? `<ul class="near-needs">${items.map(([k, n]) => `<li class="have">${itemLabel(k)} <b>${n}</b></li>`).join('')}</ul>` : `<p class="small">Empty. Tap rocks, yarn and shrooms in Meme Valley (north-east, past the Tea House). Lost frens there want them, and a rescued fren becomes your pet.</p><button class="ghost" data-quest>🐾 How to get a pet: the Meme Valley quest</button>`}
-      <p class="small">🍃 ${econ.leaves} Leaves · today: ${econ.today.sit ?? 0} from sitting, ${econ.today.market_sell ?? 0} from the Market, ${econ.today.wish ?? 0} from wishes</p>
-      <p class="near-foot">Leaves are play money. No cash value.</p>`);
+      <p class="near-foot">What you gather is for lost frens' wishes and the Workbench.</p>`);
     body().dataset.kind = 'bag';
     quest.wire(body());
   }
@@ -443,25 +441,22 @@ export function setupNear(h: NearHost) {
     const top = (cup?.top ?? []).map((t) => `<li><code>${esc(short(t.owner))}</code> <b>${t.score}</b></li>`).join('');
     const leftTxt = left > 3600000 ? `${Math.floor(left / 3600000)} h ${Math.floor((left % 3600000) / 60000)} min` : mmss(left);
     body().innerHTML = `<h2>🛒 Market</h2>
-      ${econ.near ? '' : `<button id="near-market-login" class="near-login-btn near-lock">🔒 <span>Log in with NEAR to buy and sell · +${LOGIN_BONUS} 🍃</span></button>`}
-      <div class="chips near-mode"><button data-mode="leaves" class="${cupMode ? '' : 'on'}">🍃 Leaves (${econ.leaves})</button><button data-mode="cup" class="${cupMode ? 'on' : ''}">🏆 Cup${inCup ? ` (${cup!.me!.chips} chips)` : ''}</button></div>
-      <div class="chips near-qty">${[1, 5, 10].map((n) => `<button data-qty="${n}" class="${tradeQty === n ? 'on' : ''}">×${n}</button>`).join('')}</div>
-      ${cupMode && !inCup ? `<p class="small">This Market Cup round ends in ${leftTxt} · ${cup?.entrants ?? 0} entrants. Free: 200 play chips, prizes in Leaves.</p><button class="primary" id="near-cup-join">Join this round</button>` : rows}
+      ${econ.near ? '' : `<button id="near-market-login" class="near-login-btn near-lock">🔒 <span>Log in with NEAR to play the Market Cup</span></button>`}
+      <p class="small">🏆 <b>Market Cup</b>${inCup ? ` · ${cup!.me!.chips} chips` : ''}: everyone starts a round with the same free play chips; the best traders when it ends win trophies recorded on NEAR.</p>
+      ${inCup ? `<div class="chips near-qty">${[1, 5, 10].map((n) => `<button data-qty="${n}" class="${tradeQty === n ? 'on' : ''}">×${n}</button>`).join('')}</div>` : ''}
+      ${cupMode && !inCup ? `<p class="small">This Market Cup round ends in ${leftTxt} · ${cup?.entrants ?? 0} entrants. Free: ${CUP.chips} play chips, trophies for the top ${CUP.trophies}.</p><button class="primary" id="near-cup-join">Join this round</button>` : rows}
       ${cupMode ? `<div class="label">Live top 10 ${inCup ? `· you: #${cup!.me!.rank}, score ${cup!.me!.score}` : ''}</div>${top ? `<ol class="near-top">${top}</ol>` : '<p class="small">No entrants yet: be the first.</p>'}
-        <p class="small">Each round is committed on NEAR before it starts and settled after it ends, so anyone can check it.</p>` : `<p class="small">Prices move with every player's trades. The Market buys up to 60 Leaves' worth from you a day (today: ${econ.today.market_sell ?? 0}).</p>`}
+        <p class="small">Prices move with every player's trades. Each round is committed on NEAR before it starts and settled after it ends, so anyone can check it.</p>` : ''}
       <p class="near-foot">Play money. No cash value. Free to enter.</p>`;
     body()
       .querySelectorAll<HTMLButtonElement>('button[data-side]')
       .forEach((b) =>
-        b.addEventListener('click', () => (econ.near ? h.send({ t: 'trade', item: b.dataset.item, side: b.dataset.side, n: tradeQty, cup: cupMode }) : openLoginPerks('Buying and selling needs a login'))),
+        b.addEventListener('click', () => (econ.near ? h.send({ t: 'trade', item: b.dataset.item, side: b.dataset.side, n: tradeQty, cup: cupMode }) : openLoginPerks('The Market Cup needs a login'))),
       );
-    document.getElementById('near-market-login')?.addEventListener('click', () => openLoginPerks('Buying and selling needs a login'));
+    document.getElementById('near-market-login')?.addEventListener('click', () => openLoginPerks('The Market Cup needs a login'));
     body()
       .querySelectorAll<HTMLButtonElement>('button[data-qty]')
       .forEach((b) => b.addEventListener('click', () => ((tradeQty = Number(b.dataset.qty)), renderMarket(hist))));
-    body()
-      .querySelectorAll<HTMLButtonElement>('button[data-mode]')
-      .forEach((b) => b.addEventListener('click', () => ((cupMode = b.dataset.mode === 'cup'), renderMarket(hist))));
     document.getElementById('near-cup-join')?.addEventListener('click', () => (econ.near ? h.send({ t: 'cupJoin' }) : openLoginPerks('The Market Cup needs a login')));
   }
   function openPreviews() {
@@ -482,19 +477,18 @@ export function setupNear(h: NearHost) {
 
   function showLoggedIn() {
     show(`<h2>✓ Logged in</h2><p class="small">You are <b>${esc(econ.near ?? '')}</b>.</p>
-      <ul class="near-needs"><li class="have">Your rescues, crafts and Cup trophies are recorded to this account (NEAR testnet receipts).</li><li class="have">Log in on another phone with the same wallet and your Leaves, bag and frens come with you.</li><li class="have">You show as <b>${esc(econ.nick || econ.near || '')}</b> in the hall and on the boards (type <code>/name</code> in chat to change it).</li></ul>
+      <ul class="near-needs"><li class="have">Your rescues, crafts and Cup trophies are recorded to this account (NEAR testnet receipts).</li><li class="have">Log in on another phone with the same wallet and your bag, frens and badges come with you.</li><li class="have">You show as <b>${esc(econ.nick || econ.near || '')}</b> in the hall and on the boards (type <code>/name</code> in chat to change it).</li></ul>
       <button id="near-logout" class="ghost">Log out</button>
       <p class="near-foot">Logging in signed a message only: no transaction, no fee, nothing moved. Log out and this phone is a guest again; log back in with the same wallet and everything comes back.</p>`);
     body().dataset.kind = 'login';
     $('near-logout').addEventListener('click', logout);
   }
   /** what logging in unlocks: shown when a guest reaches for one of these, and on the welcome card */
-  const LOGIN_BONUS = 50;
   const PERKS = [
-    `🍃 <b>+${LOGIN_BONUS} Leaves</b> the first time you log in`,
     '📈 Play PumpHall: Bitcoin and NEAR up/down, duels, your history',
-    '🛒 Buy and sell at the Market, and enter the Market Cup',
-    '📱 Keep your Leaves, bag and frens on any phone',
+    '🏆 Enter the Market Cup and win trophies',
+    '🎁 Claim sponsor rewards from drops you collect',
+    '📱 Keep your bag, frens and badges on any phone',
     '🏷️ Your NEAR name in the hall and on the boards',
   ];
   /** a guest tried something that needs a login: say what it unlocks and offer the button */
@@ -588,7 +582,7 @@ export function setupNear(h: NearHost) {
       // they logged in from the welcome card or in the hall: go straight (back) into the hall
       justLoggedIn = true;
       // after the hall's own "You are now …" greeting, so it is not overwritten
-      setTimeout(() => h.toast(j.bonus > 0 ? `Logged in as ${j.name} ✓ · +${j.bonus} 🍃 welcome bonus` : `Logged in as ${j.name} ✓`, 5000), 4000);
+      setTimeout(() => h.toast(`Logged in as ${j.name} ✓`, 5000), 4000);
     }
   } catch {
     /* storage blocked */
@@ -602,7 +596,7 @@ export function setupNear(h: NearHost) {
       box.id = 'near-login-welcome-box';
       box.innerHTML = `<button id="near-login-welcome" class="near-login-btn">${nearIcon(20)}<span>Log in with NEAR</span></button>
         <p id="near-login-welcome-done" class="near-login-done"></p>
-        <p class="small near-login-note">+${LOGIN_BONUS} 🍃 bonus · play PumpHall and the Market · keep progress on any phone · <a href="#" id="near-login-testnet">testnet account?</a></p>`;
+        <p class="small near-login-note">Play PumpHall and the Market Cup · claim sponsor drops · keep progress on any phone · <a href="#" id="near-login-testnet">testnet account?</a></p>`;
       lead.after(box);
 
       // logged in: one short step, a name (an auto degen name you can keep) and Enter
@@ -760,7 +754,6 @@ export function setupNear(h: NearHost) {
     pending = { kind: 'kettle', id: 'kettle', at: new THREE.Vector3(KETTLE.x, 0, KETTLE.z), reach: TRADE_ZONE.r - 2 };
     h.walkTo(new THREE.Vector3(KETTLE.x, 0, KETTLE.z - 3));
   });
-  $('near-leaves').addEventListener('click', openBag);
 
   // phones: hidden time does not count toward a sit
   document.addEventListener('visibilitychange', () => h.send({ t: 'vis', h: document.visibilityState === 'hidden' }));
@@ -785,9 +778,6 @@ export function setupNear(h: NearHost) {
         renderBar();
         return;
       case 'leaves': {
-        econ.leaves = Number(m.balance) || econ.leaves;
-        renderBar();
-        if (Number(m.paid) > 0) h.toast(`+${m.paid} 🍃 Leaves for sitting`, 3000);
         if (!firstSitDone && econ.frens.length === 0) {
           firstSitDone = true;
           syncTrail();
@@ -831,14 +821,12 @@ export function setupNear(h: NearHost) {
       case 'rescued': {
         wish = null;
         const f = FRENS.find((x) => x.id === m.fren)!;
-        econ.leaves += Number(m.paid) || 0;
-        renderBar();
         if (m.first) {
           econ.frens.push({ fren: f.id, serial: Number(m.serial), rescues: 1 });
           syncTrail();
           h.setPet(f.pet);
-          h.toast(`${f.name} #${m.serial} ${m.co ? 'was rescued with you' : 'follows you home'} ✨ +${m.paid} 🍃 · recorded on NEAR`, 6000);
-        } else h.toast(`${f.name} is happy to see you again ❤️ +${m.paid} 🍃`, 4000);
+          h.toast(`${f.name} #${m.serial} ${m.co ? 'was rescued with you' : 'follows you home'} ✨ · recorded on NEAR`, 6000);
+        } else h.toast(`${f.name} is happy to see you again ❤️`, 4000);
         if (m.helped) h.toast(`You helped ${m.helped} other${Number(m.helped) === 1 ? '' : 's'} rescue ${f.name} 🤝`, 4500);
         return;
       }
@@ -849,7 +837,6 @@ export function setupNear(h: NearHost) {
       }
       case 'crafted': {
         if (!m.ok) return h.toast(m.why === 'missing' ? 'Missing materials for that recipe.' : String(m.why), 3500);
-        econ.leaves = Number(m.balance);
         const r = RECIPES.find((x) => x.id === m.kind)!;
         for (const [k, n] of Object.entries(r.needs)) econ.bag[k] = Math.max(0, (econ.bag[k] ?? 0) - (n ?? 0));
         econ.bag[r.id] = (econ.bag[r.id] ?? 0) + 1;
@@ -863,7 +850,7 @@ export function setupNear(h: NearHost) {
         if (isOpen('book')) renderBook(m);
         return;
       case 'traded': {
-        if (!m.ok && m.login) return openLoginPerks('Buying and selling needs a login');
+        if (!m.ok && m.login) return openLoginPerks('The Market Cup needs a login');
         if (!m.ok) return h.toast(String(m.why), 3000);
         if (m.quotes) quotes = m.quotes as Quote[];
         const k = String(m.item);
@@ -871,13 +858,8 @@ export function setupNear(h: NearHost) {
         if (m.cup && cupState?.me) {
           cupState.me.chips = Number(m.chips);
           cupState.me.bag[k] = (cupState.me.bag[k] ?? 0) + (m.side === 'buy' ? n : -n);
-        } else {
-          econ.leaves = Number(m.balance);
-          econ.bag[k] = (econ.bag[k] ?? 0) + (m.side === 'buy' ? n : -n);
-          if (m.side === 'sell') econ.today.market_sell = (econ.today.market_sell ?? 0) + Number(m.total);
         }
-        renderBar();
-        h.toast(`${m.side === 'buy' ? 'Bought' : 'Sold'} ${n} ${itemLabel(k)} for ${m.total} ${m.cup ? 'chips' : '🍃'}`, 2200);
+        h.toast(`${m.side === 'buy' ? 'Bought' : 'Sold'} ${n} ${itemLabel(k)} for ${m.total} chips`, 2200);
         void loadMarket().then(renderMarket);
         return;
       }
@@ -893,7 +875,6 @@ export function setupNear(h: NearHost) {
         if (!m.ok && m.login) return openLoginPerks('The Market Cup needs a login');
         if (!m.ok) return h.toast(String(m.why), 4500);
         h.toast(`You're in the Market Cup with ${CUP.chips} chips. Trade before ${new Date(Number(m.end)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`, 5000);
-        cupMode = true;
         void loadMarket().then(renderMarket);
         return;
       case 'sitEnded':
