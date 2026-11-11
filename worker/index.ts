@@ -718,14 +718,17 @@ export class Hall extends DurableObject<Env> {
     send(ws, { t: 'cpicked', c, d, ...rest, ...(r.done && reward ? { badge: reward.badge, ...(claim ? { claim } : {}) } : {}) });
   }
 
-  /** a player's own drop progress for 'welcome': { [campaign]: { d: picked indexes, serial?, badge?, claim? } } */
+  /**
+   * a player's own drop progress for 'welcome' (live campaigns only):
+   * { [campaign]: { picks: drop indexes, got, done?, serial?, badge?, claim? } }: claim only where THEY completed
+   */
   private async campMine(pid: string) {
     const mine = await economy(this.env).campaignMine(pid);
     return Object.fromEntries(
       Object.entries(mine).map(([id, p]) => {
         const r = p.reward;
         const claim = claimOf(r);
-        return [id, { d: p.d, ...(p.serial ? { serial: p.serial, badge: r?.badge, ...(claim ? { claim } : {}) } : {}) }];
+        return [id, { picks: p.d, got: p.d.length, ...(p.serial ? { done: true, serial: p.serial, badge: r?.badge, ...(claim ? { claim } : {}) } : {}) }];
       }),
     );
   }
@@ -1187,7 +1190,7 @@ export class Hall extends DurableObject<Env> {
         // NEAR: live sponsored drops, and this player's own progress in them (picked drops; serial + claim if completed)
         const nearCamps = isNear(this.env) && this.env.ECONOMY;
         const camps = nearCamps ? await economy(this.env).listCampaigns(true) : undefined;
-        const cmine = nearCamps && a.pid ? await this.campMine(a.pid) : undefined;
+        const campsMine = nearCamps && a.pid ? await this.campMine(a.pid) : undefined;
         a.hello = true;
         ws.serializeAttachment(a);
         await this.rollDay();
@@ -1203,7 +1206,7 @@ export class Hall extends DurableObject<Env> {
           chat: this.chatLog.filter((c) => now - c.at < 30 * 60000),
           stats: this.stats(),
           ...(camps ? { camps } : {}),
-          ...(cmine ? { cmine } : {}),
+          ...(campsMine ? { campsMine } : {}),
         });
         this.broadcast({ t: 'join', p: pub(a) }, ws);
         if (isNear(this.env) && this.env.ECONOMY && a.pid) {

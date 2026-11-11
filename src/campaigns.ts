@@ -10,10 +10,13 @@
 // Socket messages (NEAR edition):
 //   client → server  { t: 'cpick', c: <campaign id>, d: <drop index> }
 //   client → server  { t: 'cclaim', c }      after a NEAR login: completes a drop whose goal was reached as a guest
-//   server → client  { t: 'cpicked', c, d, ok, why?, got, goal, done?, serial?, badge?, claim?: { url?, code? }, login? }
+//   server → client  { t: 'cpicked', c, d, ok, why?, code?, got, goal, done?, serial?, badge?, claim?: { url?, code? }, login? }
 //                    (the answer to cclaim is a 'cpicked' with d = -1; badge + claim come only with done: true)
+//                    code (stable, for refusals / login): 'already' | 'far' | 'too_fast' | 'sold_out' | 'ended' | 'login' |
+//                    'unknown_campaign' | 'bad_drop' | 'done' (already completed) | 'need_more' (cclaim before the goal)
 //   server → all     { t: 'camps', list: PublicCampaign[] }        (on create / end; also in 'welcome' as `camps`)
-//   'welcome' also has `cmine`: { [campaign id]: { d: number[] (picked), serial?, badge?, claim? } } (this player only)
+//   'welcome' also has `campsMine`: { [campaign id]: { picks: number[], got, done?, serial?, badge?, claim? } }
+//                    (live campaigns, this player only; claim only where this player completed)
 // HTTP:  GET /api/near/campaigns → { list: PublicCampaign[] }      POST /api/near/mcp (MCP, x-api-key)
 import { BAZAAR, COURT, PUMP, cleanChat } from './layout';
 import { VALLEY } from './valley';

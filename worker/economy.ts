@@ -12,9 +12,12 @@ import { ownerId, type Job, type Mirror } from './mirror';
 import { canonicalCampaign, dropsOf, isLive, publicCampaign, type Campaign, type PublicCampaign } from '../src/campaigns';
 
 /** a player's progress in one campaign (cpicked / cmine). `reward` is the full reward: only for the completer. */
+/** stable machine codes for refusals (the client may also match `why`) */
+export type CampCode = 'already' | 'far' | 'too_fast' | 'sold_out' | 'ended' | 'login' | 'unknown_campaign' | 'bad_drop' | 'done' | 'need_more';
 export interface CampPickResult {
   ok: boolean;
   why?: string;
+  code?: CampCode;
   got: number;
   goal: number;
   done?: boolean;
@@ -837,8 +840,8 @@ export class Economy extends DurableObject<EconEnv> {
   private campComplete(acct: string, c: Campaign, completions: number, got: number): CampPickResult {
     const base = { got, goal: c.goal };
     if (got < c.goal) return { ok: true, ...base, done: false };
-    if (!this.linkedAccount(acct)) return { ok: true, ...base, done: false, login: true, why: 'Log in with NEAR to claim your reward.' };
-    if (completions >= c.supply) return { ok: false, ...base, done: false, why: 'All rewards of this drop have been claimed.' };
+    if (!this.linkedAccount(acct)) return { ok: true, ...base, done: false, login: true, code: 'login', why: 'Log in with NEAR to claim your reward.' };
+    if (completions >= c.supply) return { ok: false, ...base, done: false, code: 'sold_out', why: 'All rewards of this drop have been claimed.' };
     const serial = this.next(`camp:${c.id}`);
     this.sql.exec('INSERT INTO camp_done(campaign, acct, serial, at) VALUES (?, ?, ?, ?)', c.id, acct, serial, Date.now());
     this.sql.exec('UPDATE campaigns SET completions = completions + 1 WHERE id = ?', c.id);
@@ -854,21 +857,21 @@ export class Economy extends DurableObject<EconEnv> {
     return this.ctx.storage.transactionSync(() => {
       const now = Date.now();
       const r = this.campRow(id);
-      if (!r) return { ok: false, why: 'This drop is gone.', got: 0, goal: 0 };
+      if (!r) return { ok: false, code: 'unknown_campaign', why: 'This drop is gone.', got: 0, goal: 0 };
       const c = this.campOf(r);
       const got0 = this.campGot(id, acct);
-      const fail = (why: string, extra: Partial<CampPickResult> = {}): CampPickResult => ({ ok: false, why, got: got0, goal: c.goal, ...extra });
-      if (!isLive(c, now)) return fail('This drop has ended.');
+      const fail = (code: CampCode, why: string, extra: Partial<CampPickResult> = {}): CampPickResult => ({ ok: false, code, why, got: got0, goal: c.goal, ...extra });
+      if (!isLive(c, now)) return fail('ended', 'This drop has ended.');
       const spot = Number.isInteger(d) ? dropsOf(c)[d] : undefined;
-      if (!spot) return fail('unknown drop');
-      if (at && reach !== undefined && Math.hypot(at.x - spot.x, at.z - spot.z) > reach) return fail('too far');
+      if (!spot) return fail('bad_drop', 'unknown drop');
+      if (at && reach !== undefined && Math.hypot(at.x - spot.x, at.z - spot.z) > reach) return fail('far', 'too far');
       const done = this.sql.exec<{ serial: number }>('SELECT serial FROM camp_done WHERE campaign = ? AND acct = ?', id, acct).toArray()[0];
-      if (done) return fail('You already completed this drop.', { done: true, serial: done.serial });
-      if (r.completions >= c.supply) return fail('All rewards of this drop have been claimed.');
+      if (done) return fail('done', 'You already completed this drop.', { done: true, serial: done.serial });
+      if (r.completions >= c.supply) return fail('sold_out', 'All rewards of this drop have been claimed.');
       const last = this.sql.exec<{ t: number | null }>('SELECT MAX(at) AS t FROM camp_picks WHERE acct = ?', acct).toArray()[0]?.t ?? 0;
-      if (now - last < CAMP_PICK_MS) return fail('too fast');
+      if (now - last < CAMP_PICK_MS) return fail('too_fast', 'too fast');
       if (this.sql.exec('SELECT 1 FROM camp_picks WHERE campaign = ? AND acct = ? AND drop_i = ?', id, acct, d).toArray().length)
-        return fail('Already picked.');
+        return fail('already', 'Already picked.');
       this.sql.exec('INSERT INTO camp_picks(campaign, acct, drop_i, at) VALUES (?, ?, ?, ?)', id, acct, d, now);
       return this.campComplete(acct, c, r.completions, got0 + 1);
     });
@@ -878,13 +881,13 @@ export class Economy extends DurableObject<EconEnv> {
   campaignClaim(acct: string, id: string): CampPickResult {
     return this.ctx.storage.transactionSync(() => {
       const r = this.campRow(id);
-      if (!r) return { ok: false, why: 'This drop is gone.', got: 0, goal: 0 };
+      if (!r) return { ok: false, code: 'unknown_campaign', why: 'This drop is gone.', got: 0, goal: 0 };
       const c = this.campOf(r);
       const got = this.campGot(id, acct);
       const done = this.sql.exec<{ serial: number }>('SELECT serial FROM camp_done WHERE campaign = ? AND acct = ?', id, acct).toArray()[0];
-      if (done) return { ok: false, why: 'You already completed this drop.', got, goal: c.goal, done: true, serial: done.serial };
-      if (!isLive(c)) return { ok: false, why: 'This drop has ended.', got, goal: c.goal };
-      if (got < c.goal) return { ok: false, why: `Collect ${c.goal - got} more first.`, got, goal: c.goal };
+      if (done) return { ok: false, code: 'done', why: 'You already completed this drop.', got, goal: c.goal, done: true, serial: done.serial };
+      if (!isLive(c)) return { ok: false, code: 'ended', why: 'This drop has ended.', got, goal: c.goal };
+      if (got < c.goal) return { ok: false, code: 'need_more', why: `Collect ${c.goal - got} more first.`, got, goal: c.goal };
       return this.campComplete(acct, c, r.completions, got);
     });
   }

@@ -121,18 +121,18 @@ await login(A);
 await login(B);
 await go(A, { x: spots[0].x + 15, z: spots[0].z + 15 });
 const far = await cpick(A, C1.id, 0);
-check(far?.ok === false && far.why === 'too far', 'a pick from too far is refused (server position)', JSON.stringify(far));
+check(far?.ok === false && far.why === 'too far' && far.code === 'far', 'a pick from too far is refused (server position)', JSON.stringify(far));
 await go(A, spots[0]);
 const p0 = await cpick(A, C1.id, 0);
 check(p0?.ok === true && p0.got === 1 && p0.goal === 3 && !p0.done, 'A picks drop 0 (1/3)', JSON.stringify(p0));
 const again = await cpick(A, C1.id, 0);
-check(again?.ok === false && again.got === 1, 'the same drop twice is refused', JSON.stringify(again));
-check((await cpick(A, C1.id, 99))?.ok === false, 'a drop index out of range is refused');
+check(again?.ok === false && again.code === 'already' && again.got === 1, 'the same drop twice is refused', JSON.stringify(again));
+check((await cpick(A, C1.id, 99))?.code === 'bad_drop', 'a drop index out of range is refused');
 await go(A, spots[1]);
 await cpick(A, C1.id, 1, 0);
 await go(A, spots[2]);
 const fast = await cpick(A, C1.id, 2);
-check(fast?.ok === false && fast.why === 'too fast', 'two picks within 1 s are refused', JSON.stringify(fast));
+check(fast?.ok === false && fast.code === 'too_fast', 'two picks within 1 s are refused', JSON.stringify(fast));
 
 // --- goal: completion serial 1, claim only to A
 B.msgs.length = 0;
@@ -157,7 +157,7 @@ check(rec && rec.args.owner === meA.owner && rec.args.campaign_id === C1.id && r
 // --- supply: 1 completion only
 await go(B, spots[4]);
 const bs = await cpick(B, C1.id, 4);
-check(bs?.ok === false && /claimed/.test(bs.why), 'supply 1: another player is refused once it is used up', JSON.stringify(bs));
+check(bs?.ok === false && bs.code === 'sold_out', 'supply 1: another player is refused once it is used up', JSON.stringify(bs));
 
 // --- stats
 const st = (await tool('get_campaign_stats', { id: C1.id }, SK)).data;
@@ -172,7 +172,7 @@ const G = await client(pid('cg'), s2[0].x, s2[0].z);
 await cpick(G, C2.id, 0);
 await go(G, s2[1]);
 const g2 = await cpick(G, C2.id, 1);
-check(g2?.ok === true && g2.got === 2 && g2.done === false && g2.login === true && !g2.claim, 'a guest who reaches the goal is asked to log in (no claim yet)', JSON.stringify(g2));
+check(g2?.ok === true && g2.got === 2 && g2.done === false && g2.login === true && g2.code === 'login' && !g2.claim, 'a guest who reaches the goal is asked to log in (no claim yet)', JSON.stringify(g2));
 G.send({ t: 'cclaim', c: C2.id });
 const g3 = await until(G, 'cpicked', (m) => m.c === C2.id);
 check(g3?.login === true && !g3.done, 'cclaim as a guest still asks to log in', JSON.stringify(g3));
@@ -183,12 +183,15 @@ check(g4?.d === -1 && g4.done === true && g4.serial === 1 && g4.claim?.code === 
 G.send({ t: 'cclaim', c: C2.id });
 const g5 = await until(G, 'cpicked', (m) => m.c === C2.id);
 check(g5?.ok === false && g5.done === true && !g5.claim, 'a second cclaim completes nothing', JSON.stringify(g5));
-// reconnecting: welcome.cmine restores this player's own progress (and their claim)
+// reconnecting: welcome.campsMine restores this player's own progress (and their claim)
 G.ws.close();
 await wait(200);
 const G2 = await client(G.pid, 0, 30);
 const wG = G2.msgs.find((m) => m.t === 'welcome');
-check(wG?.cmine?.[C2.id]?.serial === 1 && wG.cmine[C2.id].d.length === 2 && wG.cmine[C2.id].claim?.code === 'SCOUT-1', "welcome.cmine has the player's picks and claim", JSON.stringify(wG?.cmine));
+const mineG = wG?.campsMine?.[C2.id];
+check(mineG?.done === true && mineG.serial === 1 && mineG.got === 2 && mineG.picks.length === 2 && mineG.claim?.code === 'SCOUT-1', "welcome.campsMine has the player's picks, done, serial and claim", JSON.stringify(wG?.campsMine));
+const mineA = (await client(pid('cx'), 0, 30)).msgs.find((m) => m.t === 'welcome')?.campsMine;
+check(mineA && !mineA[C2.id], "a player with no picks has no entry in campsMine", JSON.stringify(mineA));
 const wA = A.msgs.find((m) => m.t === 'welcome');
 check(!JSON.stringify(wA ?? {}).includes('SCOUT-1'), "another player's welcome never had the claim");
 
@@ -201,7 +204,7 @@ const gone = await until(A, 'camps', (m) => !m.list.some((c) => c.id === C2.id))
 check(!!gone, 'players receive camps without it');
 await go(B, s2[2]);
 const late = await cpick(B, C2.id, 2);
-check(late?.ok === false && /ended/.test(late.why), 'a pick after the end is refused', JSON.stringify(late));
+check(late?.ok === false && late.code === 'ended', 'a pick after the end is refused', JSON.stringify(late));
 await tool('end_campaign', { id: C1.id }, SK);
 check(!(await get('/api/near/campaigns')).list.some((c) => c.id === C1.id || c.id === C2.id), 'ended campaigns leave the public list');
 
