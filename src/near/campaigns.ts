@@ -294,6 +294,20 @@ export function setupDrops(h: DropsHost) {
       case 'welcome':
         if (typeof m.now === 'number') skew = m.now - Date.now();
         if (Array.isArray(m.camps)) setList(m.camps as PublicCampaign[]);
+        // the server's record of my progress (another device, cleared storage): picked spots and my own completion
+        if (m.cmine && typeof m.cmine === 'object') {
+          for (const [cid, v] of Object.entries(m.cmine as Record<string, { d?: number[]; serial?: number; badge?: string; claim?: { url?: string; code?: string } }>)) {
+            const c = live.get(cid)?.c;
+            const s = me(cid, c);
+            for (const d of v.d ?? []) if (Number.isInteger(d) && !s.p.includes(d)) s.p.push(d);
+            s.got = Math.max(s.got, s.p.length);
+            if (v.serial && !s.done && c)
+              s.done = { serial: v.serial, at: Date.now(), badge: v.badge ?? c.reward.badge, title: c.title, sponsor: c.sponsor.name, emoji: c.drop.emoji, color: c.sponsor.color, url: v.claim?.url, code: v.claim?.code };
+            for (const d of s.p) fade(cid, d);
+          }
+          save();
+          changed();
+        }
         claimPending();
         return false; // main.ts handles welcome too
       case 'camps':
@@ -323,7 +337,7 @@ export function setupDrops(h: DropsHost) {
       changed();
       if (m.login) return askLogin(cid);
       if (/too fast/i.test(why)) return;
-      h.toast(/far/i.test(why) ? 'A little closer…' : /supply|gone|sold/i.test(why) ? 'All the badges for this drop are taken 😢' : /end/i.test(why) ? 'This drop has ended.' : why || 'Not this time.', 2500);
+      h.toast(/far/i.test(why) ? 'A little closer…' : /supply|gone|sold|been claimed/i.test(why) ? 'All the badges for this drop are taken 😢' : /end/i.test(why) ? 'This drop has ended.' : why || 'Not this time.', 2500);
       return;
     }
     if (Number.isInteger(d) && d >= 0 && !s.p.includes(d)) s.p.push(d);
