@@ -36,7 +36,16 @@ const KINDS: Record<string, Kind> = {
   duck: { url: '/models/pets/duck.glb', height: 0.55, speed: 1, walk: '', idles: [] },
   penguin: { url: '/models/pets/penguin.glb', height: 0.5, speed: 1, walk: '', idles: [] },
   axolotl: { url: '/models/pets/axolotl.glb', height: 0.32, speed: 1, walk: '', idles: [] },
+  // EXPLORATION (not in PETS / SPAWNS): procedural meme-archetype pets, scripts/meme-pets.mjs; preview with ?pets=meme
+  memeShiba: { url: '/models/meme/meme-shiba.glb', height: 1.0, speed: 0.9, walk: 'Walk', idles: ['Idle', 'Idle_2', 'Sit'] },
+  memeFrog: { url: '/models/meme/meme-frog.glb', height: 0.34, speed: 1.4, walk: 'Hop', idles: ['Idle'], hop: true },
+  memeCat: { url: '/models/meme/meme-cat.glb', height: 0.9, speed: 0.9, walk: 'Walk', idles: ['Idle', 'Sit'] },
 };
+
+/** dev-only `?pets=meme`: show the meme-archetype pets in place of the CC0 dogs / frogs (wanderers, pets, frens) */
+const MEME_SWAP: Record<string, string> = { shiba: 'memeShiba', husky: 'memeCat', frog: 'memeFrog' };
+const memePreview = import.meta.env.DEV && new URLSearchParams(location.search).get('pets') === 'meme';
+export const previewKind = (kind: string): string => (memePreview && MEME_SWAP[kind]) || kind;
 
 interface Spawn {
   kind: keyof typeof KINDS;
@@ -149,7 +158,7 @@ export function setupAnimals(
   const spawns = lowPower ? SPAWNS.filter((_, i) => i % 2 === 0) : SPAWNS;
 
   for (const s of spawns) {
-    loadAnimal(s.kind)
+    loadAnimal(previewKind(s.kind))
       .then(({ obj: wrap, mixer, acts, k }) => {
         const [x, z] = s.home;
         wrap.position.set(x, heightAt(x, z), z);

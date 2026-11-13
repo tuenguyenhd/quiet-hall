@@ -30,6 +30,10 @@ const KEEP = {
   man: ['Idle', 'Walk', 'Sitting', 'Clapping'],
   woman: ['Idle', 'Walk', 'Sitting', 'Clapping'],
   'woman-dress': ['Idle', 'Walk', 'Sitting', 'Clapping'],
+  // procedural meme-archetype pets (public/models/meme, scripts/meme-pets.mjs)
+  'meme-shiba': ['Idle', 'Idle_2', 'Walk', 'Sit'],
+  'meme-frog': ['Idle', 'Hop'],
+  'meme-cat': ['Idle', 'Walk', 'Sit'],
 };
 /** static (unrigged) meshes that are heavier than needed: simplify to this share of triangles */
 /** display stands / props baked into downloads: nodes to remove (by name) */

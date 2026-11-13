@@ -1,7 +1,7 @@
 // Pets: a small CC0 animal that follows its owner around and sits beside them when they sit.
 // Free for everyone; everyone in the hall sees your pet. Tap a pet to give it a pat (hearts).
 import * as THREE from 'three';
-import { loadAnimal, type AnimalInst } from './animals';
+import { loadAnimal, previewKind, type AnimalInst } from './animals';
 import { lerpAngle } from './avatar';
 import { popEmoji } from './effects';
 import { disposeOwned } from './dispose';
@@ -29,6 +29,10 @@ const SCALE: Record<string, number> = {
   duck: 1.08,
   penguin: 1.07,
   axolotl: 1.07,
+  // exploration: meme-archetype pets (dev preview ?pets=meme)
+  memeShiba: 0.62,
+  memeFrog: 0.8,
+  memeCat: 0.62,
 };
 /**
  * Which clip a pet plays when walking / standing / sitting. '' = no clip: a choppy code waddle / bob /
@@ -51,6 +55,9 @@ const CLIPS: Record<string, { walk: string; idle: string; sit: string; turn?: nu
   duck: { walk: 'ArmatureAction', idle: 'ArmatureAction', sit: 'ArmatureAction' },
   penguin: { walk: '', idle: '', sit: '' },
   axolotl: { walk: '', idle: '', sit: '' },
+  memeShiba: { walk: 'Walk', idle: 'Idle', sit: 'Sit' },
+  memeFrog: { walk: 'Hop', idle: 'Idle', sit: 'Idle' },
+  memeCat: { walk: 'Walk', idle: 'Idle', sit: 'Sit' },
 };
 
 const AURA_G = new THREE.RingGeometry(0.34, 0.42, 32);
@@ -70,7 +77,7 @@ export class Pet {
     private owner: THREE.Object3D,
     private heightAt: (x: number, z: number) => number,
   ) {
-    this.key = PETS[kind]?.key ?? 'none';
+    this.key = previewKind(PETS[kind]?.key ?? 'none');
     this.root.userData.pet = this;
     // start beside the owner
     this.root.position.copy(owner.position);
