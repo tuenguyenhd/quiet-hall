@@ -1,85 +1,116 @@
-# Quiet Hall × NEAR: Meme Valley
+# Quiet Hall × NEAR: rest after a trading day
 
-**A calm 3D world with no currency to grind.** Sit with strangers just to sit, rescue lost meme frens together in Meme Valley, trade in a market whose prices are moved only by players, and compete in a free 3-hour Market Cup whose fairness anyone can check on NEAR. Nobody needs a wallet.
+**A calm 3D world for traders.** Sit with strangers in the Quiet Hall after a trading day, rescue lost meme pets together in Meme Valley, play a free trading game whose fairness anyone can check on NEAR, and collect sponsored drops that an AI agent launched with one prompt. No currency to grind; most of the game needs no wallet at all.
 
-- **Track:** Games With Real Economies
-- **Live demo:** https://quiet-hall-near.ted-233.workers.dev
-- **Contract (NEAR testnet):** [`quiethall-521e7c.testnet`](https://explorer.testnet.near.org/accounts/quiethall-521e7c.testnet)
-- **Design docs:** [`design/gdd/edition-near.md`](design/gdd/edition-near.md) (this build), [`design/gdd/master-gdd.md`](design/gdd/master-gdd.md) (the whole game), [`design/pitch-near.md`](design/pitch-near.md)
+- **Tracks:** Games With Real Economies (`games`); also fits NFTs That Do Something (`nfts`, NEP-171 receipts) and Agent Economy (`agents`, MCP server for sponsored drops)
+- **Live demo:** https://quiet-hall-near.ted-233.workers.dev (phone first; works on desktop)
+- **Contract (NEAR testnet):** [`quiethall-521e7c.testnet`](https://testnet.nearblocks.io/address/quiethall-521e7c.testnet)
+- **Network:** testnet only (allowed in all tracks, rules Q-010)
+- **License:** MIT ([LICENSE](LICENSE)); third-party models and fonts keep their own licences ([public/models/CREDITS.md](public/models/CREDITS.md))
 
-## What you can do (live)
+## The problem, the product, how NEAR fits
 
-1. **Sit.** Open the link, tap a cushion, breathe. Every minute you sit (server-timed; hidden time doesn't count) earns 1 Leaf.
-2. **Rescue a fren together.** Follow the lanterns to Meme Valley. Tap Moon Rocks to gather (each player has their own stock, so nobody can take yours). Grant Shibby's wish and sit beside him for a minute: **everyone sitting beside him is rescued too.** He follows you home.
-3. **Craft.** Make a Moon Collar at the workbench.
-4. **Trade.** The Market, its own square south-east of the courtyard (PumpHall is up/down and duels only): prices move with every trade anyone makes (mid = base·e^(k·gap), 10% spread, decays back to base). Trading happens in the Market Cup's free play chips: there is no in-game currency.
-5. **Call it.** PumpHall's big board runs live Bitcoin and NEAR prices (Coinbase public candles): guess up or down for the next round, or bump into someone and duel. Points and a leaderboard only, no money.
-6. **Compete.** The Market Cup: every 3 hours, join free with 200 play chips, trade the same live market, the top 3 win trophies recorded on NEAR.
-7. **Look ahead.** The telescope at the Lookout shows six **Preview** screens (sample data, clearly labelled): Cabal Hall, Sitting Bazaar, Whale Order, Calm the FUD Golem, trade feed, Agent Cup.
+Trading is loud, and most "web3 games" are a token with a game painted on it. Quiet Hall is the opposite. It is a place to rest, and its economy is a game you play, not a token you farm.
+
+- **Players** sit together and rescue pets with whoever sits beside them. They play a free 3-hour trading game in a market whose prices only players move.
+- **Sponsors** run airdrops as play: "collect 3 🐕 in the Courtyard". An AI agent can launch one from a prompt over MCP.
+- **NEAR** is the public, tamper-evident record. Rescues, crafts, trophies and sponsor badges are bound NEP-171 receipts. Trading-game rounds are committed before they start and settled after. Sponsor terms are hashed on chain.
+
+The player never needs to notice the chain. Guests get an account id derived for them, with no sign-up, no seed phrase and no gas.
+
+## Try it (live demo, about 3 minutes)
+
+1. Open the demo link and tap **Quick join**. No account is needed. Tap **Sit**: sitting is just sitting, and the counter shows who sits with you.
+2. Tap 🐾 (top left), then **Show me the way**. Follow the lanterns to Meme Valley. Tap 2 Moon Rocks 🪨, tap **Shibby**, **Grant the wish**, and sit beside him for 1 minute. Anyone sitting nearby is rescued too. He follows you as your pet.
+3. Tap 📖 **Rescue Book**, then **receipt ↗**. The explorer shows `fren:shibby:N` owned by an account you never created.
+4. Glowing 🐕 or 🐸 bubbles in the Courtyard or Valley are **sponsored drops**. Tap 3 of them; the 🎁 count is on the 🐾 chip. Finishing one gives a bound badge (`badge:<campaign>:<n>`) plus the sponsor's claim link. Claiming needs a NEAR login.
+5. Walk to the **Market** (🛒, south-east). The **Market Cup** is a free round with 200 play chips; the top 3 win trophies on NEAR. Joining needs a NEAR login: one signed message, no transaction, no fee.
+6. **PumpHall** (south): guess whether Bitcoin or NEAR goes up or down next round, or bump into someone to duel. Points only. Needs a login.
+7. The **Coming Soon** district (south-west) and the Lookout telescope show labelled previews with sample data.
 
 ## Where NEAR is used
 
 | On NEAR (testnet) | How |
 |---|---|
-| **Rescue, craft and trophy receipts** | NEP-171 NFTs (`fren:shibby:214`, `drip:moon_collar:7`, `trophy:<round>:1`) minted to an owner id the server derives for each player (a real implicit account id from HKDF + ed25519). **The player never creates an account or signs anything.** Tokens are bound: `nft_transfer` always fails. |
-| **The market's prices** | Every hour the current bids and asks are posted to the contract (`post_prices`) and emitted as events. |
-| **Cup fairness** | Before a round opens, the hash of its setup (starting prices, market-maker seed) is committed (`commit_round`). At the end, the setup is revealed and the hash of the full results file is recorded (`settle_round`); the contract rejects a setup that doesn't match the commitment. |
-| **Sponsored drops** | A campaign's terms are committed before it goes live (`commit_campaign`: the sha256 of its config, emitted as a `campaign_committed` event). A player who completes it gets a bound badge `badge:<campaign_id>:<serial>` (`mint_badge`, event `badge_minted`); the sponsor's own reward is a claim link or code handed out off chain. |
-| **Safe retries** | Every write carries a one-use `job_id`; the contract rejects a reused one, so a retried transaction can never mint twice. |
+| **Receipts for rescues, crafts, trophies and badges** | NEP-171 tokens (`fren:shibby:214`, `drip:moon_collar:7`, `trophy:<round>:1`, `badge:<campaign>:<n>`) are minted to an owner id the server derives for each player: a real implicit account id (HKDF + ed25519). **Guests never create an account or sign anything.** Tokens are bound, so `nft_transfer` always fails. |
+| **Login (optional)** | NEAR Connect plus one NEP-413 signed message. The server checks it is a full-access key of the account. Receipts then go to your own `.near` account, and your progress follows you to any phone. |
+| **Trading-game fairness** | Before a round opens, its setup hash is committed (`commit_round`). At the end the setup is revealed and the results hash is recorded (`settle_round`); the contract rejects a setup that doesn't match. Check it: `node scripts/verify-round.mjs <demo-url> <roundId>`. |
+| **Market prices** | Bids and asks are posted every hour (`post_prices`, event log). |
+| **Sponsored drops** | A campaign's terms are committed before it goes live (`commit_campaign`, the sha256 of its canonical config). Completions mint `badge:<campaign>:<serial>` (`mint_badge`). The sponsor's reward is their own claim link or code, shown only to the player who completes it. We never hold sponsor tokens. |
+| **Safe retries** | Every write carries a one-use `job_id`; the contract rejects a reused one, so a retry can never mint twice. |
 
-**Check a round yourself:**
+## Sponsored drops from a prompt (MCP)
+
+A sponsor or an AI agent connects once, then describes the airdrop in plain words:
+
 ```bash
-node scripts/verify-round.mjs <demo-url> <roundId>
+claude mcp add --transport http quiet-hall <demo-url>/api/near/mcp --header "x-api-key: <sponsor key>"
+# then: "Drop 20 BONK memes in the Courtyard; collect 3 for a Bonk Hunter badge; claim at https://…"
 ```
-It recomputes both hashes from what the game published and compares them with the contract's own `round()` view.
 
-Off-chain on purpose: the bag, Cup chips and trades. There is no in-game currency (no Leaves in this edition): rewards are frens, drip, trophies and sponsor badges, all bound receipts.
+- **Tools:** `list_zones`, `draft_campaign_from_prompt`, `create_campaign`, `list_campaigns`, `get_campaign_stats`, `end_campaign`.
+- **Safety:** every draft goes through one validator (`src/campaigns.ts`), which caps counts, allows https-only links and limits zones to a list. Sponsor keys are stored hashed and rate-limited. Drop spots are placed deterministically from the campaign id, so client and server agree.
+- **Keys:** issued by an admin with `CAMPAIGN_ADMIN_KEY=… node scripts/near-sponsor-key.mjs <base> "<label>"`.
 
-## Honest security statement
+## Run it locally (no secrets, no Cloudflare login)
 
-The game server (a Cloudflare Worker) holds the game account's key and is the trust root: it decides prices, rescues and results. NEAR makes what it did **public and tamper-evident**: receipts with unique serials, a price history, and Cup rounds committed before they start. Nothing of value is held by the contract, nothing is sold, and there is no token.
-
-## How it is built
-
-- **Client:** Vite + Three.js (one-thumb, phone-first). NEAR UI in `src/near/`; valley and market as data in `src/valley.ts`, `src/market.ts`, `src/economy.ts`.
-- **Server:** Cloudflare Worker + Durable Objects: `Hall` (live presence, server-timed sits, reach checks), `Economy` (bag + market + Cup + sponsored drops in one SQLite store, every change one transaction with an audit row), `Mirror` (the only chain writer: one transaction in flight, batched calls, one-use job ids, retries, RPC fallbacks; a failing action parks only its own job).
-- **Contract:** Rust, `near-sdk` 5.30 + `near-contract-standards` (NEP-171), in `contracts/items/` (26 unit tests).
-- **Chain access:** `near-api-js` 7 signing inside the Workers runtime; FastNEAR testnet RPC.
-
-## Run it locally (no secrets needed)
+Needs Node 20+. Rust is only needed to rebuild the contract.
 
 ```bash
 npm install
-npm run dev:near        # app on http://localhost:5174, NEAR Worker on :8788 (no secrets needed)
+npm run dev:near     # game on http://localhost:5174, NEAR Worker on :8788
 ```
-Needs Node 20+ only; `wrangler dev` runs locally without a Cloudflare login. Rust is only needed to rebuild the contract.
-Without a `NEAR_PRIVATE_KEY` the Mirror runs in **mock mode**: everything works and receipts are marked "mock" instead of being sent. To write to testnet locally, create `.dev.vars.near` with your **own test contract**'s `NEAR_ACCOUNT` and `NEAR_PRIVATE_KEY`, plus `OWNER_SECRET` and `SESSION_SECRET`. Never point a local Worker at the production contract.
 
-**Production smoke test** (real clock, real testnet writes, ~3 minutes): `node scripts/near-prod-smoke.mjs https://quiet-hall-near.ted-233.workers.dev`
+Without `.dev.vars.near` the Worker runs in **mock mode**. Everything works, and receipts are marked "mock" instead of being sent. To write to testnet, put your **own** test contract's `NEAR_ACCOUNT` and `NEAR_PRIVATE_KEY`, plus `OWNER_SECRET` and `SESSION_SECRET`, in `.dev.vars.near`.
 
-**Known:** Cup round `20261110-090000` (the first, 09:00–12:00 UTC on Nov 10) was committed on chain by a pre-launch local check, so its settlement does not match the commitment and `verify-round` reports it. Every later round is clean.
+**Fast-forward for judges.** Start the Worker with `--var MINUTE_MS:200` (1 game minute = 0.2 s) and `--var CUP_ROUND_MIN:30`. Sits, regrowth and trading-game rounds then move fast enough to watch.
 
-**Tests** (start the Worker with a fast clock: `npx wrangler dev -c wrangler.near.toml --port 8788 --var MINUTE_MS:200 --var NEAR_MIRROR_MODE:mock --var CUP_ROUND_MIN:30 --var CUP_JOIN_CLOSE_MIN:5`):
+## Tests
+
 ```bash
-node scripts/near-economy-test.mjs  http://127.0.0.1:8788   # sit pay, caps, hidden time, no double pay, mirror
-node scripts/near-valley-test.mjs   http://127.0.0.1:8788   # personal stock, reach, co-rescue, crafting, receipts
-node scripts/near-market-test.mjs   http://127.0.0.1:8788   # market, Cup, settlement, hashes
-cd contracts/items && cargo test                             # 26 contract tests (rustup installs Rust 1.95 for this folder)
+npm run test:near                          # all 6 NEAR suites on a throwaway fast-clock Worker, mock chain, no secrets
+cd contracts/items && cargo test           # 26 contract tests
+npm run check && npm run build:near        # typecheck and production build
 ```
-From a fresh clone (no secrets) 72 checks run and pass (economy 23, valley 23, market 26). With a `LOAD_TEST_KEY` passed as a second argument, 5 more test-hook checks run: 77, plus 26 contract tests. The market suite also passes with the live testnet mirror. Screenshots: `docs/qa/near-2026-11-10/`.
 
-## What existed before the hackathon, and what was built for it
+**Suites:** economy (no currency, sits, hidden time, mirror), valley (gathering, co-rescue, crafting, receipts), market (trading game, settlement, hashes), duel (PumpHall), campaign (sponsored drops), and mcp (MCP server).
 
-- **Before (first commit 2026-11-09):** Quiet Hall, a shared meditation world: the hall, sitting, presence, chat, pets, blessings, and its Solana features (wallet sign-in, tips, collectibles, PumpHall predictions).
-- **Built in the window, on branch `near-hackathon`:** everything NEAR: the items contract, the Mirror, the Economy store (bag, market, Cup), Meme Valley (gathering, wishes with co-rescue, crafting), the Living Market, the Market Cup with on-chain commit/settle, the NEAR client UI and previews, the verify script, all NEAR tests. `git log main..near-hackathon` shows the diff.
-- **AI tools:** built with Claude Code (Anthropic) as a coding assistant. Libraries: three.js, near-api-js, near-sdk-rs, near-contract-standards, @noble/curves, @noble/hashes. Fren models are CC0 (Quaternius).
+`scripts/near-login-test.mjs` also checks a real NEP-413 signature on testnet. It needs a testnet key file: `NEAR_LOGIN_KEYFILE=~/.near-credentials/testnet/<acct>.json`.
+
+**Latest QA:** [docs/qa/near-2026-11-13/](docs/qa/near-2026-11-13/qa-signoff-near-2026-11-13.md). That's 177 checks plus 26 contract tests, 23 UI cases on a 412 px phone viewport with screenshots, and 4 small UI bugs found and fixed.
+
+## How it is built
+
+- **Client:** Vite + Three.js, one-thumb and phone-first. The NEAR UI is in `src/near/`. Game rules are kept as data: `src/valley.ts`, `src/market.ts` (pricing in one readable file), `src/economy.ts` and `src/campaigns.ts`.
+- **Server:** Cloudflare Worker + Durable Objects.
+  - `Hall`: live presence, server-timed sits, reach checks.
+  - `Economy`: bag, market, trading game and sponsored drops in one SQLite store; each change is one transaction.
+  - `Mirror`: the only chain writer. One transaction in flight, batched calls, one-use job ids, retries and RPC fallbacks.
+  - `worker/mcp.ts`: the MCP server.
+- **Contract:** Rust, `near-sdk` 5.30 + `near-contract-standards` (NEP-171), in `contracts/items/`.
+- **Chain access:** `near-api-js` signing inside the Workers runtime, using FastNEAR testnet RPC with fallbacks.
+
+## Built during the hackathon
+
+- **Timing:** the whole repository was created inside the hackathon window. The first commit is 2026-11-09, after the 2026-10-19 announcement, so there is no pre-hackathon baseline.
+- **Order of work:**
+  1. The calm hall core and a Solana/Seeker edition were built first, on `main`.
+  2. Everything NEAR was built on top of it on `near-hackathon`: the items contract, the Mirror, the Economy store, Meme Valley, the market and trading game with on-chain commit/settle, NEAR login, sponsored drops and the MCP server, no-currency play, and all NEAR tests.
+- **Diff:** `git log main..near-hackathon`.
+- **AI tools:** built with Claude Code (Anthropic) as the coding assistant.
+- **Libraries:** three.js, near-api-js, @hot-labs/near-connect, near-sdk-rs, near-contract-standards, @noble/curves, @noble/hashes, wrangler.
+- **Models:** animals by Quaternius (CC0), plus CC-BY pets listed in [CREDITS](public/models/CREDITS.md).
+
+## Honest security statement
+
+The game server (a Cloudflare Worker) holds the game account's key and is the trust root: it decides prices, rescues and results. NEAR makes what it did public and tamper-evident: receipts with unique serials, a price history, trading-game rounds committed before they start, and sponsor terms committed before they go live. The contract holds nothing of value. Nothing is sold, and there is no token. Sponsored-drop picks trust the position the client reports. A rate limit and a reach check limit abuse, but this is not full anti-cheat.
 
 ## Live, Preview, Roadmap
 
 | Tier | |
 |---|---|
-| **Live** | Server-timed sits · co-rescue · personal-stock gathering · crafting · the Living Market · Market Cup · NEP-171 receipts · hourly price posts · Cup commit/settle · trophies · verify script |
-| **Preview** (sample data, labelled) | Cabal Hall · Sitting Bazaar · Whale Order · Calm the FUD Golem · trade feed and trader card · Agent Cup |
-| **Roadmap** | NEAR Auth social login · OutLayer-proven Cup scoring · AI characters (a market trader you can haggle with, the Vault guard) with limited function-call keys · Shade Agents in an Agent Cup · receipt roots (one Merkle root an hour, mint on claim) · valley shards and regional markets · NEAR Intents for "pay with any token" cosmetics in the other editions |
+| **Live** | Server-timed sits · co-rescue · personal-stock gathering · free crafting · market moved by players · trading game with on-chain commit/settle and trophies · NEP-171 receipts · NEAR login (optional) · PumpHall up/down and duels · sponsored drops with badges · MCP server for agents |
+| **Preview** (sample data, labelled in the game) | Coming Soon district: Cabal Camp (clans) · Event Arena (team trading events, contests) · Sitting Bazaar (swaps) · The Vault (AI NPC); Lookout telescope previews |
+| **Roadmap** | Short tutorial and a chaptered journey ([design](design/gdd/near-player-journey.md)) · AI pet companion and NPCs on Claude / NEAR AI, with a paid AI Pass in NEAR · a Sponsor SDK (TypeScript + MCP) so any game or agent can launch drops · NEP-245 multi-token items · social login · NEAR Intents |
 
-Never planned: a token, an airdrop, paid odds, or an in-game currency to cash out.
+Never planned: a token, paid odds, or an in-game currency to cash out.

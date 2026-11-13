@@ -1,6 +1,6 @@
 # Quiet Hall
 
-> **NEAR Hackathon entry (branch `near-hackathon`):** see [NEAR.md](NEAR.md): Meme Valley, a player-moved market and a Market Cup whose fairness is checkable on NEAR. Run it with `npm run dev:near`.
+> **NEAR Hackathon entry (branch `near-hackathon`):** see [NEAR.md](NEAR.md): rest after a trading day in a calm 3D world. Rescue meme pets together, play a free trading game whose fairness anyone can check on NEAR, and collect sponsored drops an AI agent launched with one prompt (MCP). Run it with `npm run dev:near`; test it with `npm run test:near`.
 
 
 A shared meditation space: walk into a calm hall, see other people's lights, sit together in silence.
