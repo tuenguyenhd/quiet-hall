@@ -439,10 +439,17 @@ controls.onTap = (x, y) => {
     while (o && !o.userData.lantern) o = o.parent;
     if (o) return items.tapLantern(o.userData.lantern as LanternData);
   }
-  const hit = ray.intersectObjects(world.clickables, true)[0];
+  const hits = ray.intersectObjects(world.clickables, true);
+  const actionOf = (h: THREE.Intersection) => {
+    let a: THREE.Object3D | null = h.object;
+    while (a && !a.userData.action) a = a.parent;
+    return a;
+  };
+  // a sponsored drop wins over a big tap target behind or around it (a lost fren's hit box), if it is close to the nearest hit
+  const drop = hits.find((h) => h.distance <= hits[0].distance + 2.5 && actionOf(h)?.userData.near?.kind === 'drop');
+  const hit = drop ?? hits[0];
   if (hit) {
-    let o: THREE.Object3D | null = hit.object;
-    while (o && !o.userData.action) o = o.parent;
+    let o: THREE.Object3D | null = actionOf(hit);
     if (o) {
       const action = o.userData.action as string;
       const here = me.root.position;

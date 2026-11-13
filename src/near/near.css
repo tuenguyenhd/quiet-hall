@@ -369,7 +369,10 @@ body:not(.edition-near) #near-quest-chip { display: none; }
 .q-welcome-note { margin: 6px 0 4px; }
 #near-pet-quest { width: 100%; margin: 6px 0; }
 #pet-note.hidden + #near-pet-quest { display: none; }
-body.edition-near .hint { white-space: normal; width: max-content; max-width: calc(100vw - 40px); text-align: center; }
+/* NEAR edition: a third HUD row (the quest chip) on the left and the button column on the right:
+   hints and toasts sit below the chip and between the columns, so they never cover the 🎁 count or 🛒 (BUG-0003) */
+body.edition-near .hint { white-space: normal; width: max-content; max-width: calc(100vw - 136px); text-align: center; top: calc(max(12px, env(safe-area-inset-top)) + 160px); }
+body.edition-near .toast { top: calc(max(12px, env(safe-area-inset-top)) + 160px); max-width: min(360px, calc(100vw - 136px)); }
 /* the pet sheet while trying on a locked pet: keep the one line that says how to get it */
 body.edition-near #petsheet.peek .card > #pet-note:not(.hidden) { display: block; margin: 8px 0 2px; font-weight: 600; }
 
@@ -402,3 +405,6 @@ li .q-dface { width: 28px; height: 28px; font-size: 16px; vertical-align: middle
 .drop-win-code button { flex: none; min-height: 44px; padding: 0 14px; border: 2px solid #111; border-radius: 12px; background: #fff4c9; font: 700 14px var(--sans); }
 .drop-win-foot { margin-top: 12px; font: 500 13px var(--sans); color: #444; }
 .drop-win-close { margin-top: 6px; font: 500 12px var(--sans); opacity: 0.55; }
+
+/* the hall did not answer (BUG-0001) */
+.near-err { color: #b3261e; font-weight: 600; }

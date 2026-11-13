@@ -726,6 +726,21 @@ body {
 #presence:not(.live) {
   background: var(--paper);
 }
+/* a long status ("Offline · solo sit ok") never runs under the bell pill */
+#presence {
+  min-width: 0;
+  overflow: hidden;
+}
+.hud-right {
+  flex-shrink: 0;
+}
+#presence-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 #presence.live .dot {
   background: var(--ink);
   box-shadow: 0 0 0 3px rgba(22, 13, 46, 0.18);
@@ -1156,10 +1171,18 @@ body {
     padding-right: 8px;
   }
 }
-@media (max-width: 400px) {
-  /* narrow phones: the install pill makes room for the place name (installing is also in the browser menu) */
+@media (max-width: 440px) {
+  /* phones (up to 440 px, e.g. 412 px Android): the install pill makes room for the place name (installing is also in the browser menu) */
   #btn-install {
     display: none !important;
+  }
+  /* the presence text ("3 here · 0 sitting", "Offline · solo sit ok") fits beside the bell */
+  .hud-right {
+    gap: 5px;
+  }
+  #presence {
+    padding-left: 10px;
+    padding-right: 10px;
   }
   .sub-row .pill.place {
     max-width: 42vw;

@@ -369,12 +369,24 @@ export function setupNear(h: NearHost) {
     body().dataset.kind = 'bag';
     quest.wire(body());
   }
+  /** the hall did not answer in time: say so and offer Retry, never an endless "Loading…" (BUG-0001) */
+  const SHEET_TIMEOUT_MS = 6000;
+  function sheetError(title: string, retry: () => void) {
+    body().innerHTML = `<h2>${title}</h2><p class="small near-err">Can't reach the hall right now. Check your connection and try again.</p><button class="primary" id="near-retry">Retry</button>`;
+    $('near-retry').addEventListener('click', retry);
+  }
+  let bookWait = 0;
   async function openBook() {
     show(`<h2>📖 Rescue Book</h2><p class="small">Loading…</p>`);
     body().dataset.kind = 'book';
     h.send({ t: 'book' });
+    clearTimeout(bookWait);
+    bookWait = window.setTimeout(() => {
+      if (isOpen('book') && !body().querySelector('.near-needs')) sheetError('📖 Rescue Book', openBook);
+    }, SHEET_TIMEOUT_MS);
   }
   function renderBook(m: Msg) {
+    clearTimeout(bookWait);
     const receipts = (m.receipts as { job: string; method: string; status: string; tx: string | null }[]) ?? [];
     const rec = (job: string) => {
       const r = receipts.find((x) => x.job === job);
@@ -403,21 +415,38 @@ export function setupNear(h: NearHost) {
     drops.wire(body());
   }
 
-  async function loadMarket() {
+  /** null = the hall did not answer (timeout or error) */
+  async function loadMarket(): Promise<{ ts: number; item: string; bid: number }[] | null> {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), SHEET_TIMEOUT_MS);
     try {
-      const r = (await (await fetch(`/api/near/market?pid=${encodeURIComponent(h.pid)}`)).json()) as { quotes: Quote[]; history: { ts: number; item: string; bid: number }[]; cup: typeof cupState };
+      const res = await fetch(`/api/near/market?pid=${encodeURIComponent(h.pid)}`, { signal: ac.signal });
+      if (!res.ok) return null;
+      const r = (await res.json()) as { quotes: Quote[]; history: { ts: number; item: string; bid: number }[]; cup: typeof cupState };
       quotes = r.quotes;
       cupState = r.cup;
       return r.history;
     } catch {
-      return [];
+      return null;
+    } finally {
+      clearTimeout(t);
     }
   }
   async function openMarket() {
     show(`<h2>🛒 Market</h2><p class="small">Loading prices…</p>`);
     body().dataset.kind = 'market';
     const hist = await loadMarket();
-    renderMarket(hist);
+    if (hist) return renderMarket(hist);
+    if (!isOpen('market')) return;
+    // the hall did not answer: still show what needs no prices (the Cup, the guest's login), plus Retry
+    body().innerHTML = `<h2>🛒 Market</h2>
+      ${econ.near ? '' : `<button id="near-market-login" class="near-login-btn near-lock">🔒 <span>Log in with NEAR to play the Market Cup</span></button>`}
+      <p class="small">🏆 <b>Market Cup</b>: everyone starts a round with the same free play chips; the best traders when it ends win trophies recorded on NEAR.</p>
+      <p class="small near-err">Can't reach the Market right now. Check your connection and try again.</p>
+      <button class="primary" id="near-retry">Retry</button>
+      <p class="near-foot">Play money. No cash value. Free to enter.</p>`;
+    document.getElementById('near-market-login')?.addEventListener('click', () => openLoginPerks('The Market Cup needs a login'));
+    $('near-retry').addEventListener('click', () => void openMarket());
   }
   function spark(hist: { ts: number; item: string; bid: number }[], item: string) {
     const pts = hist.filter((p) => p.item === item).slice(-40);
@@ -860,7 +889,7 @@ export function setupNear(h: NearHost) {
           cupState.me.bag[k] = (cupState.me.bag[k] ?? 0) + (m.side === 'buy' ? n : -n);
         }
         h.toast(`${m.side === 'buy' ? 'Bought' : 'Sold'} ${n} ${itemLabel(k)} for ${m.total} chips`, 2200);
-        void loadMarket().then(renderMarket);
+        void loadMarket().then((x) => x && renderMarket(x));
         return;
       }
       case 'quotes':
@@ -875,7 +904,7 @@ export function setupNear(h: NearHost) {
         if (!m.ok && m.login) return openLoginPerks('The Market Cup needs a login');
         if (!m.ok) return h.toast(String(m.why), 4500);
         h.toast(`You're in the Market Cup with ${CUP.chips} chips. Trade before ${new Date(Number(m.end)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`, 5000);
-        void loadMarket().then(renderMarket);
+        void loadMarket().then((x) => x && renderMarket(x));
         return;
       case 'sitEnded':
         h.toast('Your sit ended while the app was in the background.', 4000);
