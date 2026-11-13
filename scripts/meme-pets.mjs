@@ -1,7 +1,7 @@
 // Procedural low-poly "meme archetype" pets (original characters, no logos / text / likeness of any artwork):
 //   meme-shiba.glb  Biscuit: an excited Shiba-style pup with a red bandana
-//   meme-frog.glb   Lily: a chill, half-lidded pond frog wearing a lily-pad hat
-//   meme-cat.glb    Pip: a cream-and-ginger cat that "pops" its mouth open, bell collar
+//   meme-frog.glb   Lily: a chill, half-lidded pond frog wearing a bright lily-pad hat with a pink flower
+//   meme-cat.glb    Pip: a grey-and-white tabby that "pops" its mouth open (nose up), bell collar
 // Style matches the Quaternius CC0 animals: flat-shaded faceted primitives, flat colours (here as vertex
 // colours on ONE material = one draw call per pet), roughness 0.415 / metalness 0.4 like the CC0 set.
 // Each model is a single SkinnedMesh with rigid (weight 1) bone parts, so it clones and animates exactly
@@ -55,7 +55,7 @@ class Rig {
     return this;
   }
   /** a part: unit primitive -> scale, rotate (euler XYZ), translate, in model space */
-  part(bone, color, g, pos, scale = [1, 1, 1], rot = [0, 0, 0]) {
+  part(bone, color, g, pos, scale = [1, 1, 1], rot = [0, 0, 0], shade = null) {
     g = g.index ? g.toNonIndexed() : g.clone();
     g.deleteAttribute('uv');
     const m = new THREE.Matrix4().compose(new THREE.Vector3(...pos), new THREE.Quaternion().setFromEuler(new THREE.Euler(...rot)), new THREE.Vector3(...(typeof scale === 'number' ? [scale, scale, scale] : scale)));
@@ -68,8 +68,19 @@ class Rig {
     const sw = new Float32Array(n * 4);
     const bi = this.list.indexOf(this.bones[bone]);
     if (bi < 0) throw new Error(`no bone ${bone}`);
+    const pa = g.attributes.position;
+    const fc = new THREE.Color();
     for (let i = 0; i < n; i++) {
       col.set([c.r, c.g, c.b], i * 3);
+      // optional per-face colour (stripes / patches) from the face centre in model space
+      if (shade && i % 3 === 0) {
+        const ctr = [0, 1, 2].map((k) => (pa.getComponent(i, k) + pa.getComponent(i + 1, k) + pa.getComponent(i + 2, k)) / 3);
+        const h = shade(...ctr);
+        if (h !== undefined && h !== null) {
+          fc.set(h);
+          for (let j = 0; j < 3; j++) col.set([fc.r, fc.g, fc.b], (i + j) * 3);
+        }
+      }
       si[i * 4] = bi;
       sw[i * 4] = 1;
     }
@@ -239,7 +250,10 @@ function frog() {
   const WHITE = 0xf6f3e8;
   const DARK = 0x2a2a24;
   const CHEEK = 0xeaa59b;
-  const PAD = 0x4e8a3c;
+  const PAD = 0xa9df7c; // bright, light green so the hat reads against the darker body from behind
+  const PAD_RIM = 0x86c45e;
+  const PETAL = 0xf4a1c1;
+  const POLLEN = 0xf6d96b;
   const r = new Rig()
     .bone('body', 'root', [0, 0.12, 0])
     .bone('head', 'body', [0, 0.2, 0.06])
@@ -263,11 +277,19 @@ function frog() {
   r.pair('head', CHEEK, sphere(6, 4), [0.115, 0.215, 0.155], [0.028, 0.02, 0.01], [0, 0.55, 0]);
   // small content smile (a thin arc)
   r.part('head', DARK, torus(0.05, 0.006, 3, 8, Math.PI * 0.7), [0, 0.215, 0.192], [1, 0.7, 1], [0, 0, Math.PI * 1.15]);
-  // lily-pad hat (a notched disc) tilted on the head, tiny stem
+  // lily-pad hat (a notched disc, light green with a darker rim) sitting almost flat, a small pink flower on top
   {
     const pad = new THREE.CylinderGeometry(1, 1, 1, 12, 1, false, 0.35, Math.PI * 2 - 0.7);
-    r.part('head', PAD, pad, [0.02, 0.335, 0.0], [0.125, 0.014, 0.125], [0.2, 0.4, -0.2]);
-    r.part('head', PAD, cyl(0.006, 0.006, 4), [0.02, 0.35, 0.0], [1, 0.03, 1], [0.2, 0, -0.2]);
+    const tilt = [0.12, 0.4, -0.1];
+    r.part('head', PAD, pad, [0.01, 0.338, -0.005], [0.13, 0.014, 0.13], tilt, (x, y, z) => (Math.hypot(x - 0.01, z + 0.005) > 0.105 ? PAD_RIM : null));
+    const fx = 0.012;
+    const fy = 0.352;
+    const fz = 0.0;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      r.part('head', PETAL, sphere(5, 3), [fx + Math.cos(a) * 0.022, fy + 0.006, fz + Math.sin(a) * 0.022], [0.022, 0.011, 0.014], [0, -a, 0.35]);
+    }
+    r.part('head', POLLEN, sphere(5, 3), [fx, fy + 0.013, fz], [0.013, 0.009, 0.013]);
   }
   // legs: big back thighs + flat feet, thin front arms + feet
   r.pair('legB', GREEN, sphere(7, 5), [0.13, 0.075, -0.05], [0.055, 0.06, 0.1], [0.3, 0, 0]);
@@ -313,17 +335,22 @@ function frog() {
 
 // ---------- Pip: cream-and-ginger cat that pops its mouth ----------
 function cat() {
-  const CREAM = 0xf8ecd6;
-  const GINGER = 0xe39b5b;
+  const WHITE = 0xf3f0ea;
+  const GREY = 0xa9aeb4;
+  const STRIPE = 0x666c74;
   const PINK = 0xe9a0a0;
   const DARK = 0x2c2523;
-  const MOUTH = 0x8c3f45;
+  const MOUTH = 0x6a2633;
   const COLLAR = 0x4f93bd;
   const BELL = 0xe9c35c;
+  // tabby bands (vertex colours): across the back by z, around the tail by height
+  const backStripe = (x, y, z) => (y > 0.3 && Math.floor((z + 1) / 0.055) % 2 === 0 ? STRIPE : null);
+  const capStripe = (x, y, z) => (y > 0.52 && Math.floor((z + 1) / 0.05) % 2 === 0 ? STRIPE : null);
+  const ring = (x, y, z) => (Math.floor(y / 0.05) % 2 === 0 ? STRIPE : null);
   const r = new Rig()
     .bone('body', 'root', [0, 0.27, 0])
     .bone('head', 'body', [0, 0.36, 0.15])
-    .bone('mouth', 'head', [0, 0.405, 0.3])
+    .bone('mouth', 'head', [0, 0.37, 0.285])
     .bone('earL', 'head', [0.085, 0.57, 0.16])
     .bone('earR', 'head', [-0.085, 0.57, 0.16])
     .bone('tail1', 'body', [0, 0.3, -0.19])
@@ -332,29 +359,29 @@ function cat() {
     .bone('legFR', 'body', [-0.065, 0.22, 0.11])
     .bone('legBL', 'body', [0.065, 0.22, -0.11])
     .bone('legBR', 'body', [-0.065, 0.22, -0.11]);
-  // body: chunky cream loaf with a ginger saddle patch (v1 had thin legs and read goat-like; an all-ginger v2
-  // was too close to the Shiba at range, so v3 keeps it cream-and-ginger: cream body, ginger cap / ears / tail)
-  r.part('body', CREAM, sphere(8, 6), [0, 0.265, -0.005], [0.13, 0.115, 0.2]);
-  r.part('body', GINGER, sphere(8, 4, 0, Math.PI * 0.3), [0, 0.27, -0.05], [0.135, 0.12, 0.15]);
+  // body: chunky grey tabby loaf, white belly and chest (v1 thin + cream read goat-like; v2/v3 ginger sat too
+  // close to the Shiba, so v4 is a grey-and-white tabby)
+  r.part('body', GREY, sphere(8, 6), [0, 0.265, -0.005], [0.13, 0.115, 0.2], [0, 0, 0], backStripe);
+  r.part('body', WHITE, sphere(8, 5), [0, 0.225, 0.05], [0.1, 0.08, 0.15]);
   for (const [b, x, z] of [['legFL', 0.068, 0.11], ['legFR', -0.068, 0.11], ['legBL', 0.068, -0.11], ['legBR', -0.068, -0.11]]) {
-    r.part(b, CREAM, cyl(0.042, 0.038, 6), [x, 0.12, z], [1, 0.2, 1]);
-    r.part(b, 0xffffff, sphere(6, 4), [x, 0.03, z + 0.012], [0.046, 0.034, 0.055]);
+    r.part(b, GREY, cyl(0.042, 0.038, 6), [x, 0.12, z], [1, 0.2, 1]);
+    r.part(b, WHITE, sphere(6, 4), [x, 0.03, z + 0.012], [0.046, 0.034, 0.055]);
   }
-  // head: big round, ginger cap over the top/back
-  r.part('head', CREAM, sphere(10, 7), [0, 0.46, 0.18], [0.155, 0.135, 0.13]);
-  r.part('head', GINGER, sphere(10, 5, 0, Math.PI * 0.42), [0, 0.465, 0.165], [0.16, 0.14, 0.135], [-0.45, 0, 0]);
-  r.pair('head', CREAM, sphere(6, 4), [0.06, 0.415, 0.27], [0.05, 0.04, 0.035]); // muzzle puffs
-  r.part('head', PINK, sphere(5, 3), [0, 0.44, 0.302], [0.016, 0.011, 0.01]); // nose
+  // head: big round white face, striped grey cap over the top/back
+  r.part('head', WHITE, sphere(10, 7), [0, 0.46, 0.18], [0.155, 0.135, 0.13]);
+  r.part('head', GREY, sphere(10, 5, 0, Math.PI * 0.42), [0, 0.465, 0.165], [0.16, 0.14, 0.135], [-0.45, 0, 0], capStripe);
+  r.pair('head', WHITE, sphere(6, 4), [0.06, 0.415, 0.27], [0.05, 0.04, 0.035]); // muzzle puffs
+  r.part('head', PINK, sphere(5, 3), [0, 0.44, 0.302], [0.018, 0.012, 0.01]); // nose
   r.pair('head', DARK, sphere(6, 5), [0.06, 0.485, 0.282], [0.021, 0.027, 0.012]); // eyes
-  // the "pop": an open oval mouth on its own bone (scaled in the idle)
-  r.part('mouth', MOUTH, sphere(8, 5), [0, 0.39, 0.29], [0.032, 0.036, 0.014]);
-  // ears: ginger pyramids, pink inside
-  r.pair('ear', GINGER, cone(4), [0.088, 0.61, 0.16], [0.058, 0.11, 0.04], [0, 0.25, -0.28]);
+  // the "pop": a big dark open oval mouth below the muzzle, on its own bone (scaled in the idle)
+  r.part('mouth', MOUTH, sphere(8, 6), [0, 0.37, 0.285], [0.048, 0.054, 0.018]);
+  // ears: grey pyramids, pink inside
+  r.pair('ear', GREY, cone(4), [0.088, 0.61, 0.16], [0.058, 0.11, 0.04], [0, 0.25, -0.28]);
   r.pair('ear', PINK, cone(3), [0.083, 0.59, 0.176], [0.03, 0.065, 0.012], [0, 0.25, -0.28]);
-  // tail: two segments curving up, ginger
-  r.part('tail1', GINGER, cyl(0.032, 0.038, 5), [0, 0.38, -0.23], [1, 0.19, 1], [-0.75, 0, 0]);
-  r.part('tail2', GINGER, cyl(0.026, 0.032, 5), [0, 0.53, -0.275], [1, 0.16, 1], [-0.25, 0, 0]);
-  r.part('tail2', CREAM, sphere(5, 4), [0, 0.61, -0.29], 0.028);
+  // tail: two ringed segments curving up, white tip
+  r.part('tail1', GREY, cyl(0.032, 0.038, 5), [0, 0.38, -0.23], [1, 0.19, 1], [-0.75, 0, 0], ring);
+  r.part('tail2', GREY, cyl(0.026, 0.032, 5), [0, 0.53, -0.275], [1, 0.16, 1], [-0.25, 0, 0], ring);
+  r.part('tail2', WHITE, sphere(5, 4), [0, 0.61, -0.29], 0.028);
   // collar + bell
   r.part('body', COLLAR, torus(0.085, 0.017, 4, 10), [0, 0.36, 0.135], [1, 1, 0.85], [D2 - 0.4, 0, 0]);
   r.part('body', BELL, sphere(6, 4), [0, 0.315, 0.215], 0.022);
@@ -363,14 +390,17 @@ function cat() {
   // Idle: breathing, swaying tail, and the mouth "pop" (closed -> wide open -> closed)
   {
     const [t, v] = loop(2.4, 12, (p) => p);
-    const pt = [0, 0.9, 1.0, 1.35, 1.45, 2.4];
-    const ps = [[0.6, 0.35, 1], [0.6, 0.35, 1], [1.25, 1.35, 1], [1.25, 1.35, 1], [0.6, 0.35, 1], [0.6, 0.35, 1]];
+    // v4: longer, bigger pop with the nose tipped up, so it reads at pet distance on a phone
+    const pt = [0, 0.7, 0.78, 1.7, 1.8, 2.4];
+    const shut = [0.45, 0.25, 1];
+    const open = [1.3, 1.45, 1.2];
+    const ps = [shut, shut, open, open, shut, shut];
     clips.push(
       clip('Idle', 2.4, [
         sclT('body', t, v.map((p) => [1, 1 + 0.02 * S(p), 1])),
         rotT('tail1', t, v.map((p) => [0, 0, 0.3 * S(p)])),
         rotT('tail2', t, v.map((p) => [0.15 * S(p + 0.25), 0, 0.35 * S(p - 0.2)])),
-        rotT('head', pt, pt.map((x, i) => [i === 2 || i === 3 ? -0.12 : 0, 0, 0])),
+        rotT('head', pt, pt.map((x, i) => [i === 2 || i === 3 ? -0.32 : 0, 0, 0])),
         sclT('mouth', pt, ps),
         rotT('earL', [0, 1.8, 1.9, 2.0, 2.4], [[0, 0, 0], [0, 0, 0], [0, 0, 0.4], [0, 0, 0], [0, 0, 0]]),
       ]),
@@ -389,7 +419,7 @@ function cat() {
         posT(r, 'body', t, v.map((p) => [0, 0.01 * Math.abs(S(p)), 0])),
         rotT('tail1', t, v.map((p) => [-0.2, 0, 0.12 * S(p)])),
         rotT('tail2', t, v.map((p) => [0, 0, 0.2 * S(p - 0.2)])),
-        sclT('mouth', t, v.map(() => [0.6, 0.35, 1])),
+        sclT('mouth', t, v.map(() => [0.45, 0.25, 1])),
       ]),
     );
   }
@@ -407,7 +437,7 @@ function cat() {
         rotT('legBR', t, v.map(() => [-pitch - 1.3, 0, 0])),
         rotT('head', t, v.map((p) => [-pitch, 0, 0.06 * S(p)])),
         rotT('tail1', t, v.map((p) => [0.9, 0, 0.1 * S(p)])),
-        sclT('mouth', t, v.map(() => [0.6, 0.35, 1])),
+        sclT('mouth', t, v.map(() => [0.45, 0.25, 1])),
       ]),
     );
   }

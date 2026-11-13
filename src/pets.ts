@@ -1,7 +1,7 @@
 // Pets: a small CC0 animal that follows its owner around and sits beside them when they sit.
 // Free for everyone; everyone in the hall sees your pet. Tap a pet to give it a pat (hearts).
 import * as THREE from 'three';
-import { loadAnimal, previewKind, type AnimalInst } from './animals';
+import { loadAnimal, petModel, type AnimalInst } from './animals';
 import { lerpAngle } from './avatar';
 import { popEmoji } from './effects';
 import { disposeOwned } from './dispose';
@@ -77,7 +77,7 @@ export class Pet {
     private owner: THREE.Object3D,
     private heightAt: (x: number, z: number) => number,
   ) {
-    this.key = previewKind(PETS[kind]?.key ?? 'none');
+    this.key = petModel(PETS[kind]?.key ?? 'none');
     this.root.userData.pet = this;
     // start beside the owner
     this.root.position.copy(owner.position);

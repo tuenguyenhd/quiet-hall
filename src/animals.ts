@@ -6,6 +6,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { COURT, GARDEN, LAKE } from './layout';
 import { cullable } from './bake';
+import { NEAR_BUILD } from './near-mark';
 
 export interface Kind {
   url: string;
@@ -37,15 +38,23 @@ const KINDS: Record<string, Kind> = {
   penguin: { url: '/models/pets/penguin.glb', height: 0.5, speed: 1, walk: '', idles: [] },
   axolotl: { url: '/models/pets/axolotl.glb', height: 0.32, speed: 1, walk: '', idles: [] },
   // EXPLORATION (not in PETS / SPAWNS): procedural meme-archetype pets, scripts/meme-pets.mjs; preview with ?pets=meme
-  memeShiba: { url: '/models/meme/meme-shiba.glb', height: 1.0, speed: 0.9, walk: 'Walk', idles: ['Idle', 'Idle_2', 'Sit'] },
+  memeShiba: { url: '/models/meme/meme-shiba.glb', height: 1.15, speed: 0.9, walk: 'Walk', idles: ['Idle', 'Idle_2', 'Sit'] },
   memeFrog: { url: '/models/meme/meme-frog.glb', height: 0.34, speed: 1.4, walk: 'Hop', idles: ['Idle'], hop: true },
   memeCat: { url: '/models/meme/meme-cat.glb', height: 0.9, speed: 0.9, walk: 'Walk', idles: ['Idle', 'Sit'] },
 };
 
 /** dev-only `?pets=meme`: show the meme-archetype pets in place of the CC0 dogs / frogs (wanderers, pets, frens) */
 const MEME_SWAP: Record<string, string> = { shiba: 'memeShiba', husky: 'memeCat', frog: 'memeFrog' };
-const memePreview = import.meta.env.DEV && new URLSearchParams(location.search).get('pets') === 'meme';
+const petsParam = import.meta.env.DEV ? new URLSearchParams(location.search).get('pets') : null;
+const memePreview = petsParam === 'meme';
 export const previewKind = (kind: string): string => (memePreview && MEME_SWAP[kind]) || kind;
+/**
+ * Model for a pet key. NEAR edition: the lost frens / rescued pets use the meme models (Shibby = Biscuit,
+ * Froggo = Lily); the Seeker edition keeps the CC0 Shiba and Frog. Dev: `?pets=meme` previews the rest,
+ * `?pets=cc0` shows the old CC0 models in the NEAR edition for side-by-side comparison.
+ */
+const NEAR_PET_MODELS: Record<string, string> = { shiba: 'memeShiba', frog: 'memeFrog' };
+export const petModel = (key: string): string => (NEAR_BUILD && petsParam !== 'cc0' && NEAR_PET_MODELS[key]) || previewKind(key);
 
 interface Spawn {
   kind: keyof typeof KINDS;

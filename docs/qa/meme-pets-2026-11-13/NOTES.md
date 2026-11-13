@@ -37,3 +37,26 @@ values as the Quaternius set, so the meme pets take the scene light the same way
 2. A bigger pop on the cat mouth, maybe a short scale-up of the whole head when it pops.
 3. If these become real pets: add PETS entries, CREDITS (original, project-owned) and pick SCALE from a face-on lineup. The `?lineup=pets` view puts the row behind the avatar at default zoom, so it was not useful here.
 4. Optional: a second idle for the frog and cat (look-around), to match the Shiba's Idle_2.
+
+---
+
+## Polish pass (same day, after the go-ahead)
+
+Changes:
+- **Pip (cat) v4:** grey-and-white tabby. The darker stripes on the back, head cap and tail rings are per-face vertex colours (a `shade` hook on `Rig.part`), so it is still 1 material and 1 draw call. The pop is bigger: the mouth is a dark oval below the muzzle that opens to about 1.3–1.45x, is held for about 0.9 s, and the nose tips up 0.32 rad during the pop. 1076 tris, 38 KB.
+- **Lily (frog):** the dark pad is now a bright light-green lily pad with a darker rim, sitting almost flat, with a small pink 5-petal flower on top. The half-lidded eyes are unchanged. 1218 tris, 38 KB.
+- **Biscuit:** model unchanged. Its wandering-dog instance is raised to KINDS height 1.15 (was 1.0) so it sits closer to the CC0 dogs. Pet scale is unchanged.
+- **NEAR edition wiring (this branch only):** the new `petModel()` in `src/animals.ts` maps the pet keys shiba → memeShiba and frog → memeFrog when `NEAR_BUILD`. That covers the lost frens in Meme Valley (Shibby, Froggo), the rescued pets and other players' pets. The Seeker edition is unchanged. The wandering animals still use CC0 unless `?pets=meme`. New dev-only `?pets=cc0` shows the old CC0 pets in the NEAR edition, for comparison.
+
+Screenshots (`polish-*`): `-current` = `?pets=cc0`, `-meme` = `?pets=meme` for the court close-ups. For the valley and fren shots, `-meme` is the plain NEAR default, which shows that the edition wiring works.
+- `polish-closeup-{current,meme}.jpg`: wanderers plus the Shiba pet
+- `polish-closeup-frogpet-*`: frog pet. `polish-closeup-catpet-*`: husky slot as pet, which is Pip in meme mode
+- `polish-valley-*`: Meme Valley overview
+- `polish-fren-shibby-*`, `polish-fren-froggo-*`: lost frens, viewed from beside the player (the fren pet sits beside its anchor)
+- `memeview2.mjs`: the capture script
+
+Verdicts after the polish:
+- **Biscuit: fits.**
+- **Pip: fits.** The tabby reads as a cat at once and no longer competes with the Shiba. The open-mouth, nose-up pop is visible at pet distance.
+- **Lily: fits.** The pink flower and light pad read from behind and three-quarter view. At valley distance the frog is small, as the CC0 frog was.
+- No console errors.
