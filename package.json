@@ -11,7 +11,8 @@
     "deploy:near": "VITE_EDITION=near vite build --mode near && wrangler deploy -c wrangler.near.toml",
     "check": "tsc --noEmit -p . && tsc --noEmit -p worker",
     "prod-local": "vite build && wrangler dev --port 8787 --ip 0.0.0.0",
-    "deploy": "vite build && wrangler deploy"
+    "deploy": "vite build && wrangler deploy",
+    "test:near": "sh scripts/near-test-all.sh"
   },
   "dependencies": {
     "@hot-labs/near-connect": "^0.12.0",
