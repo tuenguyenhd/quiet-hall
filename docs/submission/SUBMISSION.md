@@ -53,7 +53,7 @@ There is no length limit, but keep it short.
 |---|---|---|
 | 1 | Public repo with LICENSE (MIT) | LICENSE added; **the repo is not on GitHub yet (owner)** |
 | 2 | README with problem, product and NEAR fit; do-X-see-Y run steps; no secrets needed | `NEAR.md` updated (2026-11-13) |
-| 3 | Reproducible from a fresh clone; AI screening runs it | `npm run test:near`; fresh-clone run recorded below |
+| 3 | Reproducible from a fresh clone; AI screening runs it | Verified 2026-11-13 on a fresh clone: `npm ci`, `npm run check`, `npm run build:near` and `npm run test:near` all pass (6 suites, 166 checks) |
 | 4 | Only work done in the window; diff link | Whole repo is from 2026-11-09 (window opened 2026-10-19); `git log main..near-hackathon` |
 | 5 | Libraries and AI tools listed | `NEAR.md` "Built during the hackathon" |
 | 6 | No keys or secrets anywhere in the repo history | Scanned 2026-11-13: none. `.env.production` holds only the public Worker URL. Note: commit author emails become public with the repo |
