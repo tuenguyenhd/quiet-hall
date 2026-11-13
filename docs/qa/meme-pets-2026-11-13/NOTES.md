@@ -60,3 +60,34 @@ Verdicts after the polish:
 - **Pip: fits.** The tabby reads as a cat at once and no longer competes with the Shiba. The open-mouth, nose-up pop is visible at pet distance.
 - **Lily: fits.** The pink flower and light pad read from behind and three-quarter view. At valley distance the frog is small, as the CC0 frog was.
 - No console errors.
+
+---
+
+## Biscuit v2: Doge-archetype redo (after user feedback "doesn't look like Doge")
+
+An original low-poly model. The previous Biscuit is kept as `public/models/meme/meme-shiba-v1.glb`, dev comparison only, via `?pets=v1`, which puts v1 on the wandering-dog spots.
+
+- **Colour:** pale honey back, ears, tail top and legs (`#e9c48c`). The first try at `#dcaa66` rendered orange-brown in the warm scene light with metalness 0.4. Bright cream urajiro (`#fdf6ea`) on the lower face, cheeks, throat, chest ruff, belly, inner legs, paws, tail underside and inner ears. All of it is per-face vertex colour. Cream eyebrow dots that rise in the loop, black nose, no bandana.
+- **Shape:** wider head with big fluffy cheeks and a short muzzle; small upright ears tipped forward; tight tail curl over the back; chunkier body.
+- **Idle and Sit are the signature pose:** sitting on its haunches, front legs straight, head turned about 32–38° over its left shoulder with a small tilt. The eyes are dark-outlined almonds with the iris pushed to the corner (side-eye) and a white crescent showing. The loop slides the eyes further, lifts the brows and deepens the tilt, with one ear twitch. A pet sits on the owner's right side facing the owner, so its left shoulder faces the normal game camera. Walk is unchanged except for colours and shape. Idle_2 (standing look-around) is kept for the wandering animals.
+- **Budget:** 1332 tris, 47 KB after meshopt, 1 draw call. Clip names are unchanged.
+
+Iterations, crops of the pet seen from behind the player (normal camera):
+- **Iteration 1** (`doge-iter1-crop-behind.jpg`): head turned about 50° and tan `#dcaa66`. It read orange, and the head faced the camera square-on, so the eyes looked straight out and the side-eye was lost.
+- **Iteration 2** (`doge-iter2-crop-behind.jpg`): paler honey, brighter cream and bigger eye whites. The colour was right, but the whites blended into the cream cheeks.
+- **Final** (`doge-final-crop-behind.jpg`): dark almond outline and a 3/4 head turn so the eyes do the glancing.
+
+Final shots:
+- `doge-final-pet-behind.jpg`: the normal camera, the main read
+- `doge-final-pet-side.jpg`: profile, head turned toward the owner and camera
+- `doge-final-pet-farside.jpg`: the camera orbited to the dog's other side, where the head turns away
+- `doge-vs-iter-biscuit-v1-behind.jpg`: the orange v1 wandering dogs next to the new pet
+- `doge-final-shibby-valley*.jpg`: Shibby as a lost fren in Meme Valley
+- `memeview3.mjs`: the capture script
+
+**Verdict (honest):** from the normal camera, a pale honey-and-cream Shiba sitting and glancing back over its shoulder with a tilted head reads as "Doge-ish" at a glance, much more than v1 did. The side-eye itself only reads in close-up or crop. At phone pet size (about 60 px) it is the colour, the cheeks and the over-the-shoulder pose that carry the read. The pose is one-sided: viewed from the dog's other side, it looks away. At valley distance Shibby is small, and the pose is the only cue.
+
+Next steps:
+1. A slightly larger pet scale for Biscuit only (for example 0.7), so the face gets more pixels.
+2. Optionally mirror the head turn in code toward the camera side.
+3. An art-director pass on the exact honey value under night lighting.

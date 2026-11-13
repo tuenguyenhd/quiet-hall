@@ -1,5 +1,5 @@
 // Procedural low-poly "meme archetype" pets (original characters, no logos / text / likeness of any artwork):
-//   meme-shiba.glb  Biscuit: an excited Shiba-style pup with a red bandana
+//   meme-shiba.glb  Biscuit: a Doge-archetype Shiba (pale honey + cream), sitting side-eye idle
 //   meme-frog.glb   Lily: a chill, half-lidded pond frog wearing a bright lily-pad hat with a pink flower
 //   meme-cat.glb    Pip: a grey-and-white tabby that "pops" its mouth open (nose up), bell collar
 // Style matches the Quaternius CC0 animals: flat-shaded faceted primitives, flat colours (here as vertex
@@ -91,14 +91,16 @@ class Rig {
     return this;
   }
   /** mirrored pair (x and -x); `name` gets L / R suffix when the bone is per-side */
-  pair(bone, color, g, pos, scale, rot = [0, 0, 0]) {
+  pair(bone, color, g, pos, scale, rot = [0, 0, 0], shade = null) {
     const sides = [
       ['L', 1],
       ['R', -1],
     ];
     for (const [s, k] of sides) {
       const b = this.bones[bone + s] ? bone + s : bone;
-      this.part(b, color, g, [pos[0] * k, pos[1], pos[2]], scale, [rot[0], rot[1] * k, rot[2] * k]);
+      // shade sees mirrored coordinates, so one rule serves both sides
+      const sh = shade && ((x, y, z) => shade(x * k, y, z));
+      this.part(b, color, g, [pos[0] * k, pos[1], pos[2]], scale, [rot[0], rot[1] * k, rot[2] * k], sh);
     }
     return this;
   }
@@ -140,73 +142,107 @@ const loop = (dur, n, f) => {
 const S = (ph) => Math.sin(ph * Math.PI * 2);
 const clip = (name, dur, tracks) => new THREE.AnimationClip(name, dur, tracks);
 
-// ---------- Biscuit: Shiba-style pup ----------
+// ---------- Biscuit v2: Doge-archetype Shiba (pale honey + cream urajiro, sitting side-eye idle) ----------
+// Original low-poly model aiming at the meme's recognisable traits (colour, fluffy wide face, curled tail,
+// head turned back over the shoulder with a side-eye); no copy of any photo, no text, no logo.
 function shiba() {
-  const ORANGE = 0xd88c4a;
-  const CREAM = 0xf4e6cc;
-  const DARK = 0x2b211c;
-  const TONGUE = 0xe57f86;
-  const SCARF = 0xcf5a4c;
+  const TAN = 0xe9c48c; // pale honey, not orange (0xdcaa66 rendered orange-brown in the warm scene light)
+  const CREAM = 0xfdf6ea; // urajiro
+  const DARK = 0x2a221d;
+  const EYE = 0xfbf7ef;
   const r = new Rig()
     .bone('body', 'root', [0, 0.33, 0])
     .bone('head', 'body', [0, 0.44, 0.17])
-    .bone('earL', 'head', [0.075, 0.62, 0.22])
-    .bone('earR', 'head', [-0.075, 0.62, 0.22])
-    .bone('tail', 'body', [0, 0.4, -0.2])
-    .bone('legFL', 'body', [0.08, 0.26, 0.13])
-    .bone('legFR', 'body', [-0.08, 0.26, 0.13])
-    .bone('legBL', 'body', [0.08, 0.26, -0.13])
-    .bone('legBR', 'body', [-0.08, 0.26, -0.13]);
-  // body + cream chest
-  r.part('body', ORANGE, sphere(8, 6), [0, 0.33, -0.01], [0.135, 0.125, 0.235]);
-  r.part('body', CREAM, sphere(8, 5), [0, 0.3, 0.09], [0.1, 0.1, 0.13]);
-  // legs (orange) with cream socks
-  for (const [b, x, z] of [['legFL', 0.08, 0.13], ['legFR', -0.08, 0.13], ['legBL', 0.08, -0.13], ['legBR', -0.08, -0.13]]) {
-    r.part(b, ORANGE, cyl(0.042, 0.036, 6), [x, 0.17, z], [1, 0.2, 1]);
-    r.part(b, CREAM, sphere(6, 4), [x, 0.035, z + 0.012], [0.045, 0.035, 0.055]);
+    .bone('pupils', 'head', [0, 0.545, 0.362])
+    .bone('brows', 'head', [0, 0.598, 0.34])
+    .bone('earL', 'head', [0.085, 0.625, 0.215])
+    .bone('earR', 'head', [-0.085, 0.625, 0.215])
+    .bone('tail', 'body', [0, 0.42, -0.2])
+    .bone('legFL', 'body', [0.085, 0.26, 0.13])
+    .bone('legFR', 'body', [-0.085, 0.26, 0.13])
+    .bone('legBL', 'body', [0.085, 0.26, -0.13])
+    .bone('legBR', 'body', [-0.085, 0.26, -0.13]);
+  // chunky, soft body: honey back, cream belly / chest / throat
+  const bodyShade = (x, y, z) => (y < 0.285 || (z > 0.12 && y < 0.4) ? CREAM : null);
+  r.part('body', TAN, sphere(9, 7), [0, 0.335, -0.01], [0.15, 0.135, 0.24], [0, 0, 0], bodyShade);
+  r.part('body', CREAM, sphere(8, 5), [0, 0.37, 0.15], [0.105, 0.1, 0.09]); // fluffy chest ruff
+  // legs: honey outside, cream inner side + socks
+  for (const [b, x, z] of [['legFL', 0.085, 0.13], ['legFR', -0.085, 0.13], ['legBL', 0.085, -0.13], ['legBR', -0.085, -0.13]]) {
+    r.part(b, TAN, cyl(0.045, 0.038, 6), [x, 0.17, z], [1, 0.2, 1], [0, 0, 0], (px, py) => (py < 0.13 || px * Math.sign(x) < Math.abs(x) - 0.01 ? CREAM : null));
+    r.part(b, CREAM, sphere(6, 4), [x, 0.035, z + 0.012], [0.047, 0.035, 0.056]);
   }
-  // head: big round chibi head
-  r.part('head', ORANGE, sphere(9, 7), [0, 0.53, 0.23], [0.15, 0.13, 0.135]);
-  r.part('head', CREAM, sphere(8, 5), [0, 0.475, 0.335], [0.075, 0.055, 0.07]); // muzzle
-  r.pair('head', CREAM, sphere(6, 5), [0.07, 0.47, 0.3], [0.06, 0.05, 0.05]); // cheeks
-  r.part('head', DARK, sphere(6, 4), [0, 0.5, 0.405], [0.022, 0.016, 0.014]); // nose
-  r.pair('head', DARK, sphere(6, 5), [0.062, 0.545, 0.352], [0.022, 0.026, 0.014]); // eyes
-  r.pair('head', CREAM, sphere(5, 4), [0.058, 0.6, 0.333], [0.02, 0.012, 0.01]); // eyebrow dots
-  r.part('head', TONGUE, box(), [0, 0.43, 0.38], [0.03, 0.012, 0.035], [0.5, 0, 0]); // happy tongue
-  // ears: pyramids, cream inside
-  r.pair('ear', ORANGE, cone(4), [0.075, 0.67, 0.22], [0.05, 0.11, 0.03], [0, 0, -0.3]);
-  r.pair('ear', CREAM, cone(3), [0.074, 0.66, 0.235], [0.03, 0.075, 0.012], [0, 0, -0.3]);
-  // curled tail over the back, cream tip
-  r.part('tail', ORANGE, torus(0.055, 0.03, 5, 7, Math.PI * 1.4), [0, 0.47, -0.2], 1, [0, D2, 0.4]);
-  r.part('tail', CREAM, sphere(5, 4), [0, 0.49, -0.135], 0.03);
-  // bandana: neck band + a triangle flap on the chest
-  r.part('body', SCARF, torus(0.1, 0.022, 4, 10), [0, 0.425, 0.15], [1, 1, 0.8], [D2 - 0.35, 0, 0]);
-  r.part('body', SCARF, cone(3), [0, 0.37, 0.235], [0.06, 0.08, 0.015], [Math.PI + 0.25, 0, 0]);
+  // head: wide, fluffy; the lower face is cream (urajiro)
+  r.part('head', TAN, sphere(10, 7), [0, 0.53, 0.225], [0.17, 0.135, 0.14], [0, 0, 0], (x, y, z) => (y < 0.505 && z > 0.21 ? CREAM : null));
+  r.pair('head', CREAM, sphere(7, 5), [0.095, 0.478, 0.29], [0.078, 0.066, 0.062]); // fluffy cheeks
+  r.part('head', CREAM, sphere(8, 5), [0, 0.482, 0.34], [0.07, 0.055, 0.055]); // short muzzle
+  r.part('head', CREAM, sphere(7, 4), [0, 0.445, 0.27], [0.1, 0.05, 0.08]); // chin / throat fluff
+  r.part('head', DARK, sphere(6, 4), [0, 0.507, 0.392], [0.024, 0.017, 0.015]); // nose
+  // closed mouth: a small, slightly lopsided line (smug / worried)
+  r.part('head', DARK, torus(0.022, 0.0045, 3, 6, Math.PI * 0.8), [0.004, 0.468, 0.388], [1, 0.7, 1], [0, 0, Math.PI * 1.1 + 0.15]);
+  // almond eyes: off-white with the dark iris pushed to the corner (side-eye); irises on their own bone
+  // (iteration 3: a dark almond outline so the white reads against the cream cheeks; big iris pushed sideways)
+  r.pair('head', DARK, sphere(7, 5), [0.066, 0.545, 0.349], [0.04, 0.027, 0.012], [0, 0, 0.12]);
+  r.pair('head', EYE, sphere(7, 5), [0.066, 0.545, 0.354], [0.033, 0.02, 0.012], [0, 0, 0.12]);
+  r.pair('pupils', DARK, sphere(6, 5), [0.066, 0.545, 0.3625], [0.019, 0.021, 0.011]);
+  // raised cream eyebrow dots
+  r.pair('brows', CREAM, sphere(6, 4), [0.058, 0.598, 0.34], [0.022, 0.014, 0.012], [0, 0, -0.2]);
+  // small upright ears, tipped slightly forward, cream inside
+  r.pair('ear', TAN, cone(4), [0.085, 0.665, 0.215], [0.046, 0.09, 0.03], [0.18, 0, -0.22]);
+  r.pair('ear', CREAM, cone(3), [0.084, 0.658, 0.228], [0.028, 0.06, 0.012], [0.18, 0, -0.22]);
+  // tail: tight curl over the back, cream underside
+  r.part('tail', TAN, torus(0.048, 0.034, 5, 9, Math.PI * 1.75), [0, 0.5, -0.17], 1, [0, D2, 0.1], (x, y) => (y < 0.5 ? CREAM : null));
 
   const clips = [];
-  // Idle: breathing, happy tail wag, an ear flick
+  // the signature pose, used by Idle and Sit: sitting on haunches, front legs straight, head turned back over its
+  // left shoulder (local +x = toward the camera when it sits beside its owner), irises in the corner, small tilt
+  const pitch = -0.5;
+  const sitBase = (t, v, extra = () => []) => [
+    rotT('body', t, v.map((p) => [pitch, 0, 0])),
+    posT(r, 'body', t, v.map(() => [0, -0.07, -0.02])),
+    rotT('legFL', t, v.map(() => [-pitch, 0, 0])),
+    rotT('legFR', t, v.map(() => [-pitch, 0, 0])),
+    rotT('legBL', t, v.map(() => [-pitch - 1.3, 0, 0])),
+    rotT('legBR', t, v.map(() => [-pitch - 1.3, 0, 0])),
+    rotT('tail', t, v.map((p) => [0.35, 0, 0.12 * S(p)])),
+    ...extra(t, v),
+  ];
   {
-    const [t, v] = loop(2, 16, (p) => p);
+    // Idle (4 s): side-eye hold, eyes slide a touch further, brows lift, tilt deepens; one ear twitch
+    const [t, v] = loop(4, 16, (p) => p);
+    const k = (p) => 0.5 - 0.5 * Math.cos(p * Math.PI * 2); // 0 -> 1 -> 0
     clips.push(
-      clip('Idle', 2, [
-        sclT('body', t, v.map((p) => [1, 1 + 0.025 * S(p), 1 + 0.01 * S(p)])),
-        rotT('tail', t, v.map((p) => [0, 0, 0.45 * S(p * 4)])),
-        rotT('head', t, v.map((p) => [0.04 * S(p), 0, 0.06 * S(p)])),
-        rotT('earL', [0, 1.1, 1.2, 1.3, 2], [[0, 0, 0], [0, 0, 0], [0, 0, 0.45], [0, 0, 0], [0, 0, 0]]),
-      ]),
+      clip('Idle', 4, sitBase(t, v, () => [
+        rotT('head', t, v.map((p) => [-pitch + 0.05 - 0.04 * k(p), 0.55 + 0.12 * k(p), 0.16 + 0.08 * k(p)])),
+        posT(r, 'pupils', t, v.map((p) => [0.012 + 0.004 * k(p), 0, 0])),
+        posT(r, 'brows', t, v.map((p) => [0, 0.004 + 0.006 * k(p), 0])),
+        sclT('body', t, v.map((p) => [1, 1 + 0.015 * S(p * 2), 1])),
+        rotT('earL', [0, 2.9, 3.0, 3.1, 4], [[0, 0, 0], [0, 0, 0], [0, 0, 0.4], [0, 0, 0], [0, 0, 0]]),
+      ])),
     );
   }
-  // Idle_2: looks around
+  {
+    // Sit (2 s): same pose, steady (pets use it when the owner sits)
+    const [t, v] = loop(2, 8, (p) => p);
+    clips.push(
+      clip('Sit', 2, sitBase(t, v, () => [
+        rotT('head', t, v.map((p) => [-pitch + 0.05, 0.6, 0.15 + 0.03 * S(p)])),
+        posT(r, 'pupils', t, v.map(() => [0.013, 0, 0])),
+        posT(r, 'brows', t, v.map(() => [0, 0.006, 0])),
+      ])),
+    );
+  }
+  // Idle_2 (standing): looks around, glancing sideways
   {
     const [t, v] = loop(3, 12, (p) => p);
     clips.push(
       clip('Idle_2', 3, [
         rotT('head', t, v.map((p) => [0.05, 0.55 * S(p), 0.1 * S(p)])),
-        rotT('tail', t, v.map((p) => [0, 0, 0.3 * S(p * 3)])),
+        posT(r, 'pupils', t, v.map((p) => [0.008 * S(p), 0, 0])),
+        rotT('tail', t, v.map((p) => [0, 0, 0.2 * S(p * 3)])),
       ]),
     );
   }
-  // Walk: diagonal leg pairs, body bob, tail wag
+  // Walk: diagonal leg pairs, body bob, tail wag (unchanged from v1)
   {
     const [t, v] = loop(0.6, 12, (p) => p);
     const A = 0.55;
@@ -218,24 +254,7 @@ function shiba() {
         rotT('legBL', t, v.map((p) => [-A * S(p), 0, 0])),
         posT(r, 'body', t, v.map((p) => [0, 0.012 * Math.abs(S(p)), 0])),
         rotT('head', t, v.map((p) => [0.05 * S(p * 2), 0, 0])),
-        rotT('tail', t, v.map((p) => [0, 0, 0.35 * S(p * 2)])),
-      ]),
-    );
-  }
-  // Sit: rear down, back legs folded, head level, slow wag
-  {
-    const [t, v] = loop(2, 8, (p) => p);
-    const pitch = -0.42;
-    clips.push(
-      clip('Sit', 2, [
-        rotT('body', t, v.map(() => [pitch, 0, 0])),
-        posT(r, 'body', t, v.map(() => [0, -0.06, -0.02])),
-        rotT('legFL', t, v.map(() => [-pitch, 0, 0])),
-        rotT('legFR', t, v.map(() => [-pitch, 0, 0])),
-        rotT('legBL', t, v.map(() => [-pitch - 1.25, 0, 0])),
-        rotT('legBR', t, v.map(() => [-pitch - 1.25, 0, 0])),
-        rotT('head', t, v.map((p) => [-pitch + 0.05 * S(p), 0, 0])),
-        rotT('tail', t, v.map((p) => [0, 0, 0.3 * S(p * 2)])),
+        rotT('tail', t, v.map((p) => [0, 0, 0.25 * S(p * 2)])),
       ]),
     );
   }

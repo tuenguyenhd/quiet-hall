@@ -56,6 +56,7 @@ const CLIPS: Record<string, { walk: string; idle: string; sit: string; turn?: nu
   penguin: { walk: '', idle: '', sit: '' },
   axolotl: { walk: '', idle: '', sit: '' },
   memeShiba: { walk: 'Walk', idle: 'Idle', sit: 'Sit' },
+  memeShibaV1: { walk: 'Walk', idle: 'Idle', sit: 'Sit' },
   memeFrog: { walk: 'Hop', idle: 'Idle', sit: 'Idle' },
   memeCat: { walk: 'Walk', idle: 'Idle', sit: 'Sit' },
 };
