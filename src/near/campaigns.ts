@@ -164,6 +164,7 @@ export function setupDrops(h: DropsHost) {
   /** server clock minus ours (from welcome.now) */
   let skew = 0;
   const now = () => Date.now() + skew;
+  const START_LEAD_MS = 60_000;
   /** walking up to a drop: act on arrival */
   let pending: { c: string; d: number; at: XZ } | null = null;
   const root = new THREE.Group();
@@ -243,7 +244,9 @@ export function setupDrops(h: DropsHost) {
   }
   /** a new list from the server: add the new, remove the gone and the ended, keep the rest as built */
   function setList(list: PublicCampaign[]) {
-    const keep = new Set(list.filter((c) => isLive(c, now())).map((c) => c.id));
+    // a drop that was just created starts "now" on the server; our skew-corrected clock can be a little behind,
+    // so allow a minute of lead (picks are still checked by the server)
+    const keep = new Set(list.filter((c) => isLive(c, now()) || isLive(c, now() + START_LEAD_MS)).map((c) => c.id));
     for (const [id, L] of live) if (!keep.has(id) && !(import.meta.env.DEV && L.dev)) drop(id);
     for (const c of list) {
       if (!keep.has(c.id)) continue;
