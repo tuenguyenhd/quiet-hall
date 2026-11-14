@@ -408,3 +408,17 @@ li .q-dface { width: 28px; height: 28px; font-size: 16px; vertical-align: middle
 
 /* the hall did not answer (BUG-0001) */
 .near-err { color: #b3261e; font-weight: 600; }
+
+/* AI companion chat (companion.ts) */
+.cp-log { max-height: 38vh; min-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin: 8px 0; padding: 4px; }
+.cp-line { padding: 8px 11px; border-radius: 14px; max-width: 86%; line-height: 1.35; font-size: 14px; white-space: pre-wrap; }
+.cp-pet { align-self: flex-start; background: #f3ead9; color: #3b3346; border-bottom-left-radius: 4px; }
+.cp-me { align-self: flex-end; background: #b48cff; color: #fff; border-bottom-right-radius: 4px; }
+.cp-sys { align-self: center; background: transparent; color: #8a7f74; font-size: 12px; text-align: center; }
+.cp-typing { opacity: 0.7; font-style: italic; }
+.cp-quick { flex-wrap: wrap; gap: 6px; }
+.cp-form { display: flex; gap: 6px; margin-top: 8px; }
+.cp-form input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid #d8cfc2; font-size: 16px; }
+.cp-pass { margin-top: 8px; padding: 10px; border-radius: 14px; background: #fff6df; border: 1px solid #f0d58a; }
+.cp-pass button { margin-top: 8px; width: 100%; }
+.cp-form button { width: auto; flex: 0 0 auto; padding: 10px 18px; margin: 0; }

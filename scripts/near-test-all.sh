@@ -33,5 +33,6 @@ run market   scripts/near-market-test.mjs   "$BASE" localkey
 run duel     scripts/near-duel-test.mjs     "$BASE" localkey
 run campaign scripts/near-campaign-test.mjs "$BASE" localkey localadmin
 run mcp      scripts/near-mcp-test.mjs      "$BASE" localadmin
+run companion scripts/near-companion-test.mjs "$BASE" localkey
 if [ $FAIL -ne 0 ]; then echo "SOME SUITES FAILED"; exit 1; fi
 echo "ALL NEAR SUITES PASSED"

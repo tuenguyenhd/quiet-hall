@@ -4,10 +4,12 @@ import { Ledger, priceTable, type SpotOwner } from './ledger';
 import { Pump } from './pump';
 import { Economy, minuteMs, type CampPickResult } from './economy';
 import { handleMcp, newSponsorKey, sponsorKeyHash } from './mcp';
+import { companionReply, verifyPassTx } from './companion';
+import { COMPANION, SKINS, type CompanionContext } from '../src/companion';
 import { Mirror, ownerId } from './mirror';
 import { LOGIN_MESSAGE, LOGIN_RECIPIENT, loginNonce, verifyLogin } from './nearlogin';
 import { edition, ECONOMY } from '../src/economy';
-import { FRENS, GATHER, WORKBENCH, dist, frenById, nodeById } from '../src/valley';
+import { FRENS, GATHER, ITEMS, WORKBENCH, dist, frenById, nodeById } from '../src/valley';
 import { CUP, TRADE_ZONE } from '../src/market';
 import { serverRpc } from './solana';
 import { DUEL, DUEL_MAX_D, PUMP_MARKETS_BY_EDITION, cleanChat, cleanPlayerName, defaultName, inDuelZone, type PumpMarket } from '../src/layout';
@@ -79,6 +81,12 @@ export interface Env {
   LLM_MODE?: string;
   /** most LLM drafts per UTC day (var; default 300) */
   LLM_DAILY_CAP?: string;
+  /** AI companion model on NEAR AI Cloud (default anthropic/claude-haiku-5-5) */
+  AI_MODEL?: string;
+  /** most companion replies per UTC day, all players together (cost guard; default 3000) */
+  AI_DAILY_CAP?: string;
+  /** NEAR testnet account that receives AI Pass payments (default NEAR_ACCOUNT) */
+  AI_PASS_RECEIVER?: string;
 }
 
 type SitState = 'idle' | 'sit';
@@ -127,6 +135,8 @@ interface Att {
 const MAX_ROOM = 400; // sockets per hall
 const MAX_PER_IP = 8; // stops one machine faking a crowd
 const MAX_BYTES = 400;
+/** the AI companion message carries a short chat history (src/companion.ts caps it) */
+const MAX_BYTES_PETSAY = 3000;
 const MAX_PER_SEC = 30;
 const COLORS = LIGHT_COUNT * SPECIES.length; // light colour + character
 const BOUND = BOUNDS + 2;
@@ -184,7 +194,7 @@ const NEAR_API = /^\/api\/(health|config|near\/[a-z-]+|pump\/[a-z-]+)$/;
 /** NEAR edition: socket messages that belong to Solana / money / prediction features */
 const NEAR_BLOCKED_WS = new Set(['spots', 'profile', 'lantern']);
 /** socket messages that exist only in the NEAR edition */
-const NEAR_ONLY_WS = new Set(['pick', 'grant', 'wishDone', 'craft', 'book', 'trade', 'cupJoin', 'cpick', 'cclaim']);
+const NEAR_ONLY_WS = new Set(['pick', 'grant', 'wishDone', 'craft', 'book', 'trade', 'cupJoin', 'cpick', 'cclaim', 'petsay', 'aistat', 'aipass']);
 const REACH = GATHER.reach + GATHER.tolerance;
 const CO_REACH = GATHER.coRescueRadius + GATHER.tolerance;
 /** PumpHall: one board for everyone; "t<id>" rooms are isolated boards for automated tests */
@@ -696,6 +706,55 @@ export class Hall extends DurableObject<Env> {
         const c = String(m.c ?? '').slice(0, 40);
         return this.campReply(ws, a, c, -1, await E.campaignClaim(a.pid, c));
       }
+      case 'aistat': {
+        const st = await E.aiStatus(a.pid, COMPANION.freePerDay);
+        return send(ws, { t: 'aistat', left: st.pass ? -1 : st.left, free: COMPANION.freePerDay, pass: st.pass, price: COMPANION.passNear, days: COMPANION.passDays, to: this.passReceiver() });
+      }
+      case 'petsay': {
+        const text = String(m.text ?? '').trim().slice(0, COMPANION.maxIn);
+        const tip = m.tip === true;
+        if (!text && !tip) return;
+        if (await E.rateLimited(`ai:${a.pid}`, COMPANION.perMinute)) return send(ws, { t: 'petsaid', ok: false, why: `${COMPANION.name} needs a breath. Wait a few seconds.` });
+        const cap = Number(this.env.AI_DAILY_CAP) > 0 ? Number(this.env.AI_DAILY_CAP) : 3000;
+        const use = await E.aiUse(a.pid, COMPANION.freePerDay, COMPANION.passPerDay);
+        if (!use.ok) {
+          return send(ws, use.needPass
+            ? { t: 'petsaid', ok: false, needPass: true, why: `That's all ${COMPANION.freePerDay} free chats for today. Get the AI Pass to keep talking, or come back tomorrow.` }
+            : { t: 'petsaid', ok: false, why: `${COMPANION.name} is sleepy: that's today's limit. Come back tomorrow.` });
+        }
+        if (await E.rateLimited('day:ai', cap, 86_400_000)) {
+          await E.aiRefund(a.pid);
+          return send(ws, { t: 'petsaid', ok: false, why: `${COMPANION.name} is napping: the game's AI budget for today is used up. Try tomorrow.` });
+        }
+        const [quotes, before, board, st, info] = await Promise.all([E.quotes(), E.midsBefore(), E.cupBoard(a.pid), E.state(a.pid), E.linkInfo(a.pid)]);
+        const skin = SKINS.find((k) => k.pet === a.pt)?.name ?? 'Doge';
+        const ctx: CompanionContext = {
+          skin,
+          nick: info?.nick ?? null,
+          bag: st.bag,
+          quotes: quotes.map((q) => ({ item: ITEMS[q.item]?.name ?? q.item, bid: q.bid, ask: q.ask, mid: q.mid })),
+          before: Object.fromEntries(Object.entries(before).map(([k, v]) => [ITEMS[k as keyof typeof ITEMS]?.name ?? k, v])),
+          cup: board.me ? { ...board.me, endsInMin: Math.max(0, Math.round((board.end - Date.now()) / 60_000)) } : null,
+          tip,
+        };
+        const reply = await companionReply(this.env, ctx, text || 'Give me a trading tip for the Cup.', m.hist);
+        if (!reply) {
+          await E.aiRefund(a.pid);
+          return send(ws, { t: 'petsaid', ok: false, why: `${COMPANION.name} didn't hear you. Try again.` });
+        }
+        return send(ws, { t: 'petsaid', ok: true, text: reply, left: use.left, pass: use.pass });
+      }
+      case 'aipass': {
+        const tx = String(m.tx ?? '').slice(0, 64);
+        const signer = String(m.signer ?? '').slice(0, 64);
+        if (await E.rateLimited(`aipass:${a.pid}`, 6)) return send(ws, { t: 'aipassed', ok: false, why: 'Too many tries. Wait a minute.' });
+        const list = (v: string | undefined) => (v || '').split(',').map((x) => x.trim()).filter(Boolean);
+        const v = this.env.NEAR_MIRROR_MODE === 'mock' && tx.startsWith('mock')
+          ? { ok: true as const }
+          : await verifyPassTx([this.env.NEAR_RPC || 'https://test.rpc.fastnear.com', ...list(this.env.NEAR_RPC_FALLBACKS)], tx, signer, this.passReceiver());
+        if (!v.ok) return send(ws, { t: 'aipassed', ok: false, why: v.why });
+        return send(ws, { t: 'aipassed', ...(await E.aiPassGrant(a.pid, signer, tx, COMPANION.passDays)) });
+      }
       case 'book': {
         const owner = await ownerOf(this.env, a.pid);
         return send(ws, { t: 'book', owner, ...(await E.book(a.pid)), receipts: this.env.MIRROR ? await mirror(this.env).receipts(owner) : [] });
@@ -739,6 +798,11 @@ export class Hall extends DurableObject<Env> {
     const list = await economy(this.env).listCampaigns(true);
     this.broadcast({ t: 'camps', list });
     return list.length;
+  }
+
+  /** who receives AI Pass payments (testnet) */
+  private passReceiver(): string {
+    return this.env.AI_PASS_RECEIVER || this.env.NEAR_ACCOUNT || 'quiethall-521e7c.testnet';
   }
 
   /** NEAR edition: has this visitor logged in with a NEAR wallet? */
@@ -1083,7 +1147,7 @@ export class Hall extends DurableObject<Env> {
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer) {
-    if (typeof raw !== 'string' || raw.length > MAX_BYTES) return;
+    if (typeof raw !== 'string' || raw.length > (raw.startsWith('{"t":"petsay"') ? MAX_BYTES_PETSAY : MAX_BYTES)) return;
     const a = att(ws);
     if (!a) return;
     const now = Date.now();

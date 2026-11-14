@@ -1,6 +1,6 @@
 # Quiet Hall × NEAR: rest after a trading day
 
-**A calm 3D world for traders.** Sit with strangers in the Quiet Hall after a trading day, rescue lost meme pets together in Meme Valley, play a free trading game whose fairness anyone can check on NEAR, and collect sponsored drops that an AI agent launched with one prompt. No currency to grind; most of the game needs no wallet at all.
+**A calm 3D world for traders.** Sit with strangers in the Quiet Hall after a trading day, rescue lost meme pets together in Meme Valley, talk to Biscuit (your AI pet companion on NEAR AI Cloud, who also gives trading-game tips), play a free trading game whose fairness anyone can check on NEAR, and collect sponsored drops that an AI agent launched with one prompt. No currency to grind; most of the game needs no wallet at all.
 
 - **Tracks:** Games With Real Economies (`games`); also fits NFTs That Do Something (`nfts`, NEP-171 receipts) and Agent Economy (`agents`, MCP server for sponsored drops)
 - **Live demo:** https://quiet-hall-near.ted-233.workers.dev (phone first; works on desktop)
@@ -26,7 +26,8 @@ The player never needs to notice the chain. Guests get an account id derived for
 4. Glowing 🐕 or 🐸 bubbles in the Courtyard or Valley are **sponsored drops**. Tap 3 of them; the 🎁 count is on the 🐾 chip. Finishing one gives a bound badge (`badge:<campaign>:<n>`) plus the sponsor's claim link. Claiming needs a NEAR login.
 5. Walk to the **Market** (🛒, south-east). The **Market Cup** is a free round with 200 play chips; the top 3 win trophies on NEAR. Joining needs a NEAR login: one signed message, no transaction, no fee.
 6. **PumpHall** (south): guess whether Bitcoin or NEAR goes up or down next round, or bump into someone to duel. Points only. Needs a login.
-7. The **Coming Soon** district (south-west) and the Lookout telescope show labelled previews with sample data.
+7. Tap 🐶 (right side) to talk to **Biscuit**, your AI companion. Tap **📈 Trading tip**: Biscuit reads the live Market prices and suggests one play-chip move. It answers in your language. You get 10 free chats a day; after that, an **AI Pass** (1 testnet NEAR for 30 days, paid from any NEAR wallet and checked on chain) keeps the chat going.
+8. The **Coming Soon** district (south-west) and the Lookout telescope show labelled previews with sample data.
 
 ## Where NEAR is used
 
@@ -37,6 +38,7 @@ The player never needs to notice the chain. Guests get an account id derived for
 | **Trading-game fairness** | Before a round opens, its setup hash is committed (`commit_round`). At the end the setup is revealed and the results hash is recorded (`settle_round`); the contract rejects a setup that doesn't match. Check it: `node scripts/verify-round.mjs <demo-url> <roundId>`. |
 | **Market prices** | Bids and asks are posted every hour (`post_prices`, event log). |
 | **Sponsored drops** | A campaign's terms are committed before it goes live (`commit_campaign`, the sha256 of its canonical config). Completions mint `badge:<campaign>:<serial>` (`mint_badge`). The sponsor's reward is their own claim link or code, shown only to the player who completes it. We never hold sponsor tokens. |
+| **AI Pass payments** | The AI companion's Pass is a plain NEAR transfer to the game account. The server checks the transaction on NEAR RPC (signer, receiver, amount, success), and each transaction hash counts once. |
 | **Safe retries** | Every write carries a one-use `job_id`; the contract rejects a reused one, so a retry can never mint twice. |
 
 ## Sponsored drops from a prompt (MCP)
@@ -51,6 +53,15 @@ claude mcp add --transport http quiet-hall <demo-url>/api/near/mcp --header "x-a
 - **Tools:** `list_zones`, `draft_campaign_from_prompt`, `create_campaign`, `list_campaigns`, `get_campaign_stats`, `end_campaign`.
 - **Safety:** every draft goes through one validator (`src/campaigns.ts`), which caps counts, allows https-only links and limits zones to a list. Sponsor keys are stored hashed and rate-limited. Drop spots are placed deterministically from the campaign id, so client and server agree.
 - **Keys:** issued by an admin with `CAMPAIGN_ADMIN_KEY=… node scripts/near-sponsor-key.mjs <base> "<label>"`.
+
+## AI companion (NEAR AI Cloud)
+
+You have **one pet, Biscuit**. The frens you rescue in Meme Valley unlock new faces (skins) for Biscuit: Doge and Frog.
+
+- **Talk:** 🐶 on the HUD, or **💬 Talk to Biscuit** in the pet sheet. Replies come from `anthropic/claude-haiku-5-5` on **NEAR AI Cloud** (OpenAI-compatible API, `NEARAI_API_KEY` secret).
+- **Trading agent:** every reply gets the live Market quotes, the price an hour ago, and the player's Cup chips, holdings and rank. **📈 Trading tip** asks for one concrete move. Tips cover play chips only: the prompt refuses real tokens and money and never invents prices.
+- **Guardrails:** 10 free replies per player per day; an AI Pass for more (still capped at 200 a day); 8 messages a minute; a global daily cap (`AI_DAILY_CAP`); input 240 characters; short replies; a refund if the AI call fails.
+- **Code:** `src/companion.ts` (numbers, prompt), `worker/companion.ts` (AI call, payment check), `src/near/companion.ts` (chat sheet). Without a key, or with `LLM_MODE=mock`, Biscuit answers from a deterministic stub, so tests need no secrets.
 
 ## Run it locally (no secrets, no Cloudflare login)
 
@@ -68,16 +79,16 @@ Without `.dev.vars.near` the Worker runs in **mock mode**. Everything works, and
 ## Tests
 
 ```bash
-npm run test:near                          # all 6 NEAR suites on a throwaway fast-clock Worker, mock chain, no secrets
+npm run test:near                          # all 7 NEAR suites on a throwaway fast-clock Worker, mock chain, no secrets
 cd contracts/items && cargo test           # 26 contract tests
 npm run check && npm run build:near        # typecheck and production build
 ```
 
-**Suites:** economy (no currency, sits, hidden time, mirror), valley (gathering, co-rescue, crafting, receipts), market (trading game, settlement, hashes), duel (PumpHall), campaign (sponsored drops), and mcp (MCP server).
+**Suites:** economy (no currency, sits, hidden time, mirror), valley (gathering, co-rescue, crafting, receipts), market (trading game, settlement, hashes), duel (PumpHall), campaign (sponsored drops), mcp (MCP server), and companion (AI chat, free trial, AI Pass, one-use payments).
 
 `scripts/near-login-test.mjs` also checks a real NEP-413 signature on testnet. It needs a testnet key file: `NEAR_LOGIN_KEYFILE=~/.near-credentials/testnet/<acct>.json`.
 
-**Latest QA:** [docs/qa/near-2026-11-13/](docs/qa/near-2026-11-13/qa-signoff-near-2026-11-13.md). That's 177 checks plus 26 contract tests, 23 UI cases on a 412 px phone viewport with screenshots, and 4 small UI bugs found and fixed.
+**Latest QA:** [docs/qa/near-2026-11-13/](docs/qa/near-2026-11-13/qa-signoff-near-2026-11-13.md). That's 177 checks plus 26 contract tests, 23 UI cases on a 412 px phone viewport with screenshots, and 4 small UI bugs found and fixed. Since then the AI companion added its own suite (12 checks, 189 in all) and [chat screenshots](docs/qa/near-2026-11-14/companion/).
 
 ## How it is built
 
@@ -97,9 +108,9 @@ npm run check && npm run build:near        # typecheck and production build
   1. The calm hall core and a Solana/Seeker edition were built first, on `main`.
   2. Everything NEAR was built on top of it on `near-hackathon`: the items contract, the Mirror, the Economy store, Meme Valley, the market and trading game with on-chain commit/settle, NEAR login, sponsored drops and the MCP server, no-currency play, and all NEAR tests.
 - **Diff:** `git log main..near-hackathon`.
-- **AI tools:** built with Claude Code (Anthropic) as the coding assistant.
+- **AI tools:** built with Claude Code (Anthropic) as the coding assistant. In the game, NEAR AI Cloud runs the AI companion and the prompt-to-campaign drafts.
 - **Libraries:** three.js, near-api-js, @hot-labs/near-connect, near-sdk-rs, near-contract-standards, @noble/curves, @noble/hashes, wrangler.
-- **Models:** animals by Quaternius (CC0), plus CC-BY pets listed in [CREDITS](public/models/CREDITS.md).
+- **Models:** animals by Quaternius (CC0), plus CC-BY pets listed in [CREDITS](public/models/CREDITS.md). The meme-style Doge and Frog faces are original low-poly models generated by `scripts/meme-pets.mjs`.
 
 ## Honest security statement
 
@@ -109,8 +120,8 @@ The game server (a Cloudflare Worker) holds the game account's key and is the tr
 
 | Tier | |
 |---|---|
-| **Live** | Server-timed sits · co-rescue · personal-stock gathering · free crafting · market moved by players · trading game with on-chain commit/settle and trophies · NEP-171 receipts · NEAR login (optional) · PumpHall up/down and duels · sponsored drops with badges · MCP server for agents |
+| **Live** | Server-timed sits · co-rescue · personal-stock gathering · free crafting · market moved by players · trading game with on-chain commit/settle and trophies · NEP-171 receipts · NEAR login (optional) · PumpHall up/down and duels · sponsored drops with badges · MCP server for agents · AI pet companion with trading tips (NEAR AI Cloud) and a NEAR-paid AI Pass · one pet with unlockable meme faces |
 | **Preview** (sample data, labelled in the game) | Coming Soon district: Cabal Camp (clans) · Event Arena (team trading events, contests) · Sitting Bazaar (swaps) · The Vault (AI NPC); Lookout telescope previews |
-| **Roadmap** | Short tutorial and a chaptered journey ([design](design/gdd/near-player-journey.md)) · AI pet companion and NPCs on Claude / NEAR AI, with a paid AI Pass in NEAR · a Sponsor SDK (TypeScript + MCP) so any game or agent can launch drops · NEP-245 multi-token items · social login · NEAR Intents |
+| **Roadmap** | Short tutorial and a chaptered journey ([design](design/gdd/near-player-journey.md)) · AI NPCs (Kettle, the frens) on NEAR AI · a Sponsor SDK (TypeScript + MCP) so any game or agent can launch drops · NEP-245 multi-token items · social login · NEAR Intents |
 
 Never planned: a token, paid odds, or an in-game currency to cash out.

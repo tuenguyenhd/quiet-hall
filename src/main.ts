@@ -1,4 +1,5 @@
 import './style.css';
+import { COMPANION } from './companion';
 import * as THREE from 'three';
 import { buildWorld, type Seat, type Theme } from './world';
 import { setupAccount } from './account';
@@ -719,6 +720,9 @@ const near = NEAR
         me.setPet(k);
         net.send({ t: 'pet', k });
       },
+      patPet() {
+        me.pet?.pat();
+      },
       setVerifiedName(n: string) {
         verifiedName = n;
       },
@@ -869,18 +873,19 @@ function renderPets() {
     : 'Paid once with your wallet. Sign in with the same wallet on another phone and your pets come along.';
 }
 /** try-on: a locked pet walks beside you (only on your screen) while the sheet is open; the sheet moves down so you can see it */
+const YOUR_PET = NEAR ? `${COMPANION.name} · your companion` : 'Your pet';
 function previewPet() {
   const trying = petPick > 0 && !myPets.includes(petPick);
   $('petsheet').classList.toggle('peek', trying);
   viewLift = trying ? 1 : 0;
-  $('pet-try').textContent = trying ? `Trying on: ${petName(petPick)} ✦` : 'Your pet';
+  $('pet-try').textContent = trying ? `Trying on: ${petName(petPick)} ✦` : YOUR_PET;
   me.setPet(trying ? petPick : myPet);
   if (trying) setTimeout(() => me.pet?.pat(), 900);
 }
 function endPreview() {
   $('petsheet').classList.remove('peek');
   viewLift = 0;
-  $('pet-try').textContent = 'Your pet';
+  $('pet-try').textContent = YOUR_PET;
   me.setPet(myPet);
 }
 function openPets() {

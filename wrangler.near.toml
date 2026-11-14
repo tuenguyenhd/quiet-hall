@@ -60,3 +60,7 @@ USDC_MINT = ""
 LLM_BASE_URL = "https://cloud-api.near.ai/v1"
 LLM_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8"
 LLM_DAILY_CAP = "300"
+# AI companion (Biscuit): replies on NEAR AI Cloud with the same NEARAI_API_KEY secret. Free trial per player per day,
+# then an AI Pass paid in testnet NEAR (src/companion.ts). AI_DAILY_CAP = most replies per UTC day for everyone.
+AI_MODEL = "anthropic/claude-haiku-5-5"
+AI_DAILY_CAP = "3000"

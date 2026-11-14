@@ -28,9 +28,10 @@
 - [ ] **A6. Đưa repo lên GitHub ở chế độ public.**
   - Nếu không muốn lộ email, Claude có thể đổi tác giả sang email no-reply của GitHub **trước khi** đẩy lên.
   - Bạn quyết định chọn cách nào.
+- [x] **A3b. API key NEAR AI** đã được lưu thành secret `NEARAI_API_KEY` trên Worker ngày 14/11 (không nằm trong repo). AI companion chỉ chạy trên demo sau khi deploy (A2).
 - [ ] **A7. Kiểm tra lại từ bản clone sạch:**
   - lệnh: `npm ci && npm run check && npm run build:near && npm run test:near`;
-  - đã pass ngày 13/11 (6 suite, 166 check);
+  - đã pass ngày 13/11 (6 suite, 166 check); ngày 14/11 có thêm AI companion: 7 suite, 178 check;
   - chạy lại sau khi merge.
 
 ## Phần B: phần bạn tự làm
@@ -40,7 +41,7 @@
   1. Quick join, rồi ngồi thiền (Sit).
   2. Theo đèn lồng tới Meme Valley, giúp Shibby (có người thứ 2 ngồi cùng thì càng tốt), rồi bấm "receipt" để thấy token trên explorer.
   3. Trong Claude Code (MCP), gõ 1 câu prompt. Drops xuất hiện trong game. Nhặt đủ 3 cái để nhận badge và link claim.
-  4. Vào Market, tham gia trading game. Mở một round đã settle bằng `verify-round`.
+  4. Bấm 🐶 để nói chuyện với Biscuit (AI pet), bấm "📈 Trading tip". Sau đó vào Market, tham gia trading game. Mở một round đã settle bằng `verify-round`.
   5. Lướt qua khu Coming Soon (Clans, Events).
 - [ ] **B3. Đăng bài X.**
   - Bắt buộc có: "built at NEAR HACKATHON", @NEARProtocol, #NEARHackathon, kèm video.

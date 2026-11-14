@@ -16,6 +16,8 @@ import { degenName } from './names';
 import { setupMocks } from './mocks';
 import { setupQuest } from './quest';
 import { setupDrops } from './campaigns';
+import { setupCompanion } from './companion';
+import { COMPANION, SKINS } from '../companion';
 
 /** the NEAR mark for login buttons (white on black, unaltered) */
 const nearIcon = (size: number) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="${NEAR_MARK}"/></svg>`;
@@ -23,7 +25,11 @@ const nearIcon = (size: number) => `<svg viewBox="0 0 24 24" width="${size}" hei
 export const NEAR = import.meta.env.VITE_EDITION === 'near';
 
 /** NEAR edition pets: only frens you can rescue (no pets are sold in this edition). Indices into PETS. */
-export const NEAR_PETS = FRENS.map((f) => ({ k: f.pet, name: f.name, how: `Rescue ${f.name} in Meme Valley (north-east, past the Tea House) and ${f.name} follows you.` }));
+export const NEAR_PETS = FRENS.map((f) => ({
+  k: f.pet,
+  name: SKINS.find((s) => s.pet === f.pet)?.name ?? f.name,
+  how: `Rescue ${f.name} in Meme Valley (north-east, past the Tea House) to unlock this face for ${COMPANION.name}.`,
+}));
 
 type Msg = Record<string, unknown> & { t: string };
 export interface NearHost {
@@ -42,6 +48,8 @@ export interface NearHost {
   sitting(): boolean;
   /** wear a rescued fren as your pet */
   setPet(k: number): void;
+  /** pat my pet (the companion answered) */
+  patPet(): void;
   /** after a NEAR login: the account becomes this player's name */
   setVerifiedName(name: string): void;
 }
@@ -128,6 +136,7 @@ export function setupNear(h: NearHost) {
     <button class="pill" id="near-bag" title="Your bag">🎒</button>
     <button class="pill" id="near-book" title="Rescue Book">📖</button>
     <button class="pill" id="near-market" title="Market and Market Cup">🛒</button>
+    <button class="pill" id="near-talk" title="Talk to ${COMPANION.name} (AI companion)">🐶</button>
     <button class="near-login-btn small-btn" id="near-login" title="Log in with NEAR">${nearIcon(16)}<span>Log in</span></button>`;
   $('hud').appendChild(bar);
 
@@ -147,6 +156,33 @@ export function setupNear(h: NearHost) {
   // the Coming Soon district (south-west): walk-in mock-ups of what is not built yet
   const mocks = setupMocks(h, show, body);
   const isOpen = (kind: string) => !overlay.classList.contains('hidden') && body().dataset.kind === kind;
+  // the AI companion: Biscuit talks back and gives Cup tips (companion.ts)
+  const companion = setupCompanion({
+    send: h.send,
+    show: (html, kind) => (show(html), (body().dataset.kind = kind)),
+    body,
+    isOpen,
+    toast: h.toast,
+    pat: () => h.patPet(),
+  });
+  $('near-talk').addEventListener('click', () => companion.open());
+  // the pet sheet: one companion, the rescued frens are its faces; talk from there too
+  {
+    const pat = document.getElementById('btn-pat');
+    const talk = document.createElement('button');
+    talk.className = 'primary';
+    talk.id = 'btn-talk';
+    talk.textContent = `💬 Talk to ${COMPANION.name} (AI)`;
+    talk.addEventListener('click', () => {
+      document.getElementById('petsheet')?.classList.add('hidden');
+      companion.open();
+    });
+    pat?.after(talk);
+    const title = document.getElementById('pet-try');
+    if (title) title.textContent = `${COMPANION.name} · your companion`;
+    const intro = document.querySelector('#petsheet .card > p.small');
+    if (intro) intro.textContent = `One companion who follows you everywhere. Rescue frens in Meme Valley to unlock new faces (skins) for ${COMPANION.name}.`;
+  }
 
   function renderBar() {
     const lg = $('near-login');
@@ -790,6 +826,7 @@ export function setupNear(h: NearHost) {
   // ---------- messages ----------
   function onMessage(m: Msg) {
     if (drops.onMessage(m)) return;
+    if (companion.onMessage(m)) return;
     switch (m.t) {
       case 'econ':
         econ = { ...econ, ...(m as unknown as Econ) };

@@ -110,6 +110,9 @@ export class Economy extends DurableObject<EconEnv> {
         PRIMARY KEY(campaign, acct));
       CREATE TABLE IF NOT EXISTS sponsor_keys(hash TEXT PRIMARY KEY, sponsor TEXT NOT NULL, created INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS rate(k TEXT PRIMARY KEY, n INTEGER NOT NULL, win INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS ai_use(acct TEXT NOT NULL, day TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY(acct, day));
+      CREATE TABLE IF NOT EXISTS ai_pass(acct TEXT PRIMARY KEY, until INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS ai_tx(tx TEXT PRIMARY KEY, acct TEXT NOT NULL, account TEXT NOT NULL, at INTEGER NOT NULL);
     `);
     // the player's chosen name, shown instead of their NEAR address (added after links shipped)
     try {
@@ -953,4 +956,51 @@ export class Economy extends DurableObject<EconEnv> {
     });
   }
 
+  // ---------- AI companion: free daily trial, then an AI Pass (src/companion.ts) ----------
+
+  /** this player's AI allowance today */
+  aiStatus(acct: string, free: number, now = Date.now()): { used: number; left: number; pass: number } {
+    const used = this.sql.exec<{ n: number }>('SELECT n FROM ai_use WHERE acct = ? AND day = ?', acct, dayOf(now)).toArray()[0]?.n ?? 0;
+    const until = this.sql.exec<{ until: number }>('SELECT until FROM ai_pass WHERE acct = ?', acct).toArray()[0]?.until ?? 0;
+    const pass = until > now ? until : 0;
+    return { used, left: pass ? Infinity : Math.max(0, free - used), pass };
+  }
+
+  /** takes one reply from the allowance (trial, or the Pass's daily ceiling). ok=false: none left. */
+  aiUse(acct: string, free: number, passPerDay: number, now = Date.now()): { ok: boolean; left: number; pass: number; needPass?: boolean } {
+    return this.ctx.storage.transactionSync(() => {
+      const st = this.aiStatus(acct, free, now);
+      const max = st.pass ? passPerDay : free;
+      if (st.used >= max) return { ok: false, left: 0, pass: st.pass, needPass: !st.pass };
+      this.sql.exec('INSERT INTO ai_use(acct, day, n) VALUES (?, ?, 1) ON CONFLICT(acct, day) DO UPDATE SET n = n + 1', acct, dayOf(now));
+      return { ok: true, left: st.pass ? -1 : Math.max(0, free - st.used - 1), pass: st.pass };
+    });
+  }
+
+  /** gives a reply back when the AI call failed */
+  aiRefund(acct: string, now = Date.now()): void {
+    this.sql.exec('UPDATE ai_use SET n = MAX(0, n - 1) WHERE acct = ? AND day = ?', acct, dayOf(now));
+  }
+
+  /** a verified NEAR payment buys `days` of AI Pass; each transaction counts once. */
+  aiPassGrant(acct: string, account: string, tx: string, days: number, now = Date.now()): { ok: boolean; why?: string; until?: number } {
+    return this.ctx.storage.transactionSync(() => {
+      if (this.sql.exec('SELECT 1 FROM ai_tx WHERE tx = ?', tx).toArray().length) return { ok: false, why: 'This payment was already used.' };
+      this.sql.exec('INSERT INTO ai_tx(tx, acct, account, at) VALUES (?, ?, ?, ?)', tx, acct, account, now);
+      const cur = this.sql.exec<{ until: number }>('SELECT until FROM ai_pass WHERE acct = ?', acct).toArray()[0]?.until ?? 0;
+      const until = Math.max(cur, now) + days * DAY_MS;
+      this.sql.exec('INSERT OR REPLACE INTO ai_pass(acct, until) VALUES (?, ?)', acct, until);
+      return { ok: true, until };
+    });
+  }
+
+  /** mid prices about an hour ago (from the hourly price posts), for the companion's trend */
+  midsBefore(now = Date.now(), agoMs = 3_600_000): Record<string, number> {
+    const out: Record<string, number> = {};
+    const rows = this.sql.exec<{ item: string; bid: number; ask: number }>(
+      'SELECT item, bid, ask FROM price_hist WHERE ts <= ? ORDER BY ts DESC LIMIT 12', now - agoMs).toArray();
+    for (const r of rows) if (!(r.item in out)) out[r.item] = Math.round((r.bid + r.ask) / 2);
+    return out;
+  }
 }
+
