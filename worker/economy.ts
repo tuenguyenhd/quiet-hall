@@ -1109,7 +1109,7 @@ export class Economy extends DurableObject<EconEnv> {
       out[m.item] =
         gap === 0
           ? `Buys and sells are balanced, so the price sits at its base of ${m.base}.`
-          : `${gap > 0 ? `Traders bought ${gap} more than they sold` : `Traders sold ${-gap} more than they bought`}, so the price is ${pct >= 0 ? '+' : ''}${pct}% ${pct >= 0 ? 'above' : 'below'} its base of ${m.base}. With no new trades it drifts back ${Math.round(PRICE.decayPerMin * 100)}% a minute.`;
+          : `${gap > 0 ? `Traders bought ${gap} more than they sold` : `Traders sold ${-gap} more than they bought`}, so the price is ${Math.abs(pct)}% ${pct >= 0 ? 'above' : 'below'} its base of ${m.base}. With no new trades it drifts back ${Math.round(PRICE.decayPerMin * 100)}% a minute.`;
     }
     return out;
   }
