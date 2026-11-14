@@ -20,14 +20,12 @@
 
 ## Phần A: phần kỹ thuật (Claude làm, khi bạn nói "OK")
 
-- [ ] **A1. Merge** `drops-integration` vào `near-hackathon`. Nhánh này gồm drops, bỏ Leaves, sửa bug QA, README, LICENSE và `test:near`. Quyết định thêm: có gộp pet meme (`meme-pets`) vào luôn không?
+- [x] **A1. Merge** `drops-integration` vào `near-hackathon`. Nhánh này gồm drops, bỏ Leaves, sửa bug QA, README, LICENSE và `test:near`. Quyết định thêm: có gộp pet meme (`meme-pets`) vào luôn không?
 - [ ] **A2. Deploy** bản mới lên https://quiet-hall-near.ted-233.workers.dev (bản đang chạy còn cũ: vẫn có Leaves, chưa có drops).
 - [ ] **A3. Đặt secret** `CAMPAIGN_ADMIN_KEY` trên Worker. Tạo 1 chiến dịch drop mẫu để giám khảo thấy (ví dụ BONK ở Courtyard).
 - [ ] **A4. Nâng cấp contract production** `quiethall-521e7c.testnet` để có `mint_badge` / `commit_campaign`.
 - [ ] **A5. Chạy smoke test production:** `node scripts/near-prod-smoke.mjs <demo-url>`.
-- [ ] **A6. Đưa repo lên GitHub ở chế độ public.**
-  - Nếu không muốn lộ email, Claude có thể đổi tác giả sang email no-reply của GitHub **trước khi** đẩy lên.
-  - Bạn quyết định chọn cách nào.
+- [ ] **A6. Đưa repo lên GitHub ở chế độ public:** https://github.com/tuenguyenhd/quiet-hall (nhánh `main` = bản NEAR, `seeker-edition` = bản Seeker; commit dùng email no-reply của GitHub).
 - [x] **A3b. API key NEAR AI** đã được lưu thành secret `NEARAI_API_KEY` trên Worker ngày 14/11 (không nằm trong repo). AI companion chỉ chạy trên demo sau khi deploy (A2).
 - [ ] **A7. Kiểm tra lại từ bản clone sạch:**
   - lệnh: `npm ci && npm run check && npm run build:near && npm run test:near`;
