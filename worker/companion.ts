@@ -83,3 +83,35 @@ export async function verifyPassTx(rpcs: string[], tx: string, signer: string, r
   }
   return { ok: false, why: 'Could not find that payment yet. Try again in a few seconds.' };
 }
+
+/** one trading decision from the AI (a raw object, checked by checkDecision); null = no usable answer */
+export async function agentDecide(env: CompanionEnv, prompt: string): Promise<Record<string, unknown> | null> {
+  if (env.LLM_MODE === 'mock' || !env.NEARAI_API_KEY) return null;
+  const base = (env.LLM_BASE_URL || 'https://cloud-api.near.ai/v1').replace(/\/+$/, '');
+  const model = env.AI_MODEL || 'anthropic/claude-haiku-5-5';
+  try {
+    const r = await fetch(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${env.NEARAI_API_KEY}` },
+      body: JSON.stringify({
+        model,
+        max_tokens: 200,
+        temperature: 0.4,
+        ...(model.startsWith('anthropic/') ? { thinking: { type: 'disabled' } } : {}),
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { choices?: { message?: { content?: unknown } }[] };
+    const t = j.choices?.[0]?.message?.content;
+    if (typeof t !== 'string') return null;
+    const a = t.indexOf('{');
+    const b = t.lastIndexOf('}');
+    if (a < 0 || b <= a) return null;
+    const o = JSON.parse(t.slice(a, b + 1));
+    return o && typeof o === 'object' && !Array.isArray(o) ? o : null;
+  } catch {
+    return null;
+  }
+}

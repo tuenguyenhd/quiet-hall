@@ -47,6 +47,10 @@ export interface CompanionContext {
   cup: { chips: number; bag: Record<string, number>; score: number; rank: number; endsInMin: number } | null;
   /** the player asked for a trading tip (quick button) */
   tip: boolean;
+  /** other things to do now: live sponsored drops, frens still lost, the autopilot (when the market is not worth it) */
+  tasks?: string[];
+  /** Biscuit's own autopilot, if on: risk and its last decision */
+  autopilot?: string | null;
 }
 
 export function systemPrompt(c: CompanionContext): string {
@@ -60,6 +64,8 @@ You also help with the in-game Market Cup, a free 3-hour trading game with 200 p
 Market now: ${q}.
 ${cup}
 Their bag: ${JSON.stringify(c.bag)}.
+${c.autopilot ? `You are also trading for them on autopilot (${c.autopilot}).` : 'Your autopilot is off: they can turn on "Let Biscuit trade" below the chat (needs a NEAR login).'}
+${c.tasks?.length ? `Other things to do right now: ${c.tasks.join('; ')}. When the market is flat or they don't want to trade, suggest one of these and say you'll watch the market for them.` : ''}
 Rules: tips are only about this game's play chips and items. Never give advice about real tokens, coins, stocks or money; if asked, say you only know the Cup and suggest a rest. Never invent prices; use the numbers above. Never ask for keys, seed phrases or money. If they seem stressed, suggest sitting a minute in the Quiet Hall.${c.tip ? '\nThey tapped "Trading tip": give one concrete Cup idea (which item, buy or sell, why from the numbers) in 2 sentences.' : ''}`;
 }
 

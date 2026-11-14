@@ -9,6 +9,8 @@ import { APPRENTICES, CUP, MARKET, PRICE, askOf, bidOf, marketItem, midPrice } f
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { ownerId, type Job, type Mirror } from './mirror';
+import { AGENT, POLICY, checkDecision, decisionPrompt, ruleDecision, type Decision, type Risk } from '../src/agents';
+import { agentDecide } from './companion';
 import { canonicalCampaign, dropsOf, isLive, publicCampaign, type Campaign, type PublicCampaign } from '../src/campaigns';
 
 /** a player's progress in one campaign (cpicked / cmine). `reward` is the full reward: only for the completer. */
@@ -37,6 +39,11 @@ interface EconEnv {
   CUP_JOIN_CLOSE_MIN?: string;
   /** test hook: length of one "game minute" in ms (default 60000). Lets scripts sit for seconds, not minutes. */
   MINUTE_MS?: string;
+  /** trading agents' AI (worker/companion.ts); unset or LLM_MODE=mock = the plain rules in src/agents.ts */
+  NEARAI_API_KEY?: string;
+  LLM_BASE_URL?: string;
+  LLM_MODE?: string;
+  AI_MODEL?: string;
 }
 
 /** one "game minute" in ms: 60000, or MINUTE_MS for tests */
@@ -110,6 +117,12 @@ export class Economy extends DurableObject<EconEnv> {
         PRIMARY KEY(campaign, acct));
       CREATE TABLE IF NOT EXISTS sponsor_keys(hash TEXT PRIMARY KEY, sponsor TEXT NOT NULL, created INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS rate(k TEXT PRIMARY KEY, n INTEGER NOT NULL, win INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS agents(acct TEXT PRIMARY KEY, active INTEGER NOT NULL, risk TEXT NOT NULL, since INTEGER NOT NULL,
+        last INTEGER NOT NULL DEFAULT 0, ai_day TEXT NOT NULL DEFAULT '', ai_n INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS agent_log(id INTEGER PRIMARY KEY AUTOINCREMENT, acct TEXT NOT NULL, at INTEGER NOT NULL, round TEXT NOT NULL,
+        action TEXT NOT NULL, item TEXT, units INTEGER, total INTEGER, why TEXT NOT NULL, by TEXT NOT NULL, ok INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS agent_log_by_acct ON agent_log(acct, id);
+      CREATE TABLE IF NOT EXISTS agent_keys(hash TEXT PRIMARY KEY, acct TEXT NOT NULL, label TEXT NOT NULL, created INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS ai_use(acct TEXT NOT NULL, day TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY(acct, day));
       CREATE TABLE IF NOT EXISTS ai_pass(acct TEXT PRIMARY KEY, until INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS ai_tx(tx TEXT PRIMARY KEY, acct TEXT NOT NULL, account TEXT NOT NULL, at INTEGER NOT NULL);
@@ -592,6 +605,11 @@ export class Economy extends DurableObject<EconEnv> {
 
   async alarm() {
     await this.tick();
+    try {
+      await this.autopilot();
+    } catch (e) {
+      console.log('autopilot failed', String((e as Error)?.message ?? e).slice(0, 160));
+    }
     const now = Date.now();
     const nextTick = now + APPRENTICES.everyMin * this.minuteMs;
     const roundEnd = this.currentRound(now).end;
@@ -1002,5 +1020,113 @@ export class Economy extends DurableObject<EconEnv> {
     for (const r of rows) if (!(r.item in out)) out[r.item] = Math.round((r.bid + r.ask) / 2);
     return out;
   }
+  // ---------- trading agents: Biscuit's autopilot and player agents over MCP (src/agents.ts) ----------
+
+  /** this player's Cup position in the current round, or null if not in it */
+  position(acct: string, now = Date.now()): { round: string; end: number; chips: number; bag: Record<string, number> } | null {
+    const r = this.currentRound(now);
+    const e = this.sql.exec<{ chips: number }>('SELECT chips FROM cup_entries WHERE round = ? AND acct = ?', r.id, acct).toArray()[0];
+    if (!e) return null;
+    const bag: Record<string, number> = {};
+    for (const b of this.sql.exec<{ item: string; qty: number }>('SELECT item, qty FROM cup_bag WHERE round = ? AND acct = ? AND qty > 0', r.id, acct)) bag[b.item] = b.qty;
+    return { round: r.id, end: r.end, chips: e.chips, bag };
+  }
+
+  /** turns Biscuit's autopilot on or off (the caller checks the NEAR login) */
+  agentSet(acct: string, active: boolean, risk: Risk): void {
+    const now = Date.now();
+    this.sql.exec(
+      'INSERT INTO agents(acct, active, risk, since) VALUES (?, ?, ?, ?) ON CONFLICT(acct) DO UPDATE SET active = excluded.active, risk = excluded.risk, since = CASE WHEN agents.active = 0 THEN excluded.since ELSE agents.since END, last = CASE WHEN excluded.active = 1 AND agents.active = 0 THEN 0 ELSE agents.last END',
+      acct, active ? 1 : 0, risk, now,
+    );
+  }
+
+  /** what the player sees: autopilot state, Cup position and the latest decisions with their reasons */
+  agentState(acct: string): {
+    active: boolean; risk: Risk; position: ReturnType<Economy['position']>;
+    log: { at: number; action: string; item: string | null; units: number | null; total: number | null; why: string; by: string; ok: boolean }[];
+    keys: number;
+  } {
+    const a = this.sql.exec<{ active: number; risk: string }>('SELECT active, risk FROM agents WHERE acct = ?', acct).toArray()[0];
+    const log = this.sql
+      .exec<{ at: number; action: string; item: string | null; units: number | null; total: number | null; why: string; by: string; ok: number }>(
+        'SELECT at, action, item, units, total, why, by, ok FROM agent_log WHERE acct = ? ORDER BY id DESC LIMIT 12', acct)
+      .toArray()
+      .map((r) => ({ ...r, ok: !!r.ok }));
+    const keys = this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM agent_keys WHERE acct = ? AND revoked = 0', acct).toArray()[0].n;
+    return { active: !!a?.active, risk: (a?.risk as Risk) ?? 'calm', position: this.position(acct), log, keys };
+  }
+
+  /** executes one agent decision through the normal Cup trade (so it moves prices like anyone's) and logs it with its reason */
+  agentTrade(acct: string, d: Decision, by: string): { ok: boolean; why?: string; total?: number; chips?: number } {
+    const now = Date.now();
+    const round = this.currentRound(now).id;
+    let res: { ok: boolean; why?: string; total?: number; chips?: number } = { ok: true };
+    if (d.action !== 'hold') res = this.trade(acct, d.item!, d.action, d.units!, true);
+    this.sql.exec(
+      'INSERT INTO agent_log(acct, at, round, action, item, units, total, why, by, ok) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      acct, now, round, d.action, d.item ?? null, d.units ?? null, res.total ?? null, res.ok ? d.why : `${d.why} (refused: ${res.why})`, by.slice(0, 40), res.ok ? 1 : 0,
+    );
+    // keep the log short
+    this.sql.exec('DELETE FROM agent_log WHERE acct = ? AND id NOT IN (SELECT id FROM agent_log WHERE acct = ? ORDER BY id DESC LIMIT ?)', acct, acct, AGENT.logKeep);
+    return res;
+  }
+
+  addAgentKey(hash: string, acct: string, label: string): void {
+    this.sql.exec('INSERT INTO agent_keys(hash, acct, label, created) VALUES (?, ?, ?, ?)', hash, acct, label.slice(0, 40), Date.now());
+  }
+  agentKeyOwner(hash: string): { acct: string; label: string } | null {
+    return this.sql.exec<{ acct: string; label: string }>('SELECT acct, label FROM agent_keys WHERE hash = ? AND revoked = 0', hash).toArray()[0] ?? null;
+  }
+
+  /** item names for reasons ("Moon Rock", not "moon_rock") */
+  private itemName = (i: string) => i.split('_').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+
+  /**
+   * Biscuit's autopilot: every AGENT.everyMin game minutes, each active agent joins the round if needed, then makes one
+   * decision (AI within its daily budget, else the plain rules), checked against its spending policy.
+   */
+  async autopilot(): Promise<number> {
+    const now = Date.now();
+    const due = this.sql
+      .exec<{ acct: string; risk: string; ai_day: string; ai_n: number }>('SELECT acct, risk, ai_day, ai_n FROM agents WHERE active = 1 AND last <= ?', now - AGENT.everyMin * this.minuteMs)
+      .toArray();
+    let n = 0;
+    for (const a of due) {
+      this.sql.exec('UPDATE agents SET last = ? WHERE acct = ?', now, a.acct);
+      const risk: Risk = a.risk === 'bold' ? 'bold' : 'calm';
+      let pos = this.position(a.acct, now);
+      if (!pos) {
+        const j = await this.cupJoin(a.acct, `agent:${a.acct}`);
+        if (!j.ok) continue;
+        pos = this.position(a.acct, now);
+        if (!pos) continue;
+        this.agentTrade(a.acct, { action: 'hold', why: `Joined the Market Cup round for you with ${pos.chips} chips.` }, 'biscuit');
+      }
+      const quotes = this.quotes(now).map(({ item, bid, ask, mid }) => ({ item, bid, ask, mid }));
+      const before = this.midsBefore(now, 60 * this.minuteMs);
+      const day = dayOf(now);
+      const used = a.ai_day === day ? a.ai_n : 0;
+      let d: Decision | null = null;
+      if (used < AGENT.aiPerDay) {
+        const raw = await agentDecide(this.env, decisionPrompt(quotes, before, pos, risk, Math.max(0, Math.round((pos.end - now) / this.minuteMs)), this.itemName));
+        if (raw) {
+          this.sql.exec('UPDATE agents SET ai_day = ?, ai_n = ? WHERE acct = ?', day, used + 1, a.acct);
+          d = checkDecision(raw as Partial<Decision>, quotes, pos, risk);
+        }
+      }
+      d ??= ruleDecision(quotes, before, pos, risk, this.itemName);
+      this.agentTrade(a.acct, d, 'biscuit');
+      n++;
+    }
+    return n;
+  }
+
+  /** test hook: run the autopilot now (fast-clock tests) */
+  async autopilotNow(): Promise<number> {
+    await this.tick();
+    return this.autopilot();
+  }
 }
+
 

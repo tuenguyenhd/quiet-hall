@@ -3,7 +3,7 @@ import { b64, decodeText, parseSiws, readSession, signSession, verifySignature }
 import { Ledger, priceTable, type SpotOwner } from './ledger';
 import { Pump } from './pump';
 import { Economy, minuteMs, type CampPickResult } from './economy';
-import { handleMcp, newSponsorKey, sponsorKeyHash } from './mcp';
+import { agentKeyHash, handleMcp, newAgentKey, newSponsorKey, sponsorKeyHash } from './mcp';
 import { companionReply, verifyPassTx } from './companion';
 import { COMPANION, SKINS, type CompanionContext } from '../src/companion';
 import { Mirror, ownerId } from './mirror';
@@ -194,7 +194,7 @@ const NEAR_API = /^\/api\/(health|config|near\/[a-z-]+|pump\/[a-z-]+)$/;
 /** NEAR edition: socket messages that belong to Solana / money / prediction features */
 const NEAR_BLOCKED_WS = new Set(['spots', 'profile', 'lantern']);
 /** socket messages that exist only in the NEAR edition */
-const NEAR_ONLY_WS = new Set(['pick', 'grant', 'wishDone', 'craft', 'book', 'trade', 'cupJoin', 'cpick', 'cclaim', 'petsay', 'aistat', 'aipass']);
+const NEAR_ONLY_WS = new Set(['pick', 'grant', 'wishDone', 'craft', 'book', 'trade', 'cupJoin', 'cpick', 'cclaim', 'petsay', 'aistat', 'aipass', 'agent', 'agentstat', 'agentkey']);
 const REACH = GATHER.reach + GATHER.tolerance;
 const CO_REACH = GATHER.coRescueRadius + GATHER.tolerance;
 /** PumpHall: one board for everyone; "t<id>" rooms are isolated boards for automated tests */
@@ -726,7 +726,14 @@ export class Hall extends DurableObject<Env> {
           await E.aiRefund(a.pid);
           return send(ws, { t: 'petsaid', ok: false, why: `${COMPANION.name} is napping: the game's AI budget for today is used up. Try tomorrow.` });
         }
-        const [quotes, before, board, st, info] = await Promise.all([E.quotes(), E.midsBefore(), E.cupBoard(a.pid), E.state(a.pid), E.linkInfo(a.pid)]);
+        const [quotes, before, board, st, info, camps, ag] = await Promise.all([E.quotes(), E.midsBefore(), E.cupBoard(a.pid), E.state(a.pid), E.linkInfo(a.pid), E.listCampaigns(true), E.agentState(a.pid)]);
+        const [mine, book] = await Promise.all([E.campaignMine(a.pid), E.book(a.pid)]);
+        const tasks = [
+          ...camps.filter((c) => !mine[c.id]?.serial).slice(0, 3).map((c) => `sponsored drop "${c.title}" (collect ${c.goal} ${c.drop.name} in the ${c.zone === 'court' ? 'Courtyard' : c.zone}, reward: ${c.reward.badge} badge)`),
+          ...FRENS.filter((f) => !book.frens.some((x) => x.fren === f.id)).map((f) => `rescue ${f.name} in Meme Valley (unlocks the ${SKINS.find((k) => k.fren === f.id)?.name ?? f.name} face)`),
+          'sit a minute in the Quiet Hall',
+        ];
+        const last = ag.log[0];
         const skin = SKINS.find((k) => k.pet === a.pt)?.name ?? 'Doge';
         const ctx: CompanionContext = {
           skin,
@@ -736,6 +743,8 @@ export class Hall extends DurableObject<Env> {
           before: Object.fromEntries(Object.entries(before).map(([k, v]) => [ITEMS[k as keyof typeof ITEMS]?.name ?? k, v])),
           cup: board.me ? { ...board.me, endsInMin: Math.max(0, Math.round((board.end - Date.now()) / 60_000)) } : null,
           tip,
+          tasks,
+          autopilot: ag.active ? `${ag.risk}; last: ${last ? last.why : 'none yet'}` : null,
         };
         const reply = await companionReply(this.env, ctx, text || 'Give me a trading tip for the Cup.', m.hist);
         if (!reply) {
@@ -754,6 +763,23 @@ export class Hall extends DurableObject<Env> {
           : await verifyPassTx([this.env.NEAR_RPC || 'https://test.rpc.fastnear.com', ...list(this.env.NEAR_RPC_FALLBACKS)], tx, signer, this.passReceiver());
         if (!v.ok) return send(ws, { t: 'aipassed', ok: false, why: v.why });
         return send(ws, { t: 'aipassed', ...(await E.aiPassGrant(a.pid, signer, tx, COMPANION.passDays)) });
+      }
+      case 'agentstat':
+        return send(ws, { t: 'agentstat', ...(await E.agentState(a.pid)) });
+      case 'agent': {
+        // Biscuit's autopilot trades the player's Market Cup entry, so it needs the same NEAR login as the Cup
+        if (!(await this.nearLoggedIn(a))) return send(ws, { t: 'agentstat', ok: false, why: 'Log in with NEAR to let Biscuit trade for you in the Market Cup.', login: true, ...(await E.agentState(a.pid)) });
+        await E.agentSet(a.pid, m.active === true, m.risk === 'bold' ? 'bold' : 'calm');
+        await E.start();
+        return send(ws, { t: 'agentstat', ok: true, ...(await E.agentState(a.pid)) });
+      }
+      case 'agentkey': {
+        if (!(await this.nearLoggedIn(a))) return send(ws, { t: 'agentkey', ok: false, why: 'Log in with NEAR to connect your own agent.', login: true });
+        if (await E.rateLimited(`agentkey:${a.pid}`, 3, 3_600_000)) return send(ws, { t: 'agentkey', ok: false, why: 'Too many keys this hour.' });
+        const key = newAgentKey();
+        await E.addAgentKey(await agentKeyHash(key), a.pid, String(m.label ?? 'my agent').replace(/[^\w .-]/g, '').slice(0, 30) || 'my agent');
+        // the key is shown once, only to this player; only its hash is stored
+        return send(ws, { t: 'agentkey', ok: true, key, mcp: `${this.env.PUBLIC_URL ?? ''}/api/near/mcp` });
       }
       case 'book': {
         const owner = await ownerOf(this.env, a.pid);

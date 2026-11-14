@@ -1,6 +1,7 @@
 // AI companion sheet (NEAR edition): chat with Biscuit, your one pet, on NEAR AI Cloud. Biscuit also gives Market Cup
 // trading tips from live prices. Free trial per day, then an AI Pass paid in testnet NEAR (src/companion.ts).
 import { COMPANION } from '../companion';
+import { POLICY, type Risk } from '../agents';
 
 type Msg = Record<string, unknown> & { t: string };
 export interface CompanionHost {
@@ -11,7 +12,26 @@ export interface CompanionHost {
   toast(text: string, ms?: number): void;
   /** pat the pet in the world when it answers */
   pat(): void;
+  /** open the NEAR login (the autopilot and agent keys need one) */
+  login(): void;
+  loggedIn(): boolean;
 }
+
+interface AgentLog {
+  at: number;
+  action: string;
+  item: string | null;
+  units: number | null;
+  total: number | null;
+  why: string;
+  by: string;
+  ok: boolean;
+}
+const itemName = (i: string | null) => (i ?? '').split('_').map((w) => (w ? w[0].toUpperCase() + w.slice(1) : '')).join(' ');
+const ago = (t: number) => {
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
+};
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const KIND = 'companion';
@@ -27,6 +47,11 @@ export function setupCompanion(h: CompanionHost) {
   let pending = '';
   let needPass = false;
   let paying = false;
+  let agent: { active: boolean; risk: Risk; position: { chips: number; bag: Record<string, number> } | null; log: AgentLog[]; keys: number; why?: string } = {
+    active: false, risk: 'calm', position: null, log: [], keys: 0,
+  };
+  let newKey: { key: string; mcp: string } | null = null;
+  let poll = 0;
 
   const status = () =>
     stat.pass
@@ -44,6 +69,44 @@ export function setupCompanion(h: CompanionHost) {
     b.querySelector('#cp-status')!.textContent = status();
     b.querySelector('#cp-pass')!.classList.toggle('hidden', !needPass || !!stat.pass);
     for (const el of b.querySelectorAll<HTMLButtonElement>('[data-cp]')) el.disabled = waiting;
+    renderAgent();
+  }
+
+  /** Biscuit's autopilot panel and the "bring your own agent" key */
+  function renderAgent() {
+    const el = h.body().querySelector('#cp-agent');
+    if (!el) return;
+    const pos = agent.position;
+    const posLine = pos ? `In the Cup: ${pos.chips} chips${Object.keys(pos.bag).length ? ' · ' + Object.entries(pos.bag).map(([k, n]) => `${n} ${itemName(k)}`).join(', ') : ''}` : 'Not in this Cup round yet: Biscuit joins for you.';
+    el.innerHTML = `
+      <div class="cp-agent-head"><b>🤖 Let Biscuit trade for you</b>
+        <button class="chip ${agent.active ? 'on' : ''}" id="cp-auto">${agent.active ? 'ON' : 'OFF'}</button></div>
+      <p class="small">Biscuit trades your Market Cup entry every few minutes, with a reason for each move. Its trades move prices like anyone's.</p>
+      <div class="chips">${(['calm', 'bold'] as Risk[]).map((r) => `<button class="chip ${agent.risk === r ? 'on' : ''}" data-risk="${r}">${r === 'calm' ? '🐢 Calm' : '🔥 Bold'}</button>`).join('')}</div>
+      <p class="small">${esc(POLICY[agent.risk].label)}, max ${POLICY[agent.risk].maxChipsPerTrade} chips per trade.${agent.active ? ' ' + esc(posLine) : ''}</p>
+      ${agent.why ? `<p class="small near-err">${esc(agent.why)}</p>` : ''}
+      ${agent.log.length ? `<ul class="cp-trades">${agent.log.slice(0, 6).map((l) => `<li class="${l.ok ? '' : 'no'}"><span>${l.action === 'hold' ? '⏸' : l.action === 'buy' ? '🟢 Bought' : '🔴 Sold'} ${l.action === 'hold' ? '' : `${l.units} ${esc(itemName(l.item))}`}</span> <i>${esc(l.why)}</i> <small>${l.by === 'biscuit' ? '🐕' : '🤖 ' + esc(l.by.replace(/^agent:/, ''))} · ${ago(l.at)}</small></li>`).join('')}</ul>` : ''}
+      <details class="cp-byo"${newKey ? ' open' : ''}><summary>🔌 Bring your own AI agent</summary>
+        <p class="small">Any MCP agent (Claude, Cursor, your own bot) can trade your Cup entry under the same policy: tools <code>get_market</code>, <code>get_my_position</code>, <code>trade</code>.</p>
+        ${newKey ? `<p class="small">Your agent key (shown once, keep it secret):</p><pre class="cp-key">claude mcp add --transport http quiet-hall ${esc(newKey.mcp)} --header "x-api-key: ${esc(newKey.key)}"</pre>` : `<button class="ghost" id="cp-newkey">Make an agent key${agent.keys ? ` (${agent.keys} active)` : ''}</button>`}
+      </details>`;
+    el.querySelector('#cp-auto')?.addEventListener('click', () => setAgent(!agent.active, agent.risk));
+    for (const b of el.querySelectorAll<HTMLButtonElement>('[data-risk]')) b.addEventListener('click', () => setAgent(agent.active, b.dataset.risk as Risk));
+    el.querySelector('#cp-newkey')?.addEventListener('click', () => {
+      if (!h.loggedIn()) return h.login();
+      h.send({ t: 'agentkey', label: 'my agent' });
+    });
+  }
+
+  function setAgent(active: boolean, risk: Risk) {
+    if (!h.loggedIn()) {
+      agent.why = 'Log in with NEAR to let Biscuit trade for you (one signed message, no fee).';
+      renderAgent();
+      return h.login();
+    }
+    agent = { ...agent, active, risk, why: undefined };
+    h.send({ t: 'agent', active, risk });
+    renderAgent();
   }
 
   function open() {
@@ -58,6 +121,7 @@ export function setupCompanion(h: CompanionHost) {
       </div>
       <form id="cp-form" class="cp-form"><input id="cp-in" maxlength="${COMPANION.maxIn}" placeholder="Say something to ${COMPANION.name}…" autocomplete="off"><button class="primary" data-cp="send">Send</button></form>
       <p class="small" id="cp-status"></p>
+      <div id="cp-agent" class="cp-agent"></div>
       <div id="cp-pass" class="cp-pass hidden">
         <b>✨ AI Pass</b>: ${stat.price} NEAR (testnet) for ${stat.days} days of chats with ${COMPANION.name}.
         <button class="primary" id="cp-buy">Pay ${stat.price} NEAR with a NEAR wallet</button>
@@ -80,6 +144,10 @@ export function setupCompanion(h: CompanionHost) {
     }
     b.querySelector('#cp-buy')!.addEventListener('click', () => void buyPass());
     h.send({ t: 'aistat' });
+    h.send({ t: 'agentstat' });
+    // the activity log refreshes while the sheet is open
+    clearInterval(poll);
+    poll = window.setInterval(() => (h.isOpen(KIND) ? h.send({ t: 'agentstat' }) : clearInterval(poll)), 15_000);
     render();
   }
 
@@ -170,6 +238,18 @@ export function setupCompanion(h: CompanionHost) {
         lines = lines.slice(-30);
         render();
         if (!h.isOpen(KIND) && m.ok) h.toast(`🐕 ${COMPANION.name}: ${String(m.text).slice(0, 90)}`, 5000);
+        return true;
+      case 'agentstat':
+        agent = {
+          active: !!m.active, risk: m.risk === 'bold' ? 'bold' : 'calm', position: (m.position as typeof agent.position) ?? null,
+          log: (m.log as AgentLog[]) ?? [], keys: Number(m.keys) || 0, why: m.ok === false ? String(m.why ?? '') : undefined,
+        };
+        renderAgent();
+        return true;
+      case 'agentkey':
+        if (m.ok) newKey = { key: String(m.key), mcp: `${location.origin}/api/near/mcp` };
+        else agent.why = String(m.why ?? 'Could not make a key.');
+        renderAgent();
         return true;
       case 'aipassed': {
         const el = document.getElementById('cp-pay-status');

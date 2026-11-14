@@ -164,6 +164,8 @@ export function setupNear(h: NearHost) {
     isOpen,
     toast: h.toast,
     pat: () => h.patPet(),
+    login: () => void startLogin(),
+    loggedIn: () => !!econ.near,
   });
   $('near-talk').addEventListener('click', () => companion.open());
   // the pet sheet: one companion, the rescued frens are its faces; talk from there too

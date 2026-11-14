@@ -7,6 +7,8 @@
 // Everything a caller sends (and everything an LLM drafts) goes through validateCampaign before it is used.
 import type { Economy } from './economy';
 import { CAMPAIGN_LIMITS, ZONES, validateCampaign, type Campaign, type ZoneId } from '../src/campaigns';
+import { AGENT, POLICY, checkDecision, type Risk } from '../src/agents';
+import { CUP, PRICE } from '../src/market';
 
 export const MCP_PROTOCOL = '2025-03-26';
 const MAX_BODY = 32_000;
@@ -61,6 +63,10 @@ export function newSponsorKey(): string {
 }
 export const sponsorKeyHash = (key: string) => sha256Hex(`qh-sponsor:${key}`);
 const KEY_RE = /^qhs_[A-Za-z0-9]{32}$/;
+/** player agent keys: 'qha_' + 32 base62. An agent trades its player's Market Cup entry under the player's policy. */
+export const newAgentKey = () => newSponsorKey().replace(/^qhs_/, AGENT.keyPrefix);
+export const agentKeyHash = (key: string) => sha256Hex(`qh-agent:${key}`);
+const AGENT_KEY_RE = /^qha_[A-Za-z0-9]{32}$/;
 
 /** reads a body up to MAX_BODY bytes; null if larger or not JSON */
 async function readBody(req: Request): Promise<unknown | null> {
@@ -128,7 +134,39 @@ const CAMPAIGN_SCHEMA = {
   required: ['sponsor', 'zone', 'drop', 'reward'],
 };
 
+/** tools for a player's own trading agent (x-api-key = a player agent key, made in the game) */
+const AGENT_TOOLS = new Set(['get_market', 'get_my_position', 'trade']);
+
 export const TOOLS = [
+  {
+    name: 'get_market',
+    description:
+      'The Market Cup right now: every item with its buy (ask) and sell (bid) price in play chips, its mid price about an hour ago, ' +
+      `the round id and minutes left, and the rules (${PRICE.spread * 100}% spread each side; every trade moves the price; ${CUP.chips} chips to start). ` +
+      'Works with a player agent key or a sponsor key.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_my_position',
+    description: "Your player's Market Cup position this round (chips, items held, score, rank), their spending policy, and the last decisions made for them.",
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'trade',
+    description:
+      "Buys or sells one item in your player's Market Cup entry (joins the round for them if needed). The player's spending policy caps every " +
+      'trade (chips per trade, units, chips kept in reserve); a trade over the cap is clamped or refused. Give a short reason: the player sees it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        item: { type: 'string', description: 'Item id from get_market, e.g. "moon_rock".' },
+        side: { type: 'string', enum: ['buy', 'sell'] },
+        units: { type: 'integer', minimum: 1, description: 'How many units (clamped by the policy).' },
+        reason: { type: 'string', description: 'One short sentence the player will read, e.g. "Moon Rock is 12% below its hourly price".' },
+      },
+      required: ['item', 'side', 'units', 'reason'],
+    },
+  },
   {
     name: 'list_zones',
     description: 'Lists the world zones a sponsored drop can run in: id, name, size and what fits there. Call this first if unsure.',
@@ -357,10 +395,50 @@ interface Caller {
   ip: string;
   keyHash: string | null;
   sponsor: string | null;
+  /** a player agent key's owner */
+  agent: { acct: string; label: string; hash: string } | null;
 }
 
 async function callTool(env: McpEnv, deps: McpDeps, who: Caller, name: string, args: Record<string, unknown>): Promise<ToolResult> {
   const E = deps.economy;
+  if (name === 'get_market' && (who.agent || who.sponsor)) {
+    const [quotes, before, board] = await Promise.all([E.quotes(), E.midsBefore(), E.cupBoard()]);
+    return ok({
+      round: { id: board.round, endsInMin: Math.max(0, Math.round((board.end - Date.now()) / 60_000)), entrants: board.entrants },
+      items: quotes.map((q) => ({ item: q.item, ask: q.ask, bid: q.bid, mid: q.mid, midHourAgo: before[q.item] ?? q.mid })),
+      rules: { startChips: CUP.chips, spread: PRICE.spread, maxUnitsPerTrade: PRICE.maxUnits, note: 'Play chips only; no real money. Every trade moves the price.' },
+    });
+  }
+  if (AGENT_TOOLS.has(name)) {
+    if (!who.agent) return fail('This tool needs a player agent key (qha_…): a player makes one in the game (Biscuit > Bring your own agent).');
+    if (await E.rateLimited(`mcp-agent:${who.agent.hash}`, KEY_LIMIT)) return fail('Too many calls with this key. Wait a minute.');
+    const acct = who.agent.acct;
+    if (name === 'get_my_position') {
+      const [st, board] = await Promise.all([E.agentState(acct), E.cupBoard(acct)]);
+      return ok({ inCup: !!st.position, position: board.me ?? null, policy: { risk: st.risk, ...POLICY[st.risk] }, recent: st.log.slice(0, 8) });
+    }
+    // trade
+    if (await E.rateLimited(`mcp-agent-trade:${who.agent.hash}`, AGENT.mcpTradesPerMin)) return fail('Too many trades with this key. Wait a minute.');
+    const side = args.side === 'buy' || args.side === 'sell' ? args.side : null;
+    if (!side) return fail('side must be "buy" or "sell".');
+    let pos = await E.position(acct);
+    if (!pos) {
+      const j = await E.cupJoin(acct, `agent:${acct}`);
+      if (!j.ok) return fail(`Could not join the Market Cup: ${j.why}`);
+      pos = await E.position(acct);
+      if (!pos) return fail('Could not join the Market Cup.');
+    }
+    const st = await E.agentState(acct);
+    const quotes = (await E.quotes()).map(({ item, bid, ask, mid }) => ({ item, bid, ask, mid }));
+    const d = checkDecision({ action: side, item: String(args.item ?? ''), units: Number(args.units), why: String(args.reason ?? '') }, quotes, pos, st.risk as Risk);
+    if (d.action === 'hold') {
+      await E.agentTrade(acct, d, `agent:${who.agent.label}`);
+      return fail(`Refused by the policy: ${d.why}`);
+    }
+    const r = await E.agentTrade(acct, d, `agent:${who.agent.label}`);
+    if (!r.ok) return fail(`Trade refused: ${r.why}`);
+    return ok({ done: { side, item: d.item, units: d.units, chips: r.total }, chipsLeft: r.chips ?? null, clamped: d.units !== Number(args.units) ? `units clamped to ${d.units} by the policy` : undefined });
+  }
   if (!who.keyHash || !who.sponsor) return fail('This tool needs a sponsor key: send it in the x-api-key header.');
   if (await E.rateLimited(`mcp-key:${who.keyHash}`, KEY_LIMIT)) return fail('Too many calls with this key. Wait a minute.');
   if (name === 'list_zones') {
@@ -467,7 +545,9 @@ async function handleOne(env: McpEnv, deps: McpDeps, who: Caller, m: Rpc): Promi
           instructions:
             'Quiet Hall is a small open world on NEAR. Use these tools to run "sponsored drops": collectables in a world zone; ' +
             'players who collect enough earn a bound NEAR badge and your claim link. Start with draft_campaign_from_prompt, ' +
-            'review the draft, then create_campaign. Calling tools needs a sponsor key in the x-api-key header.',
+            'review the draft, then create_campaign. Calling tools needs a sponsor key in the x-api-key header. ' +
+            'Players can also connect their own trading agent with a player agent key (qha_…): get_market, get_my_position and trade ' +
+            "act on that player's Market Cup entry under their spending policy.",
         },
       };
     case 'ping':
@@ -506,7 +586,9 @@ export async function handleMcp(req: Request, env: McpEnv, deps: McpDeps): Promi
   const key = req.headers.get('x-api-key')?.trim() ?? '';
   const keyHash = KEY_RE.test(key) ? await sponsorKeyHash(key) : null;
   const sponsor = keyHash ? await deps.economy.sponsorOf(keyHash) : null;
-  const who: Caller = { ip, keyHash: sponsor ? keyHash : null, sponsor };
+  const aHash = AGENT_KEY_RE.test(key) ? await agentKeyHash(key) : null;
+  const owner = aHash ? await deps.economy.agentKeyOwner(aHash) : null;
+  const who: Caller = { ip, keyHash: sponsor ? keyHash : null, sponsor, agent: owner && aHash ? { ...owner, hash: aHash } : null };
 
   const batch = Array.isArray(body);
   const msgs = (batch ? body : [body]).slice(0, 20) as Rpc[];
