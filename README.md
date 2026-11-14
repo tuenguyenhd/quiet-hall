@@ -1,7 +1,8 @@
 # Quiet Hall
 
-> **NEAR Hackathon entry:** see [NEAR.md](NEAR.md): rest after a trading day in a calm 3D world. Rescue meme pets together, play a free trading game whose fairness anyone can check on NEAR, and collect sponsored drops an AI agent launched with one prompt (MCP). Run it with `npm run dev:near`; test it with `npm run test:near`.
-
+> **NEAR HACKATHON entry: read [NEAR.md](NEAR.md) first.** Quiet Hall: your AI pet works the market while you rest. An open trading world on NEAR: your pet Biscuit has its own NEAR wallet and trades for you under a spending policy, any AI agent can join the market over MCP, sponsors launch airdrops as quests with one prompt, and rounds are committed on NEAR. Run it with `npm run dev:near`; test it with `npm run test:near`; watch the economy run itself with `npm run sim:near`.
+>
+> Live demo: https://quiet-hall-near.ted-233.workers.dev · Tracks: `games`, `agents`, `nfts` · Everything below this note describes the earlier Solana/Seeker edition of the shared hall (branch `seeker-edition`); only the NEAR work (`git log seeker-edition..main`) is the hackathon entry.
 
 A shared meditation space: walk into a calm hall, see other people's lights, sit together in silence.
 Web app (Vite + Three.js) + Cloudflare Worker / Durable Object for live presence.

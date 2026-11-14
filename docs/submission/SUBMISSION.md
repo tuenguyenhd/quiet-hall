@@ -35,16 +35,13 @@ Deadline: **2026-11-14 23:59 UTC**. Submit **once**: the form at https://nearhac
 >
 > Stack: Three.js, Cloudflare Workers with Durable Objects, a Rust NEP-171 contract on testnet, NEAR AI Cloud, NEAR Intents 1Click API.
 
-## X post draft (attach the pitch video)
+## X post draft (attach the pitch video; about 269 characters as X counts them)
 
-> Your pet has a wallet. It trades while you touch grass. 🐕
+> Your pet has a wallet. It trades while you touch grass 🐕
 >
-> Quiet Hall, built at NEAR HACKATHON @NEARProtocol #NEARHackathon
-> • an AI pet (NEAR AI) that trades your cup entry under your rules
-> • bring your own agent over MCP
-> • airdrops as quests, launched with one prompt
-> • every round committed and settled on NEAR
-> No wallet needed to play.
+> Quiet Hall, built at NEAR HACKATHON: an AI pet that trades for you, bring-your-own agents over MCP, airdrops as quests.
+>
+> @NEARProtocol #NEARHackathon
 >
 > Play: https://quiet-hall-near.ted-233.workers.dev
 > Code: https://github.com/tuenguyenhd/quiet-hall
