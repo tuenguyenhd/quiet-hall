@@ -50,7 +50,7 @@ A.send({ t: 'state', s: 'sit' });
 await wait(61_500);
 A.send({ t: 'state', s: 'idle' });
 const lv = await until(A, 'leaves');
-check(lv?.minutes === 1 && lv.paid >= 1, 'a real minute of sitting pays Leaves', JSON.stringify(lv));
+check(lv?.minutes === 1 && lv.paid === 0, 'a real minute of sitting counts (no currency: nothing is paid)', JSON.stringify(lv));
 
 // gather 2 Moon Rocks at the Gate
 for (let i = 0; i < 2; i++) {
@@ -71,7 +71,7 @@ await wait(Math.max(0, w.until - Date.now()) + 1500);
 A.send({ t: 'wishDone' });
 const ra = await until(A, 'rescued');
 const rb = await until(B, 'rescued');
-check(ra?.first && ra.paid === 10, `A rescued Shibby #${ra?.serial}`, JSON.stringify(ra));
+check(ra?.first && ra.paid === 0, `A rescued Shibby #${ra?.serial}`, JSON.stringify(ra));
 check(rb?.co && rb.first, `B co-rescued Shibby #${rb?.serial} without materials`, JSON.stringify(rb));
 
 // receipts on NEAR
