@@ -15,6 +15,8 @@ type Ctx = {
   obstacles: { x: number; z: number; r: number }[];
   clickables: THREE.Object3D[];
   blockers: ((x: number, z: number) => boolean)[];
+  /** raised floors (height only; obstacles on them still block): the floor height there, or null */
+  floors: ((x: number, z: number) => number | null)[];
 };
 
 export interface BoardMarket {
@@ -48,6 +50,16 @@ export function buildPumpHall(c: Ctx) {
   const R = PUMP.r - 3;
   const dark = mat('#1d1538', { roughness: 0.7 });
   add(mesh(new THREE.CylinderGeometry(R, R + 0.4, 0.5, 8), dark, 0, 0.25, 0), g, false, true);
+  // you stand and sit ON the dais (0.5 high), not inside it (sitting used to hide your legs in the floor)
+  const DAIS_TOP = 0.5;
+  const inR = R * Math.cos(Math.PI / 8); // the octagon's inner radius: always inside the top face
+  c.floors.push((x, z) => {
+    const d = Math.hypot(x - PUMP.x, z - PUMP.z);
+    if (d <= inR) return y0 + DAIS_TOP;
+    // the sloped rim: a short ramp from the top edge down to the ground
+    if (d <= R + 0.4) return c.terrain(x, z) + DAIS_TOP * Math.max(0, (R + 0.4 - d) / (R + 0.4 - inR));
+    return null;
+  });
   const neonG = new THREE.MeshBasicMaterial({ color: GREEN, toneMapped: false });
   const neonR = new THREE.MeshBasicMaterial({ color: RED, toneMapped: false });
   const neonP = new THREE.MeshBasicMaterial({ color: PURPLE, toneMapped: false });

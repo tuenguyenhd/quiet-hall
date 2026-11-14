@@ -315,6 +315,8 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   scene.add(ground);
 
   const surfaces: WorldCtx['surfaces'] = [];
+  /** raised floors that only set the height (the PumpHall dais): unlike surfaces they don't make blocked spots walkable */
+  const floors: ((x: number, z: number) => number | null)[] = [];
   const blockers: WorldCtx['blockers'] = [];
   const updaters: WorldCtx['updaters'] = [];
   const themers: WorldCtx['themers'] = [];
@@ -698,7 +700,7 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
   // ---------- coming soon: Lotus Island, Sky Shrine, Night Market ----------
   buildTeasers({ scene, terrain, obstacles, clickables, blockers });
   // ---------- PumpHall (south): fun-only price predictions ----------
-  const pumpHall = buildPumpHall({ scene, terrain, obstacles, clickables, blockers });
+  const pumpHall = buildPumpHall({ scene, terrain, obstacles, clickables, blockers, floors });
   updaters.push((t) => pumpHall.update(t));
 
   // ---------- pines + rocks outside the places ----------
@@ -919,6 +921,10 @@ export function buildWorld(scene: THREE.Scene, shadows: boolean, lowPower: boole
       if (y !== null) return y;
     }
     for (const s of seatHeights) if (Math.abs(x - s.x) < 0.35 && Math.abs(z - s.z) < 0.35) return s.y;
+    for (const f of floors) {
+      const y = f(x, z);
+      if (y !== null) return y;
+    }
     return terrain(x, z);
   };
   const walkable = (x: number, z: number) => {
