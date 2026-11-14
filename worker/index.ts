@@ -5,6 +5,7 @@ import { Pump } from './pump';
 import { Economy, minuteMs, type CampPickResult } from './economy';
 import { agentKeyHash, handleMcp, newAgentKey, newSponsorKey, sponsorKeyHash } from './mcp';
 import { companionReply, verifyPassTx } from './companion';
+import { intentsBoard, intentsLine } from './intents';
 import { COMPANION, SKINS, type CompanionContext } from '../src/companion';
 import { Mirror, ownerId } from './mirror';
 import { LOGIN_MESSAGE, LOGIN_RECIPIENT, loginNonce, verifyLogin } from './nearlogin';
@@ -459,7 +460,12 @@ async function nearApi(req: Request, env: Env, path: string): Promise<Response> 
   }
   if (path === '/api/near/market') {
     const E = economy(env);
-    return json({ quotes: await E.quotes(), history: await E.history(), cup: await E.cupBoard(PID_RE.test(pid) ? pid : undefined) });
+    const [quotes, history, cup, why, intents] = await Promise.all([E.quotes(), E.history(), E.cupBoard(PID_RE.test(pid) ? pid : undefined), E.marketWhy(), intentsBoard(env.NEAR_MIRROR_MODE === 'mock')]);
+    // Kettle is the merchant NPC: the game account posts its prices on NEAR every hour (post_prices)
+    return json({ quotes, history, cup, why, kettle: { wallet: env.NEAR_ACCOUNT ?? null }, intents });
+  }
+  if (path === '/api/near/intents') {
+    return json(await intentsBoard(env.NEAR_MIRROR_MODE === 'mock'));
   }
   if (path === '/api/near/round') {
     // a round page: anyone can recompute sha256(setup) and sha256(results) and compare with the chain
@@ -734,6 +740,7 @@ export class Hall extends DurableObject<Env> {
           'sit a minute in the Quiet Hall',
         ];
         const last = ag.log[0];
+        const real = await intentsBoard(this.env.NEAR_MIRROR_MODE === 'mock');
         const skin = SKINS.find((k) => k.pet === a.pt)?.name ?? 'Doge';
         const ctx: CompanionContext = {
           skin,
@@ -745,6 +752,7 @@ export class Hall extends DurableObject<Env> {
           tip,
           tasks,
           autopilot: ag.active ? `${ag.risk}; last: ${last ? last.why : 'none yet'}` : null,
+          real: intentsLine(real),
         };
         const reply = await companionReply(this.env, ctx, text || 'Give me a trading tip for the Cup.', m.hist);
         if (!reply) {
@@ -765,13 +773,13 @@ export class Hall extends DurableObject<Env> {
         return send(ws, { t: 'aipassed', ...(await E.aiPassGrant(a.pid, signer, tx, COMPANION.passDays)) });
       }
       case 'agentstat':
-        return send(ws, { t: 'agentstat', ...(await E.agentState(a.pid)) });
+        return send(ws, { t: 'agentstat', ...(await E.agentState(a.pid)), ...(await this.agentWalletInfo(a.pid)) });
       case 'agent': {
         // Biscuit's autopilot trades the player's Market Cup entry, so it needs the same NEAR login as the Cup
         if (!(await this.nearLoggedIn(a))) return send(ws, { t: 'agentstat', ok: false, why: 'Log in with NEAR to let Biscuit trade for you in the Market Cup.', login: true, ...(await E.agentState(a.pid)) });
         await E.agentSet(a.pid, m.active === true, m.risk === 'bold' ? 'bold' : 'calm');
         await E.start();
-        return send(ws, { t: 'agentstat', ok: true, ...(await E.agentState(a.pid)) });
+        return send(ws, { t: 'agentstat', ok: true, ...(await E.agentState(a.pid)), ...(await this.agentWalletInfo(a.pid)) });
       }
       case 'agentkey': {
         if (!(await this.nearLoggedIn(a))) return send(ws, { t: 'agentkey', ok: false, why: 'Log in with NEAR to connect your own agent.', login: true });
@@ -824,6 +832,13 @@ export class Hall extends DurableObject<Env> {
     const list = await economy(this.env).listCampaigns(true);
     this.broadcast({ t: 'camps', list });
     return list.length;
+  }
+
+  /** Biscuit's own wallet and the receipts it earned (profitable Cup rounds) */
+  private async agentWalletInfo(pid: string): Promise<{ wallet: string; earned: { badge: string; status: string; tx: string | null }[] }> {
+    const wallet = await economy(this.env).agentWallet(pid);
+    const rc: { status: string; tx: string | null; args: unknown }[] = this.env.MIRROR ? await mirror(this.env).receipts(wallet) : [];
+    return { wallet, earned: rc.slice(-5).map((r) => ({ badge: String((r.args as { badge?: string })?.badge ?? ''), status: r.status, tx: r.tx })) };
   }
 
   /** who receives AI Pass payments (testnet) */

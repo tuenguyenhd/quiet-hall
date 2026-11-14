@@ -9,6 +9,7 @@ import type { Economy } from './economy';
 import { CAMPAIGN_LIMITS, ZONES, validateCampaign, type Campaign, type ZoneId } from '../src/campaigns';
 import { AGENT, POLICY, checkDecision, type Risk } from '../src/agents';
 import { CUP, PRICE } from '../src/market';
+import { INTENT_ASSETS, intentsBoard, intentsQuote } from './intents';
 
 export const MCP_PROTOCOL = '2025-03-26';
 const MAX_BODY = 32_000;
@@ -138,6 +139,21 @@ const CAMPAIGN_SCHEMA = {
 const AGENT_TOOLS = new Set(['get_market', 'get_my_position', 'trade']);
 
 export const TOOLS = [
+  {
+    name: 'get_real_market',
+    description:
+      'The real market outside the game, live from NEAR Intents (1Click API): USD prices of NEAR, BTC, ETH and SOL, and an optional dry ' +
+      `solver quote for a swap between ${Object.keys(INTENT_ASSETS).join(' and ')} (nothing is deposited or swapped). Information only: the game trades play chips. ` +
+      'Works with a player agent key or a sponsor key.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', enum: Object.keys(INTENT_ASSETS), description: 'Optional: asset to swap from.' },
+        to: { type: 'string', enum: Object.keys(INTENT_ASSETS), description: 'Optional: asset to swap to.' },
+        amount: { type: 'number', description: 'Optional: how much of `from` (whole units, e.g. 1.5).' },
+      },
+    },
+  },
   {
     name: 'get_market',
     description:
@@ -408,6 +424,13 @@ async function callTool(env: McpEnv, deps: McpDeps, who: Caller, name: string, a
       items: quotes.map((q) => ({ item: q.item, ask: q.ask, bid: q.bid, mid: q.mid, midHourAgo: before[q.item] ?? q.mid })),
       rules: { startChips: CUP.chips, spread: PRICE.spread, maxUnitsPerTrade: PRICE.maxUnits, note: 'Play chips only; no real money. Every trade moves the price.' },
     });
+  }
+  if (name === 'get_real_market' && (who.agent || who.sponsor)) {
+    const mock = (env as { NEAR_MIRROR_MODE?: string }).NEAR_MIRROR_MODE === 'mock';
+    const board = await intentsBoard(mock);
+    let quote: unknown;
+    if (typeof args.from === 'string' && typeof args.to === 'string') quote = mock ? { ok: true, amountIn: String(args.amount ?? 1), amountOut: 'sample', seconds: 12 } : await intentsQuote(args.from, args.to, Number(args.amount) || 1);
+    return ok({ source: board.source, prices: board.prices, sampleSwap: board.swap, quote, note: 'Dry quotes from NEAR Intents solvers. Nothing is swapped. The game itself uses play chips only.' });
   }
   if (AGENT_TOOLS.has(name)) {
     if (!who.agent) return fail('This tool needs a player agent key (qha_…): a player makes one in the game (Biscuit > Bring your own agent).');

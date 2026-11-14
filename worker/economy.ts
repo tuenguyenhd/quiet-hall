@@ -53,6 +53,8 @@ export const minuteMs = (v?: string) => {
 };
 
 const DAY_MS = 86_400_000;
+/** the "campaign" Biscuit's profit receipts are minted under (badge:cmp-agentcup:<serial>) */
+const AGENT_CUP_ID = 'cmp-agentcup';
 const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const prevDay = (d: string) => dayOf(Date.parse(d + 'T00:00:00Z') - DAY_MS);
 
@@ -628,6 +630,15 @@ export class Economy extends DurableObject<EconEnv> {
       settled.push(r.id);
       jobs.push({ job: `settle-${r.id}`, method: 'settle_round', args: { round_id: r.id, setup: r.setup, results_hash: res.hash } });
       res.trophies.forEach((owner, i) => jobs.push({ job: `trophy-${r.id}-${i + 1}`, method: 'mint_trophy', args: { owner, round_id: r.id, place: i + 1 } }));
+      for (const w of res.agentWins) {
+        const serial = this.next('agentwin');
+        const badge = `Cup profit +${w.profit}`;
+        jobs.push({ job: `agentwin-${r.id}-${serial}`, method: 'mint_badge', args: { owner: await this.agentWallet(w.acct), campaign_id: AGENT_CUP_ID, badge, serial } });
+        this.sql.exec(
+          "INSERT INTO agent_log(acct, at, round, action, item, units, total, why, by, ok) VALUES (?, ?, ?, 'hold', NULL, NULL, ?, ?, 'biscuit', 1)",
+          w.acct, now, r.id, w.profit, `Round over: +${w.profit} chips. A "${badge}" receipt went to my own NEAR wallet.`,
+        );
+      }
     }
     // 2. open (commit) the current round if not yet
     const cur = this.currentRound(now);
@@ -667,7 +678,7 @@ export class Economy extends DurableObject<EconEnv> {
   }
 
   /** Settles a round: scores at closing bids, Leaves prizes (best placing per day), results file + hash, trophy owners. */
-  private settle(id: string, now: number): { hash: string; trophies: string[] } {
+  private settle(id: string, now: number): { hash: string; trophies: string[]; agentWins: { acct: string; profit: number }[] } {
     return this.ctx.storage.transactionSync(() => {
       const closing = this.quotes(now);
       const ranked = this.scores(id, closing);
@@ -685,7 +696,11 @@ export class Economy extends DurableObject<EconEnv> {
       const results = JSON.stringify({ round: id, closing: closing.map(({ item, bid }) => ({ item, bid })), entries: entries.map(({ rank, owner, score, trades, prize }) => ({ rank, owner, score, trades, prize })) });
       const hash = bytesToHex(sha256(new TextEncoder().encode(results)));
       this.sql.exec("UPDATE cup_rounds SET status = 'settled', results = ?, results_hash = ? WHERE id = ?", results, hash, id);
-      return { hash, trophies: places ? entries.slice(0, CUP.trophies).map((e) => e.owner) : [] };
+      // rounds Biscuit traded and finished in profit: its own wallet gets a receipt (tick() queues it)
+      const agentWins = ranked
+        .filter((e) => e.score > CUP.chips && this.sql.exec("SELECT 1 FROM agent_log WHERE acct = ? AND round = ? AND by = 'biscuit' AND action != 'hold' AND ok = 1 LIMIT 1", e.acct, id).toArray().length)
+        .map((e) => ({ acct: e.acct, profit: e.score - CUP.chips }));
+      return { hash, trophies: places ? entries.slice(0, CUP.trophies).map((e) => e.owner) : [], agentWins };
     });
   }
 
@@ -1079,6 +1094,26 @@ export class Economy extends DurableObject<EconEnv> {
     return this.sql.exec<{ acct: string; label: string }>('SELECT acct, label FROM agent_keys WHERE hash = ? AND revoked = 0', hash).toArray()[0] ?? null;
   }
 
+  /** Biscuit's own NEAR account id (a derived implicit account, like a guest's): its profit receipts are minted here */
+  agentWallet(acct: string): Promise<string> {
+    return ownerId(this.env.OWNER_SECRET || 'dev-only-owner-secret', `${acct}:biscuit`);
+  }
+
+  /** Kettle's reasoning per item: why its price is where it is (net demand moves it; the gap fades back) */
+  marketWhy(now = Date.now()): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const m of MARKET) {
+      const gap = Math.round(this.gapNow(m.item, now));
+      const mid = midPrice(m, gap);
+      const pct = Math.round((mid / m.base - 1) * 100);
+      out[m.item] =
+        gap === 0
+          ? `Buys and sells are balanced, so the price sits at its base of ${m.base}.`
+          : `${gap > 0 ? `Traders bought ${gap} more than they sold` : `Traders sold ${-gap} more than they bought`}, so the price is ${pct >= 0 ? '+' : ''}${pct}% ${pct >= 0 ? 'above' : 'below'} its base of ${m.base}. With no new trades it drifts back ${Math.round(PRICE.decayPerMin * 100)}% a minute.`;
+    }
+    return out;
+  }
+
   /** item names for reasons ("Moon Rock", not "moon_rock") */
   private itemName = (i: string) => i.split('_').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
 
@@ -1112,7 +1147,7 @@ export class Economy extends DurableObject<EconEnv> {
         const raw = await agentDecide(this.env, decisionPrompt(quotes, before, pos, risk, Math.max(0, Math.round((pos.end - now) / this.minuteMs)), this.itemName));
         if (raw) {
           this.sql.exec('UPDATE agents SET ai_day = ?, ai_n = ? WHERE acct = ?', day, used + 1, a.acct);
-          d = checkDecision(raw as Partial<Decision>, quotes, pos, risk);
+          d = checkDecision(raw as Partial<Decision>, quotes, pos, risk, this.itemName);
         }
       }
       d ??= ruleDecision(quotes, before, pos, risk, this.itemName);

@@ -47,9 +47,10 @@ export function setupCompanion(h: CompanionHost) {
   let pending = '';
   let needPass = false;
   let paying = false;
-  let agent: { active: boolean; risk: Risk; position: { chips: number; bag: Record<string, number> } | null; log: AgentLog[]; keys: number; why?: string } = {
-    active: false, risk: 'calm', position: null, log: [], keys: 0,
-  };
+  let agent: {
+    active: boolean; risk: Risk; position: { chips: number; bag: Record<string, number> } | null; log: AgentLog[]; keys: number; why?: string;
+    wallet?: string; earned?: { badge: string; status: string; tx: string | null }[];
+  } = { active: false, risk: 'calm', position: null, log: [], keys: 0 };
   let newKey: { key: string; mcp: string } | null = null;
   let poll = 0;
 
@@ -84,6 +85,7 @@ export function setupCompanion(h: CompanionHost) {
       <p class="small">Biscuit trades your Market Cup entry every few minutes, with a reason for each move. Its trades move prices like anyone's.</p>
       <div class="chips">${(['calm', 'bold'] as Risk[]).map((r) => `<button class="chip ${agent.risk === r ? 'on' : ''}" data-risk="${r}">${r === 'calm' ? '🐢 Calm' : '🔥 Bold'}</button>`).join('')}</div>
       <p class="small">${esc(POLICY[agent.risk].label)}, max ${POLICY[agent.risk].maxChipsPerTrade} chips per trade.${agent.active ? ' ' + esc(posLine) : ''}</p>
+      ${agent.wallet ? `<p class="small">👛 Biscuit's own NEAR wallet: <code>${esc(agent.wallet.slice(0, 8))}…${esc(agent.wallet.slice(-6))}</code>${agent.earned?.length ? ` · earned: ${agent.earned.map((e) => (e.tx ? `<a href="https://explorer.testnet.near.org/transactions/${esc(e.tx)}" target="_blank" rel="noopener">${esc(e.badge)} ↗</a>` : `${esc(e.badge)} (${esc(e.status)})`)).join(', ')}` : ' · a profitable round earns it a receipt on NEAR'}</p>` : ''}
       ${agent.why ? `<p class="small near-err">${esc(agent.why)}</p>` : ''}
       ${agent.log.length ? `<ul class="cp-trades">${agent.log.slice(0, 6).map((l) => `<li class="${l.ok ? '' : 'no'}"><span>${l.action === 'hold' ? '⏸' : l.action === 'buy' ? '🟢 Bought' : '🔴 Sold'} ${l.action === 'hold' ? '' : `${l.units} ${esc(itemName(l.item))}`}</span> <i>${esc(l.why)}</i> <small>${l.by === 'biscuit' ? '🐕' : '🤖 ' + esc(l.by.replace(/^agent:/, ''))} · ${ago(l.at)}</small></li>`).join('')}</ul>` : ''}
       <details class="cp-byo"${newKey ? ' open' : ''}><summary>🔌 Bring your own AI agent</summary>
@@ -243,6 +245,7 @@ export function setupCompanion(h: CompanionHost) {
         agent = {
           active: !!m.active, risk: m.risk === 'bold' ? 'bold' : 'calm', position: (m.position as typeof agent.position) ?? null,
           log: (m.log as AgentLog[]) ?? [], keys: Number(m.keys) || 0, why: m.ok === false ? String(m.why ?? '') : undefined,
+          wallet: typeof m.wallet === 'string' ? m.wallet : agent.wallet, earned: (m.earned as typeof agent.earned) ?? agent.earned,
         };
         renderAgent();
         return true;

@@ -454,14 +454,21 @@ export function setupNear(h: NearHost) {
   }
 
   /** null = the hall did not answer (timeout or error) */
+  /** Kettle's reasoning per item, its wallet, and the real market board (NEAR Intents solver quotes) */
+  let marketWhy: Record<string, string> = {};
+  let kettleWallet: string | null = null;
+  let realMarket: { source: string; prices: { symbol: string; usd: number }[]; swap: { from: string; to: string; amountIn: string; amountOut: string; seconds: number } | null } | null = null;
   async function loadMarket(): Promise<{ ts: number; item: string; bid: number }[] | null> {
     const ac = new AbortController();
     const t = setTimeout(() => ac.abort(), SHEET_TIMEOUT_MS);
     try {
       const res = await fetch(`/api/near/market?pid=${encodeURIComponent(h.pid)}`, { signal: ac.signal });
       if (!res.ok) return null;
-      const r = (await res.json()) as { quotes: Quote[]; history: { ts: number; item: string; bid: number }[]; cup: typeof cupState };
+      const r = (await res.json()) as { quotes: Quote[]; history: { ts: number; item: string; bid: number }[]; cup: typeof cupState; why?: Record<string, string>; kettle?: { wallet: string | null }; intents?: typeof realMarket };
       quotes = r.quotes;
+      marketWhy = r.why ?? {};
+      kettleWallet = r.kettle?.wallet ?? null;
+      realMarket = r.intents ?? null;
       cupState = r.cup;
       return r.history;
     } catch {
@@ -514,6 +521,15 @@ export function setupNear(h: NearHost) {
       ${cupMode && !inCup ? `<p class="small">This Market Cup round ends in ${leftTxt} · ${cup?.entrants ?? 0} entrants. Free: ${CUP.chips} play chips, trophies for the top ${CUP.trophies}.</p><button class="primary" id="near-cup-join">Join this round</button>` : rows}
       ${cupMode ? `<div class="label">Live top 10 ${inCup ? `· you: #${cup!.me!.rank}, score ${cup!.me!.score}` : ''}</div>${top ? `<ol class="near-top">${top}</ol>` : '<p class="small">No entrants yet: be the first.</p>'}
         <p class="small">Prices move with every player's trades. Each round is committed on NEAR before it starts and settled after it ends, so anyone can check it.</p>` : ''}
+      <details class="near-why"><summary>🫖 Why these prices? Kettle explains</summary>
+        <ul>${MARKET.map((m) => `<li><b>${itemLabel(m.item)}</b> ${esc(marketWhy[m.item] ?? '')}</li>`).join('')}</ul>
+        ${kettleWallet ? `<p class="small">Kettle is a merchant NPC with a NEAR wallet: <a href="${EXPLORER}/accounts/${esc(kettleWallet)}" target="_blank" rel="noopener"><code>${esc(kettleWallet)}</code></a> posts these prices on chain every hour.</p>` : ''}
+      </details>
+      ${realMarket ? `<details class="near-why"><summary>🌐 The real market (NEAR Intents)</summary>
+        <p class="small">${realMarket.prices.map((p) => `<b>${esc(p.symbol)}</b> $${p.usd.toLocaleString()}`).join(' · ')}</p>
+        ${realMarket.swap ? `<p class="small">Solver quote: ${esc(realMarket.swap.amountIn)} ${esc(realMarket.swap.from)} → ${esc(realMarket.swap.amountOut)} ${esc(realMarket.swap.to)} in ~${realMarket.swap.seconds} s.</p>` : ''}
+        <p class="small">${realMarket.source === 'near-intents' ? 'Live dry quotes from NEAR Intents solvers.' : 'Sample numbers (NEAR Intents did not answer).'} Information only: the Cup trades play chips. Ask Biscuit about it.</p>
+      </details>` : ''}
       <p class="near-foot">Play money. No cash value. Free to enter.</p>`;
     body()
       .querySelectorAll<HTMLButtonElement>('button[data-side]')

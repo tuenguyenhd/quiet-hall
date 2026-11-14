@@ -48,7 +48,7 @@ export interface Decision {
  * Checks and clamps a decision against the policy and the position. Returns a decision that is safe to execute
  * (possibly 'hold' with the reason it was refused).
  */
-export function checkDecision(d: Partial<Decision> | null, quotes: Quote[], pos: Position, risk: Risk): Decision {
+export function checkDecision(d: Partial<Decision> | null, quotes: Quote[], pos: Position, risk: Risk, name = (i: string) => i): Decision {
   const p = POLICY[risk];
   const why = typeof d?.why === 'string' ? d.why.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
   if (!d || (d.action !== 'buy' && d.action !== 'sell')) return { action: 'hold', why: why || 'Nothing worth doing right now.' };
@@ -59,12 +59,12 @@ export function checkDecision(d: Partial<Decision> | null, quotes: Quote[], pos:
     const budget = Math.min(p.maxChipsPerTrade, pos.chips - p.keepChips);
     // walking the book costs a little more than the ask: keep a 15% margin
     units = Math.min(units, Math.floor(budget / (q.ask * 1.15)));
-    if (units < 1) return { action: 'hold', why: `Wanted to buy ${q.item}, but the policy keeps ${p.keepChips} chips in reserve.` };
+    if (units < 1) return { action: 'hold', why: `Wanted to buy ${name(q.item)}, but the policy keeps ${p.keepChips} chips in reserve.` };
   } else {
     units = Math.min(units, pos.bag[q.item] ?? 0);
-    if (units < 1) return { action: 'hold', why: `Wanted to sell ${q.item}, but holds none.` };
+    if (units < 1) return { action: 'hold', why: `Wanted to sell ${name(q.item)}, but holds none.` };
   }
-  return { action: d.action, item: q.item, units, why: why || `${d.action} ${units} ${q.item}` };
+  return { action: d.action, item: q.item, units, why: why || `${d.action} ${units} ${name(q.item)}` };
 }
 
 /**
@@ -75,11 +75,11 @@ export function ruleDecision(quotes: Quote[], before: Record<string, number>, po
   const moves = quotes.map((q) => ({ q, ch: before[q.item] ? (q.mid - before[q.item]) / before[q.item] : 0 }));
   const held = moves.filter((m) => (pos.bag[m.q.item] ?? 0) > 0).sort((a, b) => b.ch - a.ch)[0];
   if (held && held.ch > 0.08) {
-    return checkDecision({ action: 'sell', item: held.q.item, units: pos.bag[held.q.item], why: `${name(held.q.item)} is up ${Math.round(held.ch * 100)}% in an hour: taking profit.` }, quotes, pos, risk);
+    return checkDecision({ action: 'sell', item: held.q.item, units: pos.bag[held.q.item], why: `${name(held.q.item)} is up ${Math.round(held.ch * 100)}% in an hour: taking profit.` }, quotes, pos, risk, name);
   }
   const dip = moves.filter((m) => m.ch < -0.05).sort((a, b) => a.ch - b.ch)[0];
   if (dip) {
-    return checkDecision({ action: 'buy', item: dip.q.item, units: POLICY[risk].maxUnits, why: `${name(dip.q.item)} is down ${Math.round(-dip.ch * 100)}% in an hour: buying the dip.` }, quotes, pos, risk);
+    return checkDecision({ action: 'buy', item: dip.q.item, units: POLICY[risk].maxUnits, why: `${name(dip.q.item)} is down ${Math.round(-dip.ch * 100)}% in an hour: buying the dip.` }, quotes, pos, risk, name);
   }
   return { action: 'hold', why: 'Prices are flat. Waiting for a better entry.' };
 }

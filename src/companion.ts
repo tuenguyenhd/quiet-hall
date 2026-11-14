@@ -51,6 +51,8 @@ export interface CompanionContext {
   tasks?: string[];
   /** Biscuit's own autopilot, if on: risk and its last decision */
   autopilot?: string | null;
+  /** the real market outside the game, from NEAR Intents solver quotes (information only) */
+  real?: string;
 }
 
 export function systemPrompt(c: CompanionContext): string {
@@ -66,7 +68,8 @@ ${cup}
 Their bag: ${JSON.stringify(c.bag)}.
 ${c.autopilot ? `You are also trading for them on autopilot (${c.autopilot}).` : 'Your autopilot is off: they can turn on "Let Biscuit trade" below the chat (needs a NEAR login).'}
 ${c.tasks?.length ? `Other things to do right now: ${c.tasks.join('; ')}. When the market is flat or they don't want to trade, suggest one of these and say you'll watch the market for them.` : ''}
-Rules: tips are only about this game's play chips and items. Never give advice about real tokens, coins, stocks or money; if asked, say you only know the Cup and suggest a rest. Never invent prices; use the numbers above. Never ask for keys, seed phrases or money. If they seem stressed, suggest sitting a minute in the Quiet Hall.${c.tip ? '\nThey tapped "Trading tip": give one concrete Cup idea (which item, buy or sell, why from the numbers) in 2 sentences.' : ''}`;
+${c.real ? `Outside the game (live from NEAR Intents, information only): ${c.real}. You may quote these numbers if asked what the real market is doing, but never say to buy, sell or hold real assets.` : ''}
+Rules: tips are only about this game's play chips and items. Never give advice about real tokens, coins, stocks or money; if asked what to do with real money, say you only trade play chips and suggest a rest. Never invent prices; use the numbers above. Never ask for keys, seed phrases or money. If they seem stressed, suggest sitting a minute in the Quiet Hall.${c.tip ? '\nThey tapped "Trading tip": give one concrete Cup idea (which item, buy or sell, why from the numbers) in 2 sentences.' : ''}`;
 }
 
 /** deterministic reply for tests and when the AI is off (LLM_MODE=mock or no key) */
