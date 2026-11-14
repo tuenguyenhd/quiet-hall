@@ -55,7 +55,7 @@ Deadline: **2026-11-14 23:59 UTC**. Submit **once**: the form at https://nearhac
 1. Quick join and sit.
 2. Follow the lanterns, help Shibby with a second player sitting too, and show the receipt on the explorer.
 3. Type a prompt in Claude Code (MCP) and watch the drops appear live in the Courtyard; collect 3 and get the badge plus claim.
-4. Tap 🐶, ask Biscuit for a 📈 Trading tip, then join the trading game and show a settled round with `verify-round`.
+4. Tap 🐶, ask Biscuit for a 📈 Trading tip, switch on autopilot and show a trade with its reason; open the Market for Kettle's reasoning and the NEAR Intents board.
 5. Show the Coming Soon district (Clans, Events).
 
 There is no length limit, but keep it short.
@@ -64,15 +64,15 @@ There is no length limit, but keep it short.
 
 | # | Item | Status |
 |---|---|---|
-| 1 | Public repo with LICENSE (MIT) | LICENSE added; **the repo is not on GitHub yet (owner)** |
-| 2 | README with problem, product and NEAR fit; do-X-see-Y run steps; no secrets needed | `NEAR.md` updated (2026-11-13) |
-| 3 | Reproducible from a fresh clone; AI screening runs it | Verified 2026-11-13 on a fresh clone: `npm ci`, `npm run check`, `npm run build:near` and `npm run test:near` all pass (6 suites, 166 checks). 2026-11-14 with the AI companion: 7 suites, 178 checks pass (re-run the fresh clone after the merge) |
-| 4 | Only work done in the window; diff link | Whole repo is from 2026-11-09 (window opened 2026-10-19); `git log seeker-edition..main` |
+| 1 | Public repo with LICENSE (MIT) | Done: https://github.com/tuenguyenhd/quiet-hall |
+| 2 | README with problem, product and NEAR fit; do-X-see-Y run steps; no secrets needed | `NEAR.md`: hook, track table, Try it steps (2026-11-14) |
+| 3 | Reproducible from a fresh clone; AI screening runs it | `npm ci`, `npm run check`, `npm run build:near`, `npm run test:near` (8 suites, 195 checks) and `npm run sim:near` pass (2026-11-14) |
+| 4 | Only work done in the window; diff link | Whole repo is from 2026-11-09 (window opened 2026-10-19) |
 | 5 | Libraries and AI tools listed | `NEAR.md` "Built during the hackathon" |
-| 6 | No keys or secrets anywhere in the repo history | Scanned 2026-11-13: none. `.env.production` holds only the public Worker URL. Note: commit author emails become public with the repo |
-| 7 | Hosted demo up to 2026-11-18, ideally 2026-11-25 | Live, but it runs an **older build**. Deploy `drops-integration` (owner OK) |
-| 8 | Production contract has `mint_badge` / `commit_campaign` | Test contract only. **Upgrade the production contract (owner OK)** |
-| 9 | `CAMPAIGN_ADMIN_KEY` secret on the live Worker, plus a demo sponsor campaign | After the deploy (owner OK) |
-| 10 | X post with video, built at NEAR HACKATHON, @NEARProtocol, #NEARHackathon | Owner records and posts |
+| 6 | No keys or secrets anywhere in the repo history | Scanned 2026-11-14: none |
+| 7 | Hosted demo up to 2026-11-18, ideally 2026-11-25 | Live. **Re-deploy after the trading-agents commits** (`npm run deploy:near`) |
+| 8 | Production contract has `mint_badge` / `commit_campaign` | Done 2026-11-14 (code hash `GaFR12…`) |
+| 9 | `CAMPAIGN_ADMIN_KEY` and `NEARAI_API_KEY` secrets on the live Worker, plus a demo drop | Done 2026-11-14 ("Welcome drop: find 3 lost Doges") |
+| 10 | X post with video, built at NEAR HACKATHON, @NEARProtocol, #NEARHackathon | Owner posts the pitch video |
 | 11 | Mainnet NEAR account for the prize | Owner |
 | 12 | Submit once (form or API) | Owner, last step |

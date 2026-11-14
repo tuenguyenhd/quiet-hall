@@ -84,8 +84,9 @@ D.send({ t: 'cupJoin' });
 check((await until(D, 'cupJoined'))?.why?.includes('Market'), 'joining away from the Market is refused');
 await sitFor(A, 1);
 await sitFor(B, 1);
-// wait for a fresh round so all three can join before the cut-off
-await wait(ROUND_MS - (Date.now() % ROUND_MS) + 150);
+// wait for a fresh round so all three can join before the cut-off. The round length comes from the server
+// (it differs between the test runner and a hand-started Worker), so ask it when this round ends.
+await wait(Math.max(0, (await get('/api/near/market')).cup.end - Date.now()) + 250);
 const joins = [];
 for (const c of [A, B, C]) {
   c.send({ t: 'cupJoin' });
